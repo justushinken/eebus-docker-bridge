@@ -9,12 +9,14 @@
 package main
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -43,6 +45,9 @@ type Konfiguration struct {
 	FailsafeGrenzeW      float64
 	FailsafeMindestdauer time.Duration
 	NennleistungMaxW     float64
+	WebAdresse           string
+	WebBenutzer          string
+	WebPasswort          string
 }
 
 func leseKonfiguration() Konfiguration {
@@ -58,10 +63,17 @@ func leseKonfiguration() Konfiguration {
 		FailsafeGrenzeW:      envKommazahl("FAILSAFE_GRENZE_W", 4200),
 		FailsafeMindestdauer: envDauer("FAILSAFE_MINDESTDAUER", 2*time.Hour),
 		NennleistungMaxW:     envKommazahl("NENNLEISTUNG_MAX_W", 11000),
+		WebAdresse:           envTextLeerErlaubt("WEB_ADRESSE", ":8090"),
+		WebBenutzer:          envText("WEB_BENUTZER", "admin"),
+		WebPasswort:          envText("WEB_PASSWORT", ""),
 	}
 }
 
 func main() {
+	// Alle Log-Meldungen zusaetzlich fuer das Status-UI vorhalten.
+	protokoll := NeuesEreignisprotokoll(100)
+	log.SetOutput(io.MultiWriter(os.Stderr, protokoll))
+
 	konf := leseKonfiguration()
 
 	zertifikat, err := ladeOderErzeugeZertifikat(konf.Datenverzeichnis, konf.Seriennummer)
@@ -89,7 +101,7 @@ func main() {
 	}
 	konfiguration.SetAlternateIdentifier(fmt.Sprintf("%s-%s-%s", konf.Marke, konf.Modell, konf.Seriennummer))
 
-	bruecke := NeueBruecke(konf)
+	bruecke := NeueBruecke(konf, eigenerSki)
 	dienst := service.NewService(konfiguration, bruecke)
 	if err := dienst.Setup(); err != nil {
 		log.Fatalf("EEBUS-Dienst einrichten: %v", err)
@@ -111,6 +123,26 @@ func main() {
 		log.Fatalf("Modbus-Server: %v", err)
 	}
 	defer modbusServer.Stop()
+
+	// Das Status-UI ist optional: Fehler hier halten die Bruecke nicht an.
+	switch {
+	case konf.WebAdresse == "":
+		log.Printf("Web-UI deaktiviert: WEB_ADRESSE leer")
+	case konf.WebPasswort == "":
+		log.Printf("Web-UI deaktiviert: WEB_PASSWORT nicht gesetzt")
+	default:
+		webServer, err := starteWebServer(konf.WebAdresse, konf.WebBenutzer, konf.WebPasswort, bruecke, protokoll)
+		if err != nil {
+			log.Printf("Web-UI nicht gestartet: %v", err)
+			break
+		}
+		log.Printf("Web-UI auf %s", konf.WebAdresse)
+		defer func() {
+			ctx, abbrechen := context.WithTimeout(context.Background(), 2*time.Second)
+			defer abbrechen()
+			webServer.Shutdown(ctx)
+		}()
+	}
 
 	dienst.Start()
 	defer dienst.Shutdown()
@@ -173,6 +205,14 @@ func ladeOderErzeugeZertifikat(verzeichnis, seriennummer string) (tls.Certificat
 
 func envText(name, vorgabe string) string {
 	if wert, ok := os.LookupEnv(name); ok && wert != "" {
+		return wert
+	}
+	return vorgabe
+}
+
+// Wie envText, aber ein gesetzter leerer Wert bleibt leer (z. B. WEB_ADRESSE= schaltet ab).
+func envTextLeerErlaubt(name, vorgabe string) string {
+	if wert, ok := os.LookupEnv(name); ok {
 		return wert
 	}
 	return vorgabe

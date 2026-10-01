@@ -26,6 +26,7 @@ Aufgabenteilung: Der Go-Dienst kapselt das Protokoll und den LPC-Zustandsautomat
 | Pfad | Inhalt |
 |---|---|
 | `main.go`, `bruecke.go`, `modbus.go` | Go-Dienst: EEBUS-Anbindung, LPC-Zustandsautomat, Modbus-Server |
+| `web.go`, `web/index.html` | Status-UI (ins Binary eingebettet) |
 | `Dockerfile` | Image für PFC200 (ARMv7) oder PC (amd64) |
 | `Codesys/` | CODESYS-Quellen: `FbEebusLpc`, GVL, Enums, Beispielprogramm |
 | `test/controlbox/` | Test-Steuerbox aus eebus-go als Docker-Image |
@@ -65,9 +66,9 @@ Auf dem Entwicklungsrechner (Docker mit buildx):
 Abhängigkeiten sind in `go.mod`/`go.sum` gepinnt (eebus-go v0.7.0, modbus v1.6.4).
 
 ```sh
-docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.1 --load .
-mkdir -p dist && docker save eebus-bruecke:0.1 | gzip > dist/eebus-bruecke-0.1.tar.gz
-scp dist/eebus-bruecke-0.1.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
+docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.2 --load .
+mkdir -p dist && docker save eebus-bruecke:0.2 | gzip > dist/eebus-bruecke-0.2.tar.gz
+scp dist/eebus-bruecke-0.2.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
 ```
 
 `scp` aus Git Bash, nicht aus PowerShell. Als `admin` statt `root` erst nach `/tmp` kopieren und auf dem PFC mit `sudo` verschieben.
@@ -76,7 +77,7 @@ Auf dem PFC200 (als root):
 
 ```sh
 mkdir -p /home/eebus-bruecke
-docker load -i /home/eebus-bruecke/eebus-bruecke-0.1.tar.gz
+docker load -i /home/eebus-bruecke/eebus-bruecke-0.2.tar.gz
 
 docker run -d --name eebus-bruecke \
   --restart unless-stopped \
@@ -88,7 +89,8 @@ docker run -d --name eebus-bruecke \
   -e NENNLEISTUNG_MAX_W=22000 \
   -e FAILSAFE_GRENZE_W=4200 \
   -e FAILSAFE_MINDESTDAUER=2h \
-  eebus-bruecke:0.1
+  -e WEB_PASSWORT=<Passwort fuer das Status-UI> \
+  eebus-bruecke:0.2
 ```
 
 `/home/eebus-bruecke` liegt im internen Speicher. Mit SD-Karte stattdessen `/media/sd/eebus-bruecke` verwenden. In beiden Fällen `zertifikat.pem` und `schluessel.pem` auf dem PC sichern.
@@ -96,6 +98,27 @@ docker run -d --name eebus-bruecke \
 `--network host` ist nötig, weil mDNS (Multicast) über das Docker-Bridge-Netz nicht zuverlässig funktioniert. Der Modbus-Server bindet trotzdem nur auf 127.0.0.1, ist also aus dem LAN nicht erreichbar. Zum Testen mit einem Modbus-Master auf dem PC `-e MODBUS_URL=tcp://0.0.0.0:5502` setzen. Dann ist der Port ohne Schutz im ganzen LAN offen, danach wieder entfernen.
 
 Weitere Variablen: `EEBUS_PORT` (4712), `MODBUS_URL` (`tcp://127.0.0.1:5502`), `DATENVERZEICHNIS` (`/data`), `GERAET_HERSTELLER`, `GERAET_MARKE`, `GERAET_MODELL`.
+
+## Status-UI
+
+Die Brücke bringt eine Statusseite mit: `http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Die Seite zeigt nur an, ändern lässt sich darüber nichts:
+
+- Ampel mit LPC-Zustand und wirksamer Grenze
+- Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Werte
+- EEBUS-Verbindung, Alter des Heartbeats, eigener SKI zum Kopieren
+- per mDNS gefundene Geräte mit SKI, als Hilfe beim Pairing
+- SPS-Lebenszeichen, gemeldete Nennleistung
+- die letzten 100 Log-Meldungen
+
+| Variable | Vorgabe | Bedeutung |
+|---|---|---|
+| `WEB_PASSWORT` | – | **Ohne Passwort startet das UI nicht**, die Brücke selbst läuft normal weiter. |
+| `WEB_BENUTZER` | `admin` | Benutzername |
+| `WEB_ADRESSE` | `:8090` | Adresse und Port, leer (`WEB_ADRESSE=`) schaltet das UI ab |
+
+Port 8090 statt 8080, weil auf dem PFC die CODESYS-WebVisu oft 8080 belegt. Bei aktiver PFC-Firewall Port 8090 freigeben.
+
+Die Anmeldung läuft über HTTP Basic Auth ohne HTTPS, das Passwort ist im LAN also mitlesbar. Sie schützt vor zufälligem Zugriff, nicht vor gezielten Angriffen.
 
 ## Pairing mit der Steuerbox
 
@@ -139,8 +162,10 @@ openssl x509 -in test/controlbox/zertifikat.pem -noout -ext subjectKeyIdentifier
 
 # Brücke starten, eigener SKI steht im Log ("Eigener SKI: ...")
 docker network create eebus-test
-MSYS_NO_PATHCONV=1 docker run -d --name bruecke --network eebus-test \
-  -v "$PWD/test/data:/data" -e EEBUS_REMOTE_SKI=<SKI Steuerbox> eebus-bruecke:dev
+#   Status-UI danach unter http://localhost:8090 (admin / test)
+MSYS_NO_PATHCONV=1 docker run -d --name bruecke --network eebus-test -p 8090:8090 \
+  -v "$PWD/test/data:/data" -e EEBUS_REMOTE_SKI=<SKI Steuerbox> -e WEB_PASSWORT=test \
+  eebus-bruecke:dev
 docker logs bruecke
 
 # Steuerbox starten
@@ -160,7 +185,7 @@ Im Container-Netz funktioniert mDNS zwischen den Containern. Gegen eine echte St
 ## Offene Punkte vor dem Produktiveinsatz
 
 - **eebus-go-Version:** Kompiliert und lokal gegen `cmd/controlbox` aus eebus-go v0.7.0 getestet (Pairing, Grenze, Ablauf, Failsafe, Rückkehr). Noch nicht gegen eine echte Steuerbox.
-- **Verbindungsstatus:** Beim Stoppen der Test-Steuerbox kam kein `RemoteSKIDisconnected`, Register 3 blieb auf „verbunden“. Prüfen, ob eebus-go die Trennung erst verzögert meldet oder gar nicht.
+- **Verbindungsstatus:** Beim ersten Test kam nach dem Stoppen der Test-Steuerbox kein `RemoteSKIDisconnected`, Register 3 blieb auf „verbunden“. In einem späteren Test wurde die Trennung sofort gemeldet. Bei der echten Steuerbox beobachten. Für die Grenze ist das unkritisch, dort entscheidet der Heartbeat.
 - **Zustandsautomat:** Die Übergänge in `bruecke.go` (insbesondere Init und Verlassen von Failsafe) gegen die aktuelle Spezifikation "EEBUS UC Limitation of Power Consumption" und das FNN-Lastenheft Steuerbox prüfen.
 - **Zertifizierung:** Diese Brücke ist nicht EEBUS-zertifiziert. Für Pilot- und Eigenanlagen ausreichend, für Serienanlagen vorher mit Netzbetreiber bzw. MSB klären.
 - **Docker auf dem PFC200:** Nur ab neueren Firmware-Ständen verfügbar, bei gemischtem Gerätepark vorab je Steuerung prüfen. Docker-Datenverzeichnis wegen begrenztem internem Speicher möglichst auf die SD-Karte legen.

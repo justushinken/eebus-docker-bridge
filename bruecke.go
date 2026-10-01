@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"slices"
 	"sync"
 	"time"
 
@@ -49,6 +51,18 @@ const (
 	VerbindungVerbunden   Verbindung = 2
 )
 
+func (v Verbindung) String() string {
+	switch v {
+	case VerbindungKeinPartner:
+		return "Kein Partner"
+	case VerbindungGetrennt:
+		return "Getrennt"
+	case VerbindungVerbunden:
+		return "Verbunden"
+	}
+	return "Unbekannt"
+}
+
 const (
 	// Ohne Heartbeat der Steuerbox fuer diese Dauer -> Failsafe.
 	heartbeatTimeout = 120 * time.Second
@@ -60,10 +74,14 @@ const (
 // Aufrufe in den EEBUS-Stack (b.lpc.*) immer ausserhalb von mu,
 // damit es keine Verklemmung mit dessen Callbacks gibt.
 type Bruecke struct {
-	konf Konfiguration
-	lpc  *cslpc.LPC
+	konf       Konfiguration
+	lpc        *cslpc.LPC
+	eigenerSki string
+	gestartet  time.Time
 
 	mu                    sync.Mutex
+	gefunden              []shipapi.RemoteService // per mDNS sichtbare EEBUS-Geraete
+	pairing               map[string]shipapi.ConnectionState
 	zustand               LpcZustand
 	zustandSeit           time.Time
 	verbindung            Verbindung
@@ -83,15 +101,18 @@ type Bruecke struct {
 	gemeldeteNennleistungW  float64
 }
 
-func NeueBruecke(konf Konfiguration) *Bruecke {
+func NeueBruecke(konf Konfiguration, eigenerSki string) *Bruecke {
 	verbindung := VerbindungGetrennt
 	if konf.RemoteSki == "" {
 		verbindung = VerbindungKeinPartner
 	}
+	jetzt := time.Now()
 	return &Bruecke{
 		konf:                   konf,
+		eigenerSki:             eigenerSki,
+		gestartet:              jetzt,
 		zustand:                ZustandInit,
-		zustandSeit:            time.Now(),
+		zustandSeit:            jetzt,
 		verbindung:             verbindung,
 		failsafeGrenzeW:        konf.FailsafeGrenzeW,
 		failsafeMindestdauer:   konf.FailsafeMindestdauer,
@@ -129,16 +150,60 @@ func (b *Bruecke) RemoteSKIDisconnected(dienst api.ServiceInterface, ski string)
 }
 
 // Hilfreich bei der Inbetriebnahme: zeigt die per mDNS gefundenen Geraete samt SKI.
+// mDNS meldet die Liste wiederholt, protokolliert werden nur neu gefundene Geraete.
 func (b *Bruecke) VisibleRemoteServicesUpdated(dienst api.ServiceInterface, eintraege []shipapi.RemoteService) {
+	b.mu.Lock()
+	bekannt := make(map[string]bool, len(b.gefunden))
+	for _, e := range b.gefunden {
+		bekannt[e.Ski] = true
+	}
+	b.gefunden = slices.Clone(eintraege)
+	b.mu.Unlock()
+
 	for _, e := range eintraege {
-		log.Printf("Gefunden: %s %s, SKI %s", e.Brand, e.Model, e.Ski)
+		if !bekannt[e.Ski] {
+			log.Printf("Gefunden: %s %s, SKI %s", e.Brand, e.Model, e.Ski)
+		}
 	}
 }
 
 func (b *Bruecke) ServiceShipIDUpdate(ski string, shipId string) {}
 
+var pairingTexte = map[shipapi.ConnectionState]string{
+	shipapi.ConnectionStateNone:                   "kein Pairing",
+	shipapi.ConnectionStateQueued:                 "eingereiht",
+	shipapi.ConnectionStateInitiated:              "von hier gestartet",
+	shipapi.ConnectionStateReceivedPairingRequest: "Anfrage der Gegenseite",
+	shipapi.ConnectionStateInProgress:             "Handshake laeuft",
+	shipapi.ConnectionStateTrusted:                "vertraut",
+	shipapi.ConnectionStatePin:                    "PIN",
+	shipapi.ConnectionStateCompleted:              "abgeschlossen",
+	shipapi.ConnectionStateRemoteDeniedTrust:      "von Gegenseite abgelehnt",
+	shipapi.ConnectionStateError:                  "Fehler",
+}
+
+// Protokolliert nur Wechsel, der SHIP-Handshake meldet manche Zustaende mehrfach.
 func (b *Bruecke) ServicePairingDetailUpdate(ski string, detail *shipapi.ConnectionStateDetail) {
-	log.Printf("Pairing-Status %s: %v", ski, detail.State())
+	zustand := detail.State()
+	b.mu.Lock()
+	if b.pairing == nil {
+		b.pairing = make(map[string]shipapi.ConnectionState)
+	}
+	alt, bekannt := b.pairing[ski]
+	b.pairing[ski] = zustand
+	b.mu.Unlock()
+	if bekannt && alt == zustand {
+		return
+	}
+
+	text, ok := pairingTexte[zustand]
+	if !ok {
+		text = fmt.Sprint(zustand)
+	}
+	if err := detail.Error(); err != nil {
+		text += ": " + err.Error()
+	}
+	log.Printf("Pairing %s: %s", ski, text)
 }
 
 // Nur der konfigurierten Steuerbox wird vertraut.

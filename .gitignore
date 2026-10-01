@@ -1,0 +1,16 @@
+# Gebaute Images zum Verteilen
+dist/
+*.tar.gz
+
+# Zertifikate und private Schluessel (SKI!) gehoeren nicht ins Repo
+*.pem
+test/data/
+backup-pfc/
+
+# Go-Kompilat
+/eebus-bruecke
+*.exe
+
+# Editor
+.vscode/
+.idea/

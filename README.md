@@ -34,6 +34,7 @@ Aufgabenteilung: Der Go-Dienst kapselt das Protokoll und den LPC-Zustandsautomat
 | `docker-compose.yml` | Lokale Testumgebung: Brücke, Test-Steuerbox, SPS-Simulator |
 | `skripte/pfc-images-bauen.sh` | Baut Brücke und Test-Steuerbox für den PFC nach `dist/` |
 | `dist/` | gebaute Images zum Verteilen (nicht im Repo) |
+| `CLAUDE.md` | Arbeitsstand, offene Punkte und technische Details für die Weiterentwicklung |
 
 Alle Go-Programme liegen in einem Modul. Gebaut wird ausschließlich in Docker (Go 1.24), eine lokale Go-Installation ist nicht nötig.
 
@@ -88,6 +89,7 @@ docker run -d --name eebus-bruecke \
   --network host \
   --memory 64m \
   -v /home/eebus-bruecke:/data \
+  -e GERAET_MARKE=<Firmenkürzel> \
   -e NENNLEISTUNG_MAX_W=22000 \
   -e FAILSAFE_GRENZE_W=4200 \
   -e FAILSAFE_MINDESTDAUER=2h \
@@ -95,7 +97,7 @@ docker run -d --name eebus-bruecke \
   eebus-bruecke:0.4
 ```
 
-Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sonst als Umleitung. Das Passwort in einfache Anführungszeichen setzen.
+Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sonst als Umleitung. Das Passwort in einfache Anführungszeichen setzen. Nach dem ersten Start die angezeigte SHIP-ID zusätzlich mit `-e SHIP_ID=…` fest eintragen (siehe „Vor der Übergabe an den Messstellenbetreiber“).
 
 `/home/eebus-bruecke` liegt im internen Speicher. Mit SD-Karte stattdessen `/media/sd/eebus-bruecke` verwenden. Das Verzeichnis enthält alles, was die Kopplung ausmacht, und gehört gesichert:
 
@@ -151,7 +153,44 @@ Es gibt zwei Verfahren, die auch gleichzeitig aktiv sein können. Welches gilt, 
 | `EEBUS_REMOTE_SKI` | – | SKI der Steuerbox, schaltet das SKI-Verfahren ein |
 | `SHIP_ID` | `<Marke>-<Modell>-<MAC>` | Kennung der Brücke im Netz, z. B. `Demo-PFC200-LPC-Bruecke-0030DE683ADC` |
 
-Die SHIP-ID entsteht aus der MAC-Adresse des PFC. Mit `--network host` sieht der Container die echte Schnittstelle, bevorzugt `br0`. Die SHIP-ID ist damit eindeutig und auf dem Typenschild ablesbar. EEBUS empfiehlt für neue Geräte das Format `i:<IANA-Nummer>_u:<Seriennummer>`. Das ist aber keine Pflicht, und ohne eigene IANA-Nummer bleibt es beim obigen Format. **Nach der Kopplung SHIP-ID und Datenverzeichnis nicht mehr ändern**, sonst muss neu gekoppelt werden.
+### SHIP-ID
+
+Die SHIP-ID ist der dauerhafte Name der Brücke im EEBUS-Netz. Sie wird per mDNS verkündet und steht im QR-Code. Über sie findet die Steuerbox die Brücke wieder, und beim Pairing Service richtet die Steuerbox ihre Ankündigung genau an diese ID. Laut SHIP-Spezifikation muss sie **weltweit eindeutig** sein und darf sich **nicht ändern**.
+
+- **Aufbau:** frei wählbarer Text, höchstens 63 Byte, ohne Leerzeichen, Semikolons und Steuerzeichen. Er soll mit einem Herstellerkürzel beginnen, dahinter folgt eine eindeutige Kennung. Die Brücke bildet `<GERAET_MARKE>-<GERAET_MODELL>-<MAC>`, z. B. `Demo-PFC200-LPC-Bruecke-0030DE683ADC`.
+- **MAC-Adresse:** Mit `--network host` sieht der Container die echten Schnittstellen des PFC und nimmt bevorzugt `br0` (X1). Das ist die MAC vom Typenschild, sie bleibt bei Neustarts und Updates gleich. Prüfen: `cat /sys/class/net/br0/address` muss zum Ende der SHIP-ID passen. Ohne Host-Netz (z. B. lokal mit Compose) erzeugt Docker eine eigene MAC, die sich ändern kann.
+- **IANA-Format:** EEBUS empfiehlt für neue Geräte `i:<IANA-Nummer>_u:<Seriennummer>`. Das ist keine Pflicht, Geräte müssen auch andere Formate akzeptieren. Ohne eigene IANA-Nummer bleibt es beim obigen Format.
+- **SHIP-ID und SKI sind verschieden:** SKI und Fingerprint werden aus dem Zertifikat berechnet. Die SHIP-ID ist ein Name, der auch bei einem neuen Zertifikat bleibt.
+
+### Vor der Übergabe an den Messstellenbetreiber
+
+Was danach geändert wird, erzwingt ein neues Pairing. Deshalb vorher:
+
+1. **`GERAET_MARKE` auf ein Kürzel der eigenen Firma setzen** statt `Demo`. Das entspricht der Regel „SHIP-ID beginnt mit dem Herstellerkürzel“, und die Marke erscheint im QR-Code und bei der Steuerbox als Gerätename.
+2. **SHIP-ID festschreiben:** Die SHIP-ID von der Statusseite kopieren und mit `-e SHIP_ID=…` im `docker run` eintragen. Danach hängt sie nicht mehr an der MAC, und auch ein Tausch des PFC (mit übertragenem Datenverzeichnis) ändert sie nicht. **Ab der Übergabe SHIP-ID und Datenverzeichnis nicht mehr ändern.**
+3. **Datenverzeichnis sichern** (`/home/eebus-bruecke`, siehe Tabelle oben): Zertifikat, Secret und Kopplung.
+4. **Netzwerk mit dem Installateur abstimmen**, siehe nächster Abschnitt.
+5. **Verfahren klären:** Pairing Service (QR-Code bzw. SKI, SHIP-ID, Fingerprint, Secret übergeben) oder SKI-Verfahren (SKIs austauschen).
+
+### Netzwerk: damit sich Brücke und Steuerbox finden
+
+Die Geräte finden sich per **mDNS** (Multicast-DNS, UDP 5353 an 224.0.0.251). Diese Pakete verlassen das eigene Netzsegment nicht, Router leiten sie nicht weiter. Danach läuft die eigentliche Verbindung als verschlüsselter WebSocket per TCP zu der Adresse, die mDNS geliefert hat.
+
+| Voraussetzung | Warum |
+|---|---|
+| **Steuerbox und PFC im selben Netzsegment** (gleiches Subnetz, gleiches VLAN, über Switches verbunden, kein Router dazwischen) | mDNS geht nicht über Router. Getrennte Netze nur mit einem mDNS-Repeater/Reflector am Router |
+| **Multicast nicht blockiert** | Verwaltete Switches mit IGMP-Snooping ohne Querier, „Multicast-Filter“ oder WLAN mit Client-Isolation können mDNS verschlucken |
+| **PFC-Firewall:** UDP 5353 und TCP 4712 eingehend erlaubt | 4712 ist der EEBUS-Port der Brücke. Die Steuerbox verbindet sich dorthin, oder die Brücke zu ihr |
+| **IP-Adressen im selben Bereich** (DHCP oder fest) | Ohne DHCP vergeben EEBUS-Geräte sich laut Spezifikation selbst eine 169.254.x.x-Adresse. Das klappt nur, wenn beide Seiten das tun |
+
+Mit dem Installateur bzw. Messstellenbetreiber klären:
+
+- In welches Netz kommt der LAN-Anschluss der Steuerbox? Am einfachsten in dasselbe Netz wie X1 des PFC.
+- Wie werden die IP-Adressen vergeben: DHCP oder fest? Gibt es VLANs?
+- Ist ein verwalteter Switch mit Multicast-Filter dazwischen?
+- Alternative mit sauberer Trennung: X2 des PFC im WBM als eigene Schnittstelle konfigurieren und die Steuerbox direkt oder über einen einfachen Switch an X2 anschließen, mit festem gemeinsamem Subnetz. Die Brücke lauscht dank `--network host` auf allen Schnittstellen. Das ist noch nicht ausprobiert.
+
+Zur Kontrolle zeigt die Statusseite unter „Per mDNS gefundene EEBUS-Geräte“, ob die Steuerbox gesehen wird. Erscheint sie dort nicht, liegt es am Netz, nicht an der Kopplung.
 
 ## CODESYS-Seite
 
@@ -218,7 +257,17 @@ docker run -d --name eebus-steuerbox \
   eebus-steuerbox:0.4
 ```
 
-Danach `http://<pfc-ip>:8091` öffnen und die Brücke per Pairing Service koppeln (QR-Text aus dem Brücken-UI). An der Brücke ist dafür nichts einzustellen. Nach dem Test `docker rm -f eebus-steuerbox` und die Brücke wieder mit dem SKI der echten Steuerbox anlegen.
+Danach `http://<pfc-ip>:8091` öffnen und die Brücke per Pairing Service koppeln (QR-Text aus dem Brücken-UI). An der Brücke ist dafür nichts einzustellen.
+
+Nach dem Test die Test-Steuerbox entfernen und ihre Kopplung bei der Brücke löschen, sonst vertraut die Brücke ihr weiter:
+
+```sh
+docker rm -f eebus-steuerbox
+rm /home/eebus-bruecke/steuerbox-pairing.json /home/eebus-bruecke/failsafe.json
+docker restart eebus-bruecke
+```
+
+Zertifikat und Secret bleiben dabei erhalten, SKI, Fingerprint und QR-Code ändern sich also nicht. War die Brücke per SKI an die Test-Steuerbox gekoppelt, zusätzlich `EEBUS_REMOTE_SKI` entfernen bzw. auf den SKI der echten Steuerbox setzen.
 
 Das ist auf dem PFC noch nicht ausprobiert. Lokal laufen beide Container im selben Netz problemlos. Auf dem PFC teilen sich beide den Host. Falls sie sich per mDNS nicht finden, gibt das Log der Steuerbox Auskunft.
 
@@ -229,5 +278,6 @@ Das ist auf dem PFC noch nicht ausprobiert. Lokal laufen beide Container im selb
 - **Zustandsautomat:** Die Übergänge in `bruecke/bruecke.go` (insbesondere Init und Verlassen von Failsafe) gegen die aktuelle Spezifikation "EEBUS UC Limitation of Power Consumption" und das FNN-Lastenheft Steuerbox prüfen.
 - **Zertifizierung:** Diese Brücke ist nicht EEBUS-zertifiziert. Für Pilot- und Eigenanlagen ausreichend, für Serienanlagen vorher mit Netzbetreiber bzw. MSB klären.
 - **Docker auf dem PFC200:** Nur ab neueren Firmware-Ständen verfügbar, bei gemischtem Gerätepark vorab je Steuerung prüfen. Docker-Datenverzeichnis wegen begrenztem internem Speicher möglichst auf die SD-Karte legen.
-- **mDNS:** Läuft auf dem PFC bereits ein Avahi-Dienst, auf Port-Konflikte an 5353 achten.
+- **mDNS:** Läuft auf dem PFC bereits ein Avahi-Dienst, auf Port-Konflikte an 5353 achten. Netzwerk vorab mit dem Installateur abstimmen (siehe „Netzwerk“).
+- **Brücke und Test-Steuerbox gleichzeitig auf dem PFC:** noch nicht ausprobiert, lokal funktioniert es.
 - **Erweiterung:** MPC (Messwerte an die Steuerbox) und LPP (Einspeisebegrenzung) lassen sich nach gleichem Muster ergänzen. Dafür ist die Schnittstellenversion zu erhöhen.

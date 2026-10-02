@@ -4,7 +4,6 @@ dist/
 
 # Zertifikate und private Schluessel (SKI!) gehoeren nicht ins Repo
 *.pem
-test/data/
 backup-pfc/
 
 # Go-Kompilat
@@ -14,3 +13,6 @@ backup-pfc/
 # Editor
 .vscode/
 .idea/
+
+# Lokale Compose-Einstellungen (STEUERBOX_SKI)
+.env

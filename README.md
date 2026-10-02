@@ -25,13 +25,17 @@ Aufgabenteilung: Der Go-Dienst kapselt das Protokoll und den LPC-Zustandsautomat
 
 | Pfad | Inhalt |
 |---|---|
-| `main.go`, `bruecke.go`, `modbus.go` | Go-Dienst: EEBUS-Anbindung, LPC-Zustandsautomat, Modbus-Server |
-| `web.go`, `web/index.html` | Status-UI (ins Binary eingebettet) |
-| `Dockerfile` | Image für PFC200 (ARMv7) oder PC (amd64) |
-| `Codesys/` | CODESYS-Quellen: `FbEebusLpc`, GVL, Enums, Beispielprogramm |
-| `test/controlbox/` | Test-Steuerbox aus eebus-go als Docker-Image |
-| `test/spssimulator/` | Modbus-Client, der die SPS-Seite spielt |
+| `bruecke/` | Die Brücke (läuft auf dem PFC): EEBUS-Anbindung, LPC-Zustandsautomat, Modbus-Server, Status-UI |
+| `codesys/` | CODESYS-Quellen: `FbEebusLpc`, GVL, Enums, Beispielprogramm |
+| `testwerkzeuge/steuerbox/` | Test-Steuerbox mit Web-UI: Grenzen senden, Heartbeat- und Verbindungsausfall simulieren |
+| `testwerkzeuge/spssimulator/` | Modbus-Client, der die CODESYS-Seite spielt |
+| `internal/gemeinsam/` | Gemeinsamer Go-Code: Zertifikat, Umgebungsvariablen, Ereignisprotokoll, Web-UI-Grundlagen |
+| `Dockerfile` | Ein Dockerfile für alle Programme, Auswahl per `--build-arg PROGRAMM=…` |
+| `docker-compose.yml` | Lokale Testumgebung: Brücke, Test-Steuerbox, SPS-Simulator |
+| `skripte/pfc-images-bauen.sh` | Baut Brücke und Test-Steuerbox für den PFC nach `dist/` |
 | `dist/` | gebaute Images zum Verteilen (nicht im Repo) |
+
+Alle Go-Programme liegen in einem Modul. Abhängigkeiten sind in `go.mod`/`go.sum` gepinnt (eebus-go v0.7.0, modbus v1.6.4). Gebaut wird ausschließlich in Docker, eine lokale Go-Installation ist nicht nötig.
 
 ## Registerlayout (Schnittstellenversion 1)
 
@@ -61,24 +65,22 @@ Holding-Register (FC03/FC16), SPS → Brücke:
 
 ## Bauen und Verteilen
 
-Auf dem Entwicklungsrechner (Docker mit buildx):
-
-Abhängigkeiten sind in `go.mod`/`go.sum` gepinnt (eebus-go v0.7.0, modbus v1.6.4).
+Auf dem Entwicklungsrechner (Docker Desktop, Git Bash) aus dem Repo-Wurzelverzeichnis:
 
 ```sh
-docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.2 --load .
-mkdir -p dist && docker save eebus-bruecke:0.2 | gzip > dist/eebus-bruecke-0.2.tar.gz
-scp dist/eebus-bruecke-0.2.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
+sh skripte/pfc-images-bauen.sh 0.3
+scp dist/eebus-bruecke-0.3.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
 ```
 
-`scp` aus Git Bash, nicht aus PowerShell. Als `admin` statt `root` erst nach `/tmp` kopieren und auf dem PFC mit `sudo` verschieben.
+Das Skript baut Brücke und Test-Steuerbox für ARMv7 und legt beide als `.tar.gz` unter `dist/` ab. `scp` aus Git Bash, nicht aus PowerShell. Als `admin` statt `root` erst nach `/tmp` kopieren und auf dem PFC mit `sudo` verschieben.
 
 Auf dem PFC200 (als root):
 
 ```sh
 mkdir -p /home/eebus-bruecke
-docker load -i /home/eebus-bruecke/eebus-bruecke-0.2.tar.gz
+docker load -i /home/eebus-bruecke/eebus-bruecke-0.3.tar.gz
 
+docker rm -f eebus-bruecke    # falls eine ältere Version läuft
 docker run -d --name eebus-bruecke \
   --restart unless-stopped \
   --network host \
@@ -89,9 +91,11 @@ docker run -d --name eebus-bruecke \
   -e NENNLEISTUNG_MAX_W=22000 \
   -e FAILSAFE_GRENZE_W=4200 \
   -e FAILSAFE_MINDESTDAUER=2h \
-  -e WEB_PASSWORT=<Passwort fuer das Status-UI> \
-  eebus-bruecke:0.2
+  -e WEB_PASSWORT='<Passwort für das Status-UI>' \
+  eebus-bruecke:0.3
 ```
+
+Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sonst als Umleitung. Das Passwort in einfache Anführungszeichen setzen.
 
 `/home/eebus-bruecke` liegt im internen Speicher. Mit SD-Karte stattdessen `/media/sd/eebus-bruecke` verwenden. In beiden Fällen `zertifikat.pem` und `schluessel.pem` auf dem PC sichern.
 
@@ -99,9 +103,9 @@ docker run -d --name eebus-bruecke \
 
 Weitere Variablen: `EEBUS_PORT` (4712), `MODBUS_URL` (`tcp://127.0.0.1:5502`), `DATENVERZEICHNIS` (`/data`), `GERAET_HERSTELLER`, `GERAET_MARKE`, `GERAET_MODELL`.
 
-## Status-UI
+## Status-UI der Brücke
 
-Die Brücke bringt eine Statusseite mit: `http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Die Seite zeigt nur an, ändern lässt sich darüber nichts:
+`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Die Seite zeigt nur an, ändern lässt sich darüber nichts:
 
 - Ampel mit LPC-Zustand und wirksamer Grenze
 - Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Werte
@@ -122,7 +126,7 @@ Die Anmeldung läuft über HTTP Basic Auth ohne HTTPS, das Passwort ist im LAN a
 
 ## Pairing mit der Steuerbox
 
-1. Container ohne `EEBUS_REMOTE_SKI` starten. `docker logs eebus-bruecke` zeigt den eigenen SKI und alle per mDNS gefundenen EEBUS-Geräte mit deren SKI.
+1. Container ohne `EEBUS_REMOTE_SKI` starten. Status-UI bzw. `docker logs eebus-bruecke` zeigen den eigenen SKI und alle per mDNS gefundenen EEBUS-Geräte mit deren SKI.
 2. Eigenen SKI an den Messstellenbetreiber bzw. Installateur der Steuerbox geben, SKI der Steuerbox notieren.
 3. Container mit `EEBUS_REMOTE_SKI` neu anlegen. Das Zertifikat liegt im Volume und bleibt erhalten, der SKI ändert sich also nicht.
 
@@ -130,63 +134,80 @@ Das Volume `/data` gehört gesichert: Geht es verloren, entsteht ein neues Zerti
 
 ## CODESYS-Seite
 
-Die Quellen liegen als Text unter `Codesys/` und werden ins CODESYS-Projekt übernommen.
+Die Quellen liegen als Text unter `codesys/` und werden ins CODESYS-Projekt übernommen.
 
 Gerätebaum:
 
 1. *Ethernet-Adapter → Ethernet* anhängen, Schnittstelle mit der IP des PFC wählen (X1 meist `br0`). Für die Verbindung zu `127.0.0.1` ist die Wahl egal, CODESYS verlangt aber einen Adapter.
-2. Darunter *ModbusTCP Master*, **Auto-Reconnect aktivieren**, da die Brücke nach einem Neustart oft später bereit ist als die SPS.
+2. Darunter *ModbusTCP Master*, **Auto-Reconnect aktivieren**. Sonst gibt CODESYS nach einem Neustart der Brücke auf, und die Brücke zeigt „SPS ausgefallen“.
 3. Darunter *ModbusTCP Slave* mit IP `127.0.0.1`, Port `5502`, Unit-ID beliebig.
-4. Kanäle wie in `Codesys/GvlEebus.st`: FC04 Offset 0 Länge 14 (200 ms) und FC16 Offset 0 Länge 3 (1 s).
+4. Kanäle wie in `codesys/GvlEebus.st`: FC04 Offset 0 Länge 14 (200 ms) und FC16 Offset 0 Länge 3 (1 s).
 5. Im E/A-Abbild die Kanäle als Ganzes auf `GvlEebus.aInputRegister` bzw. `GvlEebus.aHoldingRegister` legen, Buszyklus-Task = Task von `PrgEnergiemanagement`.
 
 Falls der Gerätebaum Localhost als Ziel nicht akzeptiert, alternativ `FbMbMasterTcp` aus WagoAppPlcModbus mit `sHost := '127.0.0.1'` verwenden. `FbEebusLpc` bleibt dabei unverändert, da er nur die Register-Arrays sieht.
 
-## Testen ohne echte Steuerbox
+## Test-Steuerbox
 
-eebus-go enthält unter `cmd/controlbox` ein Beispiel, das die Gegenseite (Energy Guard) spielt: 5 s nach dem Verbinden sendet es eine Grenze von 7000 W für 2 Minuten, Heartbeat alle ~58 s. `test/controlbox/Dockerfile` baut es als Image, `test/spssimulator` spielt die CODESYS-Seite.
+`testwerkzeuge/steuerbox` spielt die Steuerbox des Messstellenbetreibers (EEBUS Energy Guard). Sie wird über ein Web-UI bedient (Port 8091):
 
-Komplett auf dem PC (Docker Desktop, Git Bash), ohne PFC und ohne Go-Installation:
+- **Senden:** Grenze mit Leistung und Dauer, Grenze aufheben, Vorlagen für typische Werte. Failsafe-Grenze und Failsafe-Mindestdauer (2–24 h).
+- **Störungen simulieren:**
+  - Heartbeat stoppen: Die Brücke geht 120 s nach dem letzten Heartbeat in Failsafe. Zurück geht es nur mit Heartbeat *und* einer neuen Grenze.
+  - Verbindung kurz unterbrechen: Die Verbindung wird automatisch neu aufgebaut.
+  - Trennen: Die Verbindung bleibt getrennt, bis sie wiederhergestellt wird.
+- **Werte bei der Brücke:** Grenze, Failsafe-Werte und die Nennleistung, so wie die Brücke sie über EEBUS meldet. Die Nennleistung kommt von der SPS, das prüft also die ganze Kette.
+- **Kopplung:** eigener SKI zum Kopieren, per mDNS gefundene Geräte, Koppeln per Klick. Die Kopplung wird im Volume gespeichert.
+- **Ereignisse:** Antworten der Brücke (angenommen/abgelehnt), Verbindungswechsel, Pairing.
+
+Die Steuerbox sendet ihren Heartbeat alle 8 s (`HEARTBEAT_TIMEOUT`, Vorgabe 10 s, minus 2 s), damit die Brücke nach dem Verbinden schnell aus „Init“ kommt. Weitere Variablen: `EEBUS_PORT` (4713), `WEB_ADRESSE` (`:8091`), `WEB_BENUTZER` (`admin`), `WEB_PASSWORT` (Pflicht), `DATENVERZEICHNIS` (`/data`).
+
+### Lokal auf dem PC
+
+`docker-compose.yml` startet Brücke, Test-Steuerbox und SPS-Simulator im selben Docker-Netz. mDNS funktioniert dort zwischen den Containern.
 
 ```sh
-# Images bauen (Brücke fuer amd64, ohne --platform)
-docker build -t eebus-bruecke:dev .
-docker build -t eebus-controlbox:dev test/controlbox
-
-# Einmalig: Zertifikat der Test-Steuerbox erzeugen und ihren SKI ermitteln
-docker run --rm eebus-controlbox:dev 4713 > cb.txt
-awk '/BEGIN CERT/,/END CERT/' cb.txt > test/controlbox/zertifikat.pem
-awk '/BEGIN EC/,/END EC/' cb.txt > test/controlbox/schluessel.pem && rm cb.txt
-openssl x509 -in test/controlbox/zertifikat.pem -noout -ext subjectKeyIdentifier
-#   -> Doppelpunkte entfernen, klein schreiben = SKI der Steuerbox
-
-# Brücke starten, eigener SKI steht im Log ("Eigener SKI: ...")
-docker network create eebus-test
-#   Status-UI danach unter http://localhost:8090 (admin / test)
-MSYS_NO_PATHCONV=1 docker run -d --name bruecke --network eebus-test -p 8090:8090 \
-  -v "$PWD/test/data:/data" -e EEBUS_REMOTE_SKI=<SKI Steuerbox> -e WEB_PASSWORT=test \
-  eebus-bruecke:dev
-docker logs bruecke
-
-# Steuerbox starten
-MSYS_NO_PATHCONV=1 docker run -d --name steuerbox --network eebus-test \
-  -v "$PWD/test/controlbox:/cert:ro" eebus-controlbox:dev \
-  4713 <SKI Brücke> /cert/zertifikat.pem /cert/schluessel.pem
-
-# SPS simulieren: Register live ansehen (Strg+C beendet)
-MSYS_NO_PATHCONV=1 docker run --rm -it --network container:bruecke \
-  -v "$PWD:/src" -w /src golang:1.23 go run ./test/spssimulator -nennleistung 22000
+docker compose up -d --build
 ```
 
-Erwarteter Ablauf in `docker logs -f bruecke`: `Steuerbox verbunden` → `Neue Grenze: 7000 W` → mit dem ersten Heartbeat `Init -> Begrenzt` → nach 2 min `Begrenzt -> Unbegrenzt/gesteuert`. `docker stop steuerbox` führt 120 s nach dem letzten Heartbeat zu `Failsafe`, `docker start steuerbox` wieder zurück nach `Begrenzt`.
+| Dienst | Adresse | Anmeldung |
+|---|---|---|
+| Brücke | http://localhost:8090 | admin / test |
+| Test-Steuerbox | http://localhost:8091 | admin / test |
+| Modbus der Brücke | localhost:5502 | – |
 
-Im Container-Netz funktioniert mDNS zwischen den Containern. Gegen eine echte Steuerbox im LAN braucht es dagegen `--network host`, was mit Docker Desktop unter Windows nicht zuverlässig geht, also dafür den PFC oder einen Linux-Rechner nehmen.
+Einmalig koppeln:
+
+1. Im Steuerbox-UI unter „Kopplung“ den eigenen SKI kopieren.
+2. Im Repo-Wurzelverzeichnis eine Datei `.env` anlegen mit `STEUERBOX_SKI=<SKI>` und `docker compose up -d` wiederholen. Damit vertraut die Brücke der Steuerbox.
+3. Im Steuerbox-UI bei der gefundenen Brücke auf „Koppeln“ klicken.
+
+Zertifikate und Kopplung liegen in Docker-Volumes und überstehen Neustarts. SPS-Ausfall testen: `docker compose stop spssimulator`. Alles entfernen inklusive Volumes: `docker compose down -v`.
+
+### Auf dem PFC
+
+Für Tests mit der echten CODESYS-Applikation läuft die Test-Steuerbox als zweiter Container auf demselben PFC. Das Image baut `skripte/pfc-images-bauen.sh` mit.
+
+```sh
+mkdir -p /home/eebus-steuerbox
+docker load -i /home/eebus-steuerbox/eebus-steuerbox-0.3.tar.gz
+docker run -d --name eebus-steuerbox \
+  --network host \
+  --memory 64m \
+  -v /home/eebus-steuerbox:/data \
+  -e WEB_PASSWORT='<Passwort>' \
+  eebus-steuerbox:0.3
+```
+
+Danach `http://<pfc-ip>:8091` öffnen, den SKI der Steuerbox als `EEBUS_REMOTE_SKI` bei der Brücke eintragen (Container neu anlegen) und im Steuerbox-UI die Brücke koppeln. Nach dem Test `docker rm -f eebus-steuerbox` und die Brücke wieder mit dem SKI der echten Steuerbox anlegen.
+
+Das ist auf dem PFC noch nicht ausprobiert. Lokal laufen beide Container im selben Netz problemlos. Auf dem PFC teilen sich beide den Host. Falls sie sich per mDNS nicht finden, gibt das Log der Steuerbox Auskunft.
 
 ## Offene Punkte vor dem Produktiveinsatz
 
-- **eebus-go-Version:** Kompiliert und lokal gegen `cmd/controlbox` aus eebus-go v0.7.0 getestet (Pairing, Grenze, Ablauf, Failsafe, Rückkehr). Noch nicht gegen eine echte Steuerbox.
-- **Verbindungsstatus:** Beim ersten Test kam nach dem Stoppen der Test-Steuerbox kein `RemoteSKIDisconnected`, Register 3 blieb auf „verbunden“. In einem späteren Test wurde die Trennung sofort gemeldet. Bei der echten Steuerbox beobachten. Für die Grenze ist das unkritisch, dort entscheidet der Heartbeat.
-- **Zustandsautomat:** Die Übergänge in `bruecke.go` (insbesondere Init und Verlassen von Failsafe) gegen die aktuelle Spezifikation "EEBUS UC Limitation of Power Consumption" und das FNN-Lastenheft Steuerbox prüfen.
+- **eebus-go-Version:** Kompiliert und lokal mit der Test-Steuerbox getestet: Pairing, Grenze, Ablauf, Failsafe-Werte, Heartbeat-Ausfall, Verbindungsabbrüche, Nennleistung. Noch nicht gegen eine echte Steuerbox.
+- **Fehler in eebus-go v0.7.0:** Nach einer Trennung bleibt beim Energy Guard die alte Entität in `RemoteEntitiesScenarios()`, Schreibzugriffe gehen danach ins Leere. Die Test-Steuerbox umgeht das (siehe `ziel()` in `testwerkzeuge/steuerbox/steuerbox.go`). Die Brücke ist als Controllable System nicht betroffen. Bei einem Update von eebus-go prüfen, ob der Fehler behoben ist.
+- **Verbindungsstatus:** Beim allerersten Test mit dem eebus-go-Beispiel kam nach dem Stoppen der Gegenseite kein `RemoteSKIDisconnected`. In allen späteren Tests (Container-Stopp, kurze Unterbrechung, Trennen) wurde die Trennung sofort gemeldet. Bei der echten Steuerbox beobachten. Für die Grenze ist das unkritisch, dort entscheidet der Heartbeat.
+- **Zustandsautomat:** Die Übergänge in `bruecke/bruecke.go` (insbesondere Init und Verlassen von Failsafe) gegen die aktuelle Spezifikation "EEBUS UC Limitation of Power Consumption" und das FNN-Lastenheft Steuerbox prüfen.
 - **Zertifizierung:** Diese Brücke ist nicht EEBUS-zertifiziert. Für Pilot- und Eigenanlagen ausreichend, für Serienanlagen vorher mit Netzbetreiber bzw. MSB klären.
 - **Docker auf dem PFC200:** Nur ab neueren Firmware-Ständen verfügbar, bei gemischtem Gerätepark vorab je Steuerung prüfen. Docker-Datenverzeichnis wegen begrenztem internem Speicher möglichst auf die SD-Karte legen.
 - **mDNS:** Läuft auf dem PFC bereits ein Avahi-Dienst, auf Port-Konflikte an 5353 achten.

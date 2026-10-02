@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test-Steuerbox</title>
+<!--STIL-->
+</head>
+<body>
+<main>
+	<header>
+		<h1>Test-Steuerbox</h1>
+		<span class="marke orange">Simulator, nicht für den Produktivbetrieb</span>
+	</header>
+
+	<section class="ampel" id="ampel">
+		<div class="punkt"></div>
+		<div>
+			<div class="titel" id="ampelTitel">Lade …</div>
+			<div class="leise" id="ampelText"></div>
+		</div>
+	</section>
+
+	<div class="raster">
+		<section class="karte">
+			<h2>Senden</h2>
+			<div class="abschnitt">
+				<div class="vorlagen" id="vorlagen"></div>
+				<div class="felder">
+					<label>Grenze in W<input id="grenzeW" type="number" min="0" step="100" value="4200"></label>
+					<label>Dauer in min, 0 = unbefristet<input id="grenzeMin" type="number" min="0" step="1" value="2"></label>
+				</div>
+				<div class="knoepfe">
+					<button class="primaer braucht-verbindung" id="grenzeSenden" type="button">Grenze senden</button>
+					<button class="braucht-verbindung" id="grenzeAufheben" type="button">Grenze aufheben</button>
+				</div>
+				<p class="meldung" id="grenzeMeldung"></p>
+			</div>
+			<div class="abschnitt">
+				<div class="felder">
+					<label>Failsafe-Grenze in W<input id="failsafeW" type="number" min="0" step="100" value="4200"></label>
+					<label>Mindestdauer in h, 2 bis 24<input id="failsafeH" type="number" min="2" max="24" step="0.5" value="2"></label>
+				</div>
+				<div class="knoepfe">
+					<button class="braucht-verbindung" id="failsafeSenden" type="button">Failsafe-Werte senden</button>
+				</div>
+				<p class="meldung" id="failsafeMeldung"></p>
+			</div>
+		</section>
+
+		<section class="karte">
+			<h2>Störungen simulieren</h2>
+			<div class="abschnitt">
+				<dl><dt>Heartbeat</dt><dd id="heartbeat"></dd></dl>
+				<div class="knoepfe" style="margin-top:10px">
+					<button class="gefahr" id="heartbeatSchalter" type="button"></button>
+				</div>
+				<p class="hinweis">Ohne Heartbeat geht die Brücke nach 120 s in Failsafe. Zurück nur mit Heartbeat <em>und</em> einer neuen Grenze.</p>
+			</div>
+			<div class="abschnitt">
+				<dl><dt>Verbindung</dt><dd id="verbindung"></dd></dl>
+				<div class="knoepfe" style="margin-top:10px">
+					<button class="braucht-verbindung" id="kurz" type="button">Kurz unterbrechen</button>
+					<button class="gefahr" id="trennen" type="button">Trennen</button>
+				</div>
+				<p class="hinweis">„Kurz unterbrechen“ schließt die Verbindung einmal, sie wird automatisch neu aufgebaut. „Trennen“ hält sie getrennt, bis du sie wiederherstellst.</p>
+			</div>
+			<p class="meldung" id="stoerungMeldung"></p>
+		</section>
+
+		<section class="karte">
+			<h2>Werte bei der Brücke</h2>
+			<dl>
+				<dt>Grenze</dt><dd id="bGrenze"></dd>
+				<dt>Failsafe-Grenze</dt><dd id="bFailsafeW"></dd>
+				<dt>Failsafe-Mindestdauer</dt><dd id="bFailsafeDauer"></dd>
+				<dt>Nennleistung (von SPS)</dt><dd id="bNennleistung"></dd>
+				<dt>LPC-Szenarien</dt><dd id="bSzenarien"></dd>
+			</dl>
+			<p class="hinweis">So wie die Brücke sie über EEBUS meldet.</p>
+		</section>
+
+		<section class="karte breit">
+			<h2>Kopplung</h2>
+			<dl>
+				<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button id="kopieren" type="button">Kopieren</button></dd>
+				<dt>Gekoppelte Brücke</dt><dd><span class="mono" id="gekoppelt"></span><button class="gefahr" id="entkoppeln" type="button">Entkoppeln</button></dd>
+			</dl>
+			<p class="hinweis">Den eigenen SKI bei der Brücke als <code>EEBUS_REMOTE_SKI</code> eintragen, dann hier die Brücke koppeln.</p>
+			<table class="geraete" style="margin-top:12px">
+				<thead><tr><th>Per mDNS gefunden</th><th>Typ</th><th>SKI</th><th></th></tr></thead>
+				<tbody id="gefunden"></tbody>
+			</table>
+			<p class="meldung" id="kopplungMeldung"></p>
+		</section>
+
+		<section class="karte breit">
+			<h2>Ereignisse</h2>
+			<div class="ereignisse" id="ereignisse"></div>
+		</section>
+	</div>
+
+	<footer>
+		<span id="laufzeit"></span>
+		<span id="aktualisiert"></span>
+	</footer>
+</main>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+let zuletzt = null;
+
+function watt(w) {
+	return Math.round(w).toLocaleString("de-DE") + " W";
+}
+
+function dauer(s) {
+	s = Math.max(0, Math.floor(s));
+	const d = Math.floor(s / 86400), h = Math.floor(s / 3600) % 24, m = Math.floor(s / 60) % 60, sek = s % 60;
+	if (d > 0) return `${d} d ${h} h`;
+	if (h > 0) return m > 0 ? `${h} h ${m} min` : `${h} h`;
+	if (m > 0) return sek > 0 ? `${m} min ${sek} s` : `${m} min`;
+	return `${sek} s`;
+}
+
+// Werte immer per textContent, nie per innerHTML: Gerätenamen aus dem mDNS kommen aus dem LAN.
+function marke(el, text, farbe) {
+	const span = document.createElement("span");
+	span.className = "marke " + (farbe || "");
+	span.textContent = text;
+	el.replaceChildren(span);
+}
+
+function zeigeAmpel(farbe, titel, text) {
+	$("ampel").className = "ampel " + farbe;
+	$("ampelTitel").textContent = titel;
+	$("ampelText").textContent = text;
+}
+
+function kurzSki(ski) {
+	return ski.slice(0, 8) + "…";
+}
+
+// Vorlagen füllen nur die Felder, gesendet wird erst mit "Grenze senden".
+const vorlagen = [
+	{ w: 4200, min: 2, text: "4.200 W · 2 min" },
+	{ w: 7000, min: 2, text: "7.000 W · 2 min" },
+	{ w: 0, min: 1, text: "0 W · 1 min" },
+	{ w: 4200, min: 0, text: "4.200 W · unbefristet" },
+];
+for (const v of vorlagen) {
+	const b = document.createElement("button");
+	b.type = "button";
+	b.textContent = v.text;
+	b.addEventListener("click", () => { $("grenzeW").value = v.w; $("grenzeMin").value = v.min; });
+	$("vorlagen").append(b);
+}
+
+function zeige(s) {
+	zuletzt = s;
+	const gekoppelt = s.gekoppelt !== "";
+
+	if (!gekoppelt) {
+		zeigeAmpel("", "Nicht gekoppelt", "Unten unter „Kopplung“ die Brücke auswählen");
+	} else if (s.unterbrochen) {
+		zeigeAmpel("rot", "Getrennt (Test)", "Verbindung absichtlich getrennt, unter „Störungen“ wiederherstellen");
+	} else if (!s.verbunden) {
+		zeigeAmpel("orange", "Verbindungsaufbau …", `Brücke ${kurzSki(s.gekoppelt)} noch nicht verbunden`);
+	} else if (!s.heartbeatLaeuft) {
+		zeigeAmpel("rot", "Verbunden, Heartbeat gestoppt", "Brücke geht 120 s nach dem letzten Heartbeat in Failsafe");
+	} else {
+		zeigeAmpel("gruen", "Verbunden mit der Brücke", s.bruecke ? "LPC bereit" : "Warte auf LPC-Meldung der Brücke …");
+	}
+
+	// Aktionen, die eine Verbindung brauchen
+	const bereit = s.verbunden && s.bruecke !== null;
+	for (const b of document.querySelectorAll(".braucht-verbindung")) b.disabled = !bereit;
+
+	marke($("heartbeat"), s.heartbeatLaeuft ? `läuft, alle ${dauer(s.heartbeatAbstandS)}` : "gestoppt", s.heartbeatLaeuft ? "gruen" : "rot");
+	$("heartbeatSchalter").textContent = s.heartbeatLaeuft ? "Heartbeat stoppen" : "Heartbeat starten";
+	$("heartbeatSchalter").className = s.heartbeatLaeuft ? "gefahr" : "primaer";
+
+	if (!gekoppelt) marke($("verbindung"), "nicht gekoppelt", "");
+	else if (s.unterbrochen) marke($("verbindung"), "getrennt (Test)", "rot");
+	else marke($("verbindung"), s.verbunden ? "verbunden" : "nicht verbunden", s.verbunden ? "gruen" : "orange");
+	$("trennen").textContent = s.unterbrochen ? "Wiederherstellen" : "Trennen";
+	$("trennen").className = s.unterbrochen ? "primaer" : "gefahr";
+	$("trennen").disabled = !gekoppelt;
+
+	const b = s.bruecke;
+	const unbekannt = "–";
+	$("bGrenze").textContent = b && b.grenze
+		? `${watt(b.grenze.wertW)}, ${b.grenze.aktiv ? "aktiv" : "inaktiv"}` + (b.grenze.dauerS > 0 ? `, noch ${dauer(b.grenze.dauerS)}` : "")
+		: unbekannt;
+	$("bFailsafeW").textContent = b && b.failsafeGrenzeW != null ? watt(b.failsafeGrenzeW) : unbekannt;
+	$("bFailsafeDauer").textContent = b && b.failsafeMindestdauerS != null ? dauer(b.failsafeMindestdauerS) : unbekannt;
+	$("bNennleistung").textContent = b && b.nennleistungW != null ? watt(b.nennleistungW) : unbekannt;
+	$("bSzenarien").textContent = b && b.szenarien && b.szenarien.length ? b.szenarien.join(", ") : unbekannt;
+
+	$("eigenerSki").textContent = s.eigenerSki;
+	$("gekoppelt").textContent = s.gekoppelt || "keine";
+	$("entkoppeln").hidden = !gekoppelt;
+
+	const zeilen = s.gefunden.map(g => {
+		const tr = document.createElement("tr");
+		for (const text of [`${g.marke} ${g.modell}`, g.typ, g.ski]) {
+			const td = document.createElement("td");
+			td.textContent = text;
+			tr.append(td);
+		}
+		tr.children[2].className = "mono";
+		const td = document.createElement("td");
+		if (g.ski === s.gekoppelt) {
+			marke(td, "gekoppelt", "gruen");
+		} else {
+			const knopf = document.createElement("button");
+			knopf.type = "button";
+			knopf.textContent = "Koppeln";
+			knopf.addEventListener("click", () => senden("POST", "api/kopplung", { ski: g.ski }, "kopplungMeldung"));
+			td.append(knopf);
+		}
+		tr.append(td);
+		return tr;
+	});
+	if (zeilen.length === 0) {
+		const tr = document.createElement("tr");
+		const td = document.createElement("td");
+		td.colSpan = 4;
+		td.className = "leise";
+		td.textContent = "Noch keine Geräte gefunden";
+		tr.append(td);
+		zeilen.push(tr);
+	}
+	$("gefunden").replaceChildren(...zeilen);
+
+	const heute = new Date().toDateString();
+	$("ereignisse").replaceChildren(...s.ereignisse.map(e => {
+		const zeit = new Date(e.zeit);
+		const div = document.createElement("div");
+		const t = document.createElement("time");
+		t.textContent = (zeit.toDateString() === heute ? "" : zeit.toLocaleDateString("de-DE") + " ") + zeit.toLocaleTimeString("de-DE");
+		const span = document.createElement("span");
+		span.textContent = e.text;
+		div.append(t, span);
+		return div;
+	}));
+
+	$("laufzeit").textContent = `Laufzeit ${dauer(s.laufzeitS)}`;
+	$("aktualisiert").textContent = `Aktualisiert ${new Date().toLocaleTimeString("de-DE")}`;
+}
+
+// Ohne Zugangsdaten in der URL: Bei Aufruf als http://benutzer:pw@ip/ lehnt fetch
+// sonst ab. Der Browser sendet die einmal eingegebene Anmeldung trotzdem mit.
+function url(pfad) {
+	const u = new URL(pfad, location.href);
+	u.username = u.password = "";
+	return u;
+}
+
+async function senden(methode, pfad, daten, meldungId) {
+	const meldung = $(meldungId);
+	meldung.className = "meldung";
+	meldung.textContent = "…";
+	try {
+		const antwort = await fetch(url(pfad), {
+			method: methode,
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(daten),
+		});
+		const inhalt = await antwort.json().catch(() => ({}));
+		meldung.textContent = antwort.ok ? inhalt.text : (inhalt.fehler || `Fehler ${antwort.status}`);
+		if (!antwort.ok) meldung.className = "meldung fehler";
+	} catch (fehler) {
+		meldung.className = "meldung fehler";
+		meldung.textContent = "Steuerbox nicht erreichbar";
+	}
+}
+
+function zahl(id) {
+	return Number($(id).value);
+}
+
+$("grenzeSenden").addEventListener("click", () =>
+	senden("POST", "api/grenze", { wertW: zahl("grenzeW"), dauerS: zahl("grenzeMin") * 60, aktiv: true }, "grenzeMeldung"));
+$("grenzeAufheben").addEventListener("click", () =>
+	senden("POST", "api/grenze", { wertW: 0, dauerS: 0, aktiv: false }, "grenzeMeldung"));
+$("failsafeSenden").addEventListener("click", () =>
+	senden("POST", "api/failsafe", { grenzeW: zahl("failsafeW"), mindestdauerS: zahl("failsafeH") * 3600 }, "failsafeMeldung"));
+$("heartbeatSchalter").addEventListener("click", () =>
+	senden("POST", "api/heartbeat", { an: !zuletzt.heartbeatLaeuft }, "stoerungMeldung"));
+$("kurz").addEventListener("click", () =>
+	senden("POST", "api/verbindung", { aktion: "kurz" }, "stoerungMeldung"));
+$("trennen").addEventListener("click", () =>
+	senden("POST", "api/verbindung", { aktion: zuletzt.unterbrochen ? "wiederherstellen" : "trennen" }, "stoerungMeldung"));
+$("entkoppeln").addEventListener("click", () => {
+	if (confirm("Kopplung mit der Brücke aufheben?")) senden("DELETE", "api/kopplung", {}, "kopplungMeldung");
+});
+
+// navigator.clipboard gibt es nur über HTTPS oder localhost, auf dem PFC
+// (http://<ip>) daher der Weg über ein temporäres Textfeld.
+$("kopieren").addEventListener("click", async () => {
+	const ski = $("eigenerSki").textContent;
+	try {
+		await navigator.clipboard.writeText(ski);
+	} catch {
+		const feld = document.createElement("textarea");
+		feld.value = ski;
+		document.body.append(feld);
+		feld.select();
+		document.execCommand("copy");
+		feld.remove();
+	}
+	$("kopieren").textContent = "Kopiert";
+	setTimeout(() => $("kopieren").textContent = "Kopieren", 1500);
+});
+
+async function abfragen() {
+	try {
+		const antwort = await fetch(url("api/status"), { cache: "no-store" });
+		if (antwort.status === 401) {
+			zeigeAmpel("", "Anmeldung abgelaufen", "Seite neu laden");
+		} else if (!antwort.ok) {
+			throw new Error(antwort.status);
+		} else {
+			zeige(await antwort.json());
+		}
+	} catch (fehler) {
+		zeigeAmpel("", "Steuerbox nicht erreichbar", "Letzter Versuch " + new Date().toLocaleTimeString("de-DE"));
+	}
+	setTimeout(abfragen, 1000);
+}
+
+abfragen();
+</script>
+</body>
+</html>

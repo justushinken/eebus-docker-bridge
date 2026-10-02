@@ -1,11 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"slices"
 	"sync"
 	"time"
+
+	"eebus-bruecke/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
 	ucapi "github.com/enbility/eebus-go/usecases/api"
@@ -75,13 +76,13 @@ const (
 // damit es keine Verklemmung mit dessen Callbacks gibt.
 type Bruecke struct {
 	konf       Konfiguration
+	pairing    gemeinsam.Pairingprotokoll
 	lpc        *cslpc.LPC
 	eigenerSki string
 	gestartet  time.Time
 
 	mu                    sync.Mutex
 	gefunden              []shipapi.RemoteService // per mDNS sichtbare EEBUS-Geraete
-	pairing               map[string]shipapi.ConnectionState
 	zustand               LpcZustand
 	zustandSeit           time.Time
 	verbindung            Verbindung
@@ -135,75 +136,46 @@ func (b *Bruecke) SetzeStartwerte() {
 
 // --- api.ServiceReaderInterface ---
 
+// Verbindungswechsel nur einmal protokollieren, ship-go meldet sie teils doppelt.
 func (b *Bruecke) RemoteSKIConnected(dienst api.ServiceInterface, ski string) {
 	b.mu.Lock()
+	neu := b.verbindung != VerbindungVerbunden
 	b.verbindung = VerbindungVerbunden
 	b.mu.Unlock()
-	log.Printf("Steuerbox verbunden: %s", ski)
+	if neu {
+		log.Printf("Steuerbox verbunden: %s", ski)
+	}
 }
 
 func (b *Bruecke) RemoteSKIDisconnected(dienst api.ServiceInterface, ski string) {
 	b.mu.Lock()
+	neu := b.verbindung == VerbindungVerbunden
 	b.verbindung = VerbindungGetrennt
 	b.mu.Unlock()
-	log.Printf("Steuerbox getrennt: %s", ski)
+	if neu {
+		log.Printf("Steuerbox getrennt: %s", ski)
+	}
 }
 
 // Hilfreich bei der Inbetriebnahme: zeigt die per mDNS gefundenen Geraete samt SKI.
 // mDNS meldet die Liste wiederholt, protokolliert werden nur neu gefundene Geraete.
 func (b *Bruecke) VisibleRemoteServicesUpdated(dienst api.ServiceInterface, eintraege []shipapi.RemoteService) {
 	b.mu.Lock()
-	bekannt := make(map[string]bool, len(b.gefunden))
-	for _, e := range b.gefunden {
-		bekannt[e.Ski] = true
-	}
+	neu := gemeinsam.NeuGefunden(b.gefunden, eintraege)
 	b.gefunden = slices.Clone(eintraege)
 	b.mu.Unlock()
 
-	for _, e := range eintraege {
-		if !bekannt[e.Ski] {
-			log.Printf("Gefunden: %s %s, SKI %s", e.Brand, e.Model, e.Ski)
-		}
+	for _, e := range neu {
+		log.Printf("Gefunden: %s %s, SKI %s", e.Brand, e.Model, e.Ski)
 	}
 }
 
 func (b *Bruecke) ServiceShipIDUpdate(ski string, shipId string) {}
 
-var pairingTexte = map[shipapi.ConnectionState]string{
-	shipapi.ConnectionStateNone:                   "kein Pairing",
-	shipapi.ConnectionStateQueued:                 "eingereiht",
-	shipapi.ConnectionStateInitiated:              "von hier gestartet",
-	shipapi.ConnectionStateReceivedPairingRequest: "Anfrage der Gegenseite",
-	shipapi.ConnectionStateInProgress:             "Handshake laeuft",
-	shipapi.ConnectionStateTrusted:                "vertraut",
-	shipapi.ConnectionStatePin:                    "PIN",
-	shipapi.ConnectionStateCompleted:              "abgeschlossen",
-	shipapi.ConnectionStateRemoteDeniedTrust:      "von Gegenseite abgelehnt",
-	shipapi.ConnectionStateError:                  "Fehler",
-}
-
-// Protokolliert nur Wechsel, der SHIP-Handshake meldet manche Zustaende mehrfach.
 func (b *Bruecke) ServicePairingDetailUpdate(ski string, detail *shipapi.ConnectionStateDetail) {
-	zustand := detail.State()
-	b.mu.Lock()
-	if b.pairing == nil {
-		b.pairing = make(map[string]shipapi.ConnectionState)
+	if text, melden := b.pairing.Neu(ski, detail); melden {
+		log.Printf("Pairing %s: %s", ski, text)
 	}
-	alt, bekannt := b.pairing[ski]
-	b.pairing[ski] = zustand
-	b.mu.Unlock()
-	if bekannt && alt == zustand {
-		return
-	}
-
-	text, ok := pairingTexte[zustand]
-	if !ok {
-		text = fmt.Sprint(zustand)
-	}
-	if err := detail.Error(); err != nil {
-		text += ": " + err.Error()
-	}
-	log.Printf("Pairing %s: %s", ski, text)
 }
 
 // Nur der konfigurierten Steuerbox wird vertraut.
@@ -250,20 +222,28 @@ func (b *Bruecke) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterface,
 		b.letzterHeartbeat = jetzt
 		b.mu.Unlock()
 
+	// eebus-go meldet bei jeder Aenderung der Konfiguration beide Failsafe-Ereignisse,
+	// protokolliert wird nur ein tatsaechlich geaenderter Wert.
 	case cslpc.DataUpdateFailsafeConsumptionActivePowerLimit:
 		if wert, _, err := b.lpc.FailsafeConsumptionActivePowerLimit(); err == nil {
 			b.mu.Lock()
+			geaendert := wert != b.failsafeGrenzeW
 			b.failsafeGrenzeW = wert
 			b.mu.Unlock()
-			log.Printf("Neue Failsafe-Grenze: %.0f W", wert)
+			if geaendert {
+				log.Printf("Neue Failsafe-Grenze: %.0f W", wert)
+			}
 		}
 
 	case cslpc.DataUpdateFailsafeDurationMinimum:
 		if dauer, _, err := b.lpc.FailsafeDurationMinimum(); err == nil {
 			b.mu.Lock()
+			geaendert := dauer != b.failsafeMindestdauer
 			b.failsafeMindestdauer = dauer
 			b.mu.Unlock()
-			log.Printf("Neue Failsafe-Mindestdauer: %v", dauer)
+			if geaendert {
+				log.Printf("Neue Failsafe-Mindestdauer: %v", dauer)
+			}
 		}
 	}
 }

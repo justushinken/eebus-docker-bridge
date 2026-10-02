@@ -1,0 +1,56 @@
+# Lokale Testumgebung auf dem PC: Bruecke, Test-Steuerbox und SPS-Simulator.
+#
+#   docker compose up -d --build
+#
+# Bruecke:    http://localhost:8090  (admin / test)
+# Steuerbox:  http://localhost:8091  (admin / test)
+# Modbus:     localhost:5502
+#
+# Einmalig koppeln: SKI der Steuerbox (in ihrem UI) in .env als STEUERBOX_SKI
+# eintragen, "docker compose up -d" wiederholen, dann im Steuerbox-UI die Bruecke
+# koppeln. Zertifikate und Kopplung liegen in Volumes und bleiben erhalten.
+
+services:
+  bruecke:
+    build: .
+    image: eebus-bruecke:dev
+    ports:
+      - "8090:8090"
+      - "5502:5502"
+    environment:
+      EEBUS_REMOTE_SKI: ${STEUERBOX_SKI:-}
+      # Im Container-Netz statt nur 127.0.0.1, damit SPS-Simulator und
+      # Modbus-Master auf dem PC herankommen.
+      MODBUS_URL: tcp://0.0.0.0:5502
+      NENNLEISTUNG_MAX_W: "11000"
+      WEB_PASSWORT: test
+    volumes:
+      - bruecke-daten:/data
+
+  steuerbox:
+    build:
+      context: .
+      args:
+        PROGRAMM: testwerkzeuge/steuerbox
+    image: eebus-steuerbox:dev
+    ports:
+      - "8091:8091"
+    environment:
+      WEB_PASSWORT: test
+    volumes:
+      - steuerbox-daten:/data
+
+  # Spielt die CODESYS-Seite. Ausfall der SPS testen: docker compose stop spssimulator
+  spssimulator:
+    build:
+      context: .
+      args:
+        PROGRAMM: testwerkzeuge/spssimulator
+    image: eebus-spssimulator:dev
+    command: ["-url", "tcp://bruecke:5502", "-nennleistung", "22000"]
+    depends_on:
+      - bruecke
+
+volumes:
+  bruecke-daten:
+  steuerbox-daten:

@@ -4,101 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EEBUS-Brücke</title>
-<style>
-	:root {
-		--hintergrund: #f4f5f7;
-		--flaeche: #ffffff;
-		--rand: #dfe2e6;
-		--text: #1d2329;
-		--text-leise: #5f6b76;
-		--gruen: #1f8a4c;
-		--gruen-flaeche: #e3f4ea;
-		--orange: #b35c00;
-		--orange-flaeche: #fdeedc;
-		--rot: #c0352b;
-		--rot-flaeche: #fbe4e2;
-		--grau: #6b7680;
-		--grau-flaeche: #eceef0;
-		--mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
-	}
-	@media (prefers-color-scheme: dark) {
-		:root {
-			--hintergrund: #14181c;
-			--flaeche: #1d2329;
-			--rand: #2e363e;
-			--text: #e6e9ec;
-			--text-leise: #9aa5af;
-			--gruen: #4cc27f;
-			--gruen-flaeche: #173527;
-			--orange: #f0a04b;
-			--orange-flaeche: #3b2a16;
-			--rot: #f07167;
-			--rot-flaeche: #3d1f1d;
-			--grau: #9aa5af;
-			--grau-flaeche: #262d34;
-		}
-	}
-	* { box-sizing: border-box; }
-	body {
-		margin: 0;
-		background: var(--hintergrund);
-		color: var(--text);
-		font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-	}
-	main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 32px; }
-	header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-	h1 { font-size: 20px; margin: 0; }
-	h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-leise); margin: 0 0 10px; }
-	.leise { color: var(--text-leise); }
-	.mono { font-family: var(--mono); font-size: 13px; overflow-wrap: anywhere; }
-
-	.ampel {
-		border-radius: 10px; padding: 18px 20px; margin-bottom: 16px;
-		border: 1px solid var(--rand); background: var(--grau-flaeche);
-		display: flex; align-items: center; gap: 16px;
-	}
-	.ampel .punkt { width: 18px; height: 18px; border-radius: 50%; background: var(--grau); flex: none; }
-	.ampel .titel { font-size: 24px; font-weight: 650; }
-	.ampel.gruen { background: var(--gruen-flaeche); } .ampel.gruen .punkt { background: var(--gruen); }
-	.ampel.orange { background: var(--orange-flaeche); } .ampel.orange .punkt { background: var(--orange); }
-	.ampel.rot { background: var(--rot-flaeche); } .ampel.rot .punkt { background: var(--rot); }
-
-	.raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
-	.karte { background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; padding: 16px; min-width: 0; }
-	.breit { grid-column: 1 / -1; }
-
-	dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
-	dt { color: var(--text-leise); }
-	dd { margin: 0; min-width: 0; font-variant-numeric: tabular-nums; }
-
-	.marke { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 13px; font-weight: 600; background: var(--grau-flaeche); color: var(--grau); }
-	.marke.gruen { background: var(--gruen-flaeche); color: var(--gruen); }
-	.marke.orange { background: var(--orange-flaeche); color: var(--orange); }
-	.marke.rot { background: var(--rot-flaeche); color: var(--rot); }
-
-	button {
-		font: inherit; font-size: 13px; padding: 2px 10px; margin-left: 6px;
-		border: 1px solid var(--rand); border-radius: 6px; background: var(--hintergrund); color: var(--text); cursor: pointer;
-	}
-	button:hover { border-color: var(--text-leise); }
-
-	table { width: 100%; border-collapse: collapse; }
-	th, td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--rand); vertical-align: top; }
-	th { font-weight: 600; color: var(--text-leise); font-size: 13px; }
-	tr:last-child td { border-bottom: none; }
-
-	.ereignisse { max-height: 360px; overflow-y: auto; font-family: var(--mono); font-size: 13px; }
-	.ereignisse div { display: flex; gap: 12px; padding: 3px 0; border-bottom: 1px solid var(--rand); }
-	.ereignisse div:last-child { border-bottom: none; }
-	.ereignisse time { color: var(--text-leise); flex: none; }
-	.ereignisse span { overflow-wrap: anywhere; }
-
-	footer { margin-top: 16px; font-size: 13px; color: var(--text-leise); display: flex; gap: 16px; flex-wrap: wrap; }
-	@media (max-width: 480px) {
-		.raster { grid-template-columns: 1fr; }
-		.ampel .titel { font-size: 20px; }
-	}
-</style>
+<!--STIL-->
 </head>
 <body>
 <main>
@@ -150,7 +56,7 @@
 
 		<section class="karte breit">
 			<h2>Per mDNS gefundene EEBUS-Geräte</h2>
-			<table>
+			<table class="geraete">
 				<thead><tr><th>Gerät</th><th>Typ</th><th>SKI</th><th></th></tr></thead>
 				<tbody id="gefunden"></tbody>
 			</table>

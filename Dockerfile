@@ -1,20 +1,26 @@
-# Mehrstufiger Build: Go-Kompilat fuer die Zielplattform, Laufzeit-Image "scratch".
-# Fuer den PFC200 (ARMv7) auf dem Entwicklungsrechner:
-#   docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.1 --load .
-# Fuer lokale Tests auf dem PC (amd64) ohne --platform bauen.
+# Ein Dockerfile fuer alle Programme im Repo, Auswahl per PROGRAMM.
+# Go-Kompilat fuer die Zielplattform, Laufzeit-Image "scratch".
+#
+# Bruecke fuer den PFC200 (ARMv7):
+#   docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.3 --load .
+# Test-Steuerbox:
+#   docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM=testwerkzeuge/steuerbox -t eebus-steuerbox:0.3 --load .
+# Fuer lokale Tests auf dem PC (amd64) ohne --platform bauen, oder docker compose verwenden.
 
 FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS bau
 ARG TARGETOS TARGETARCH TARGETVARIANT
+ARG PROGRAMM=bruecke
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-COPY *.go ./
-COPY web ./web
+COPY internal ./internal
+COPY bruecke ./bruecke
+COPY testwerkzeuge ./testwerkzeuge
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
-    go build -trimpath -ldflags="-s -w" -o /eebus-bruecke .
+    go build -trimpath -ldflags="-s -w" -o /programm ./$PROGRAMM
 
 FROM scratch
-COPY --from=bau /eebus-bruecke /eebus-bruecke
+COPY --from=bau /programm /programm
 # Zertifikat und Schluessel liegen hier, unbedingt als Volume einbinden
 VOLUME ["/data"]
-ENTRYPOINT ["/eebus-bruecke"]
+ENTRYPOINT ["/programm"]

@@ -2,7 +2,7 @@
 // Liest jede Sekunde die Input-Register der Bruecke, zeigt sie dekodiert an
 // und schreibt SPS-Lebenszeichen und Nennleistung in die Holding-Register.
 //
-//	go run ./test/spssimulator -url tcp://127.0.0.1:5502 -nennleistung 22000
+//	go run ./testwerkzeuge/spssimulator -url tcp://127.0.0.1:5502 -nennleistung 22000
 package main
 
 import (

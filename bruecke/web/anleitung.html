@@ -189,13 +189,34 @@
 	</section>
 
 	<section class="karte" style="margin-top:16px">
+		<h2>Netzwerk: damit sich Brücke und Steuerbox finden</h2>
+		<p><strong>Vorgabe für den Installateur:</strong> Steuerbox und PFC (X1) ins selbe Netz, <strong>selbes Subnetz</strong> (z. B. beide in 192.168.1.0/24), kein VLAN und kein Router dazwischen. Ob die Adressen per DHCP kommen oder fest vergeben sind, ist egal, solange sie im selben Bereich liegen.</p>
+		<p>Warum: Die Geräte finden sich per <strong>mDNS</strong>. Diese Pakete (UDP 5353) erreichen nur Geräte im selben Netzsegment, Router leiten sie nicht weiter. Danach verbinden sich die Geräte per TCP direkt über ihre IP-Adressen. Dafür müssen sie sich gegenseitig erreichen können.</p>
+		<table>
+			<thead><tr><th>Fall</th><th>Finden</th><th>Verbinden</th><th>Ergebnis</th></tr></thead>
+			<tbody>
+				<tr><td>Gleiches Segment, gleiches Subnetz<br><span class="leise">192.168.1.10 und 192.168.1.20, /24</span></td><td>✅</td><td>✅</td><td><span class="marke gruen">funktioniert</span></td></tr>
+				<tr><td>Gleiches Segment, verschiedene Subnetze<br><span class="leise">192.168.1.10 und 192.168.2.20</span></td><td>✅</td><td>❌ nur über Router</td><td><span class="marke rot">praktisch nicht</span></td></tr>
+				<tr><td>Verschiedene Segmente oder VLANs, über Router verbunden</td><td>❌ ohne mDNS-Repeater</td><td>✅</td><td><span class="marke orange">nur mit Zusatzaufwand</span></td></tr>
+			</tbody>
+		</table>
+		<h3 style="margin-top:20px">Was das Finden sonst noch verhindern kann</h3>
+		<ul>
+			<li>Verwaltete Switches mit IGMP-Snooping ohne Querier oder mit Multicast-Filter</li>
+			<li>WLAN mit Client-Isolation</li>
+			<li>PFC-Firewall: UDP 5353 und TCP 4712 müssen erlaubt sein</li>
+		</ul>
+		<p class="hinweis">Kontrolle vor Ort: Erscheint die Steuerbox auf der Statusseite unter „Per mDNS gefundene EEBUS-Geräte“, ist das Netz in Ordnung. Fehlt sie dort, liegt es am Netz, nicht an der Kopplung.</p>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
 		<h2>Fehlersuche</h2>
 		<table>
 			<thead><tr><th>Anzeige</th><th>Ursache und Abhilfe</th></tr></thead>
 			<tbody>
 				<tr><td>SPS „ausgefallen“</td><td>CODESYS schreibt nicht per Modbus. Im ModbusTCP Master <strong>Auto-Reconnect</strong> aktivieren, Ziel <code>127.0.0.1:5502</code> prüfen, läuft die Applikation?</td></tr>
 				<tr><td>Steuerbox „Kein Partner“</td><td>Noch keine Kopplung eingerichtet, siehe oben.</td></tr>
-				<tr><td>Steuerbox bleibt „Getrennt“</td><td>Steuerbox nicht im selben Netzsegment (mDNS geht nicht über Router), oder die PFC-Firewall sperrt TCP 4712 bzw. UDP 5353.</td></tr>
+				<tr><td>Steuerbox bleibt „Getrennt“</td><td>Steuerbox nicht im selben Netzsegment oder Subnetz wie der PFC, oder die PFC-Firewall sperrt TCP 4712 bzw. UDP 5353. Siehe „Netzwerk“ oben.</td></tr>
 				<tr><td>„von Gegenseite abgelehnt“</td><td>Beim SKI-Verfahren ist auf einer Seite ein falscher SKI eingetragen.</td></tr>
 				<tr><td>„Pairing Service abgelehnt“</td><td>Die Steuerbox kennt ein falsches Secret oder einen falschen Fingerprint. QR-Code erneut übergeben.</td></tr>
 				<tr><td>Ampel rot „Failsafe“</td><td>Seit 120 s kein Heartbeat. Verbindung zur Steuerbox prüfen. Zurück geht es, sobald Heartbeat und eine neue Grenze kommen.</td></tr>

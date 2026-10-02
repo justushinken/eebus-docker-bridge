@@ -174,7 +174,15 @@ Was danach geändert wird, erzwingt ein neues Pairing. Deshalb vorher:
 
 ### Netzwerk: damit sich Brücke und Steuerbox finden
 
-Die Geräte finden sich per **mDNS** (Multicast-DNS, UDP 5353 an 224.0.0.251). Diese Pakete verlassen das eigene Netzsegment nicht, Router leiten sie nicht weiter. Danach läuft die eigentliche Verbindung als verschlüsselter WebSocket per TCP zu der Adresse, die mDNS geliefert hat.
+**Vorgabe für den Installateur:** Steuerbox und PFC (X1) ins selbe Netz, **selbes Subnetz** (z. B. beide in 192.168.1.0/24), kein VLAN und kein Router dazwischen. DHCP oder feste Adressen sind egal, solange sie im selben Bereich liegen.
+
+Die Geräte finden sich per **mDNS** (Multicast-DNS, UDP 5353 an 224.0.0.251). Diese Pakete verlassen das eigene Netzsegment nicht, Router leiten sie nicht weiter. Danach läuft die eigentliche Verbindung als verschlüsselter WebSocket per TCP zu der Adresse, die mDNS geliefert hat. Daher braucht es beides: dasselbe Segment zum Finden und gegenseitige IP-Erreichbarkeit zum Verbinden.
+
+| Fall | Finden | Verbinden | Ergebnis |
+|---|---|---|---|
+| Gleiches Segment, gleiches Subnetz (192.168.1.10 und 192.168.1.20, /24) | ✅ | ✅ | funktioniert |
+| Gleiches Segment, verschiedene Subnetze (192.168.1.10 und 192.168.2.20) | ✅ | ❌ nur über Router | praktisch nicht |
+| Verschiedene Segmente oder VLANs, über Router verbunden | ❌ ohne mDNS-Repeater | ✅ | nur mit Zusatzaufwand am Router |
 
 | Voraussetzung | Warum |
 |---|---|

@@ -1,33 +1,36 @@
 module eebus-bruecke
 
-go 1.23
+go 1.24.1
+
+toolchain go1.24.13
 
 // eebus-go bewusst gepinnt: Die API aendert sich zwischen Minor-Versionen.
 // Vor einem Update die Aufrufe in main.go/bruecke.go mit cmd/hems bzw.
 // cmd/controlbox der neuen Version abgleichen.
 
 require (
-	github.com/enbility/eebus-go v0.7.0
-	github.com/enbility/ship-go v0.6.0
-	github.com/enbility/spine-go v0.7.0
+	github.com/enbility/eebus-go v0.7.1-0.20260930170458-8583642861c3
+	github.com/enbility/ship-go v0.6.1-0.20260928110648-a84426bc3810
+	github.com/enbility/spine-go v0.7.1-0.20260520153416-0104ce40c885
 	github.com/simonvetter/modbus v1.6.4
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 )
 
 require (
-	github.com/ahmetb/go-linq/v3 v3.2.0 // indirect
 	github.com/enbility/go-avahi v0.0.0-20240909195612-d5de6b280d7a // indirect
 	github.com/enbility/zeroconf/v2 v2.0.0-20240920094356-be1cae74fda6 // indirect
 	github.com/goburrow/serial v0.1.0 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/golanguzb70/lrucache v1.2.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
-	github.com/miekg/dns v1.1.62 // indirect
-	github.com/rickb777/date v1.21.1 // indirect
-	github.com/rickb777/plural v1.4.2 // indirect
+	github.com/govalues/decimal v0.1.36 // indirect
+	github.com/miekg/dns v1.1.72 // indirect
+	github.com/rickb777/period v1.0.22 // indirect
+	github.com/rickb777/plural v1.4.7 // indirect
 	gitlab.com/c0b/go-ordered-json v0.0.0-20201030195603-febf46534d5a // indirect
-	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/net v0.29.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/tools v0.25.0 // indirect
+	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/sync v0.19.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/tools v0.42.0 // indirect
 )

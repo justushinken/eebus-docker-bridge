@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anleitung · Test-Steuerbox</title>
+<!--STIL-->
+</head>
+<body>
+<main>
+	<header>
+		<div class="kopf">
+			<h1>Test-Steuerbox</h1>
+			<nav><a href="./">Steuerung</a><a class="aktiv" href="anleitung">Anleitung</a></nav>
+		</div>
+		<span class="marke orange">Simulator, nicht für den Produktivbetrieb</span>
+	</header>
+
+	<div class="anleitung">
+
+	<section class="karte">
+		<h2>Wozu die Test-Steuerbox da ist</h2>
+		<p>Die echte Steuerbox gehört dem Messstellenbetreiber und sendet nur, wenn der Netzbetreiber wirklich begrenzt. Zum Testen spielt diese Software ihre Rolle (EEBUS „Energy Guard“). Damit lassen sich Grenzen, Failsafe-Werte und Störungen jederzeit auslösen und an Brücke und SPS beobachten.</p>
+
+		<svg class="schaubild" viewBox="0 0 760 170" role="img" aria-label="Testaufbau: Test-Steuerbox, Brücke, CODESYS oder SPS-Simulator">
+			<defs>
+				<marker id="pfeil1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="pfeilspitze" d="M0,0 L10,5 L0,10 z"/></marker>
+			</defs>
+			<rect class="orange" x="10" y="40" width="200" height="80" rx="10" stroke-width="1.5"/>
+			<text x="110" y="74" text-anchor="middle" font-weight="600" font-size="14">Test-Steuerbox</text>
+			<text x="110" y="94" text-anchor="middle" class="leise-text">diese Seite · Port 8091</text>
+
+			<rect class="kasten" x="280" y="40" width="200" height="80" rx="10"/>
+			<text x="380" y="74" text-anchor="middle" font-weight="600" font-size="14">Brücke</text>
+			<text x="380" y="94" text-anchor="middle" class="leise-text">Statusseite · Port 8090</text>
+
+			<rect class="kasten" x="550" y="40" width="200" height="80" rx="10"/>
+			<text x="650" y="74" text-anchor="middle" font-weight="600" font-size="14">CODESYS</text>
+			<text x="650" y="94" text-anchor="middle" class="leise-text">oder SPS-Simulator</text>
+
+			<line class="linie" x1="210" y1="80" x2="278" y2="80" marker-end="url(#pfeil1)" marker-start="url(#pfeil1)"/>
+			<text x="244" y="70" text-anchor="middle" class="leise-text">EEBUS</text>
+			<line class="linie" x1="480" y1="80" x2="548" y2="80" marker-end="url(#pfeil1)" marker-start="url(#pfeil1)"/>
+			<text x="514" y="70" text-anchor="middle" class="leise-text">Modbus</text>
+
+			<text x="380" y="150" text-anchor="middle" class="leise-text">Hier auslösen, an der Brücke und in CODESYS das Ergebnis prüfen.</text>
+		</svg>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>Mit der Brücke koppeln</h2>
+		<h3>A · SHIP Pairing Service (wie künftig beim Messstellenbetreiber)</h3>
+		<ol>
+			<li>Auf der Statusseite der Brücke unter „Kopplung“ auf <strong>„QR-Text kopieren“</strong> klicken.</li>
+			<li>Hier unter „Kopplung“ in das Feld einfügen und <strong>„Per Pairing Service koppeln“</strong> klicken.</li>
+			<li>Nach wenigen Sekunden steht oben „Verbunden mit der Brücke“. Die Brücke meldet „Steuerbox per Pairing Service gekoppelt“. An der Brücke musst du nichts einstellen.</li>
+		</ol>
+		<h3 style="margin-top:20px">B · SKI-Verfahren (bisheriges Verfahren)</h3>
+		<ol>
+			<li>Hier unter „Kopplung“ den <strong>eigenen SKI</strong> kopieren.</li>
+			<li>Die Brücke mit <code>EEBUS_REMOTE_SKI=&lt;SKI&gt;</code> neu starten (lokal: Datei <code>.env</code>, dann <code>docker compose up -d</code>).</li>
+			<li>Hier bei der gefundenen Brücke auf <strong>„Per SKI koppeln“</strong> klicken.</li>
+		</ol>
+		<p class="hinweis">Die Kopplung wird gespeichert und übersteht Neustarts. „Entkoppeln“ hebt sie auf.</p>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>Testszenarien</h2>
+		<p>Jeweils auslösen und an der Statusseite der Brücke (Ampel) sowie in CODESYS (<code>fbEebusLpc</code>) prüfen.</p>
+		<table>
+			<thead><tr><th>Test</th><th>So geht's</th><th>Erwartetes Ergebnis</th></tr></thead>
+			<tbody>
+				<tr><td>1 · Grenze</td><td>Vorlage „4.200 W · 2 min“, <em>Grenze senden</em></td><td>Ereignis „Brücke hat Grenze angenommen“, Ampel orange „Begrenzt auf 4.200 W“, in CODESYS <code>xBegrenzungAktiv</code> = TRUE</td></tr>
+				<tr><td>2 · Ablauf</td><td>2 min warten</td><td>Ampel grün „Unbegrenzt“, Restlaufzeit 0</td></tr>
+				<tr><td>3 · Aufheben</td><td>unbefristete Grenze senden, dann <em>Grenze aufheben</em></td><td>sofort „Unbegrenzt“</td></tr>
+				<tr><td>4 · Heartbeat-Ausfall</td><td><em>Heartbeat stoppen</em>, 2 min warten (siehe Zeitachse)</td><td>nach 120 s Ampel rot „Failsafe“ mit der Failsafe-Grenze</td></tr>
+				<tr><td>5 · Rückkehr</td><td><em>Heartbeat starten</em>, dann eine Grenze senden</td><td>erst mit der neuen Grenze zurück zu „Begrenzt“</td></tr>
+				<tr><td>6 · Kurzer Abbruch</td><td><em>Kurz unterbrechen</em></td><td>„Getrennt“, nach wenigen Sekunden wieder „Verbunden“, <strong>kein</strong> Failsafe</td></tr>
+				<tr><td>7 · Langer Abbruch</td><td><em>Trennen</em>, über 2 min warten, <em>Wiederherstellen</em>, Grenze senden</td><td>nach 120 s „Failsafe“, danach wie Test 5</td></tr>
+				<tr><td>8 · Failsafe-Werte</td><td>z. B. 5.000 W und 3 h senden</td><td>„Werte bei der Brücke“ und Statusseite zeigen die neuen Werte</td></tr>
+				<tr><td>9 · Ungültige Werte</td><td>Mindestdauer 1 h senden</td><td>wird abgewiesen (erlaubt sind 2 bis 24 h)</td></tr>
+				<tr><td>10 · Kette bis zur SPS</td><td>in CODESYS <code>udiNennleistungMaxW</code> ändern</td><td>erscheint hier unter „Nennleistung (von SPS)“</td></tr>
+			</tbody>
+		</table>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>Zeitachse: Heartbeat-Ausfall (Test 4 und 5)</h2>
+		<svg class="schaubild" viewBox="0 0 760 180" role="img" aria-label="Zeitachse: nach dem Stoppen des Heartbeats bleibt die Brücke 120 Sekunden begrenzt, dann Failsafe, nach Heartbeat und neuer Grenze wieder begrenzt">
+			<defs>
+				<marker id="pfeil2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="pfeilspitze" d="M0,0 L10,5 L0,10 z"/></marker>
+			</defs>
+			<text x="20" y="54" class="leise-text">Heartbeat</text>
+			<g class="linie">
+				<line x1="90" y1="44" x2="90" y2="60"/><line x1="112" y1="44" x2="112" y2="60"/><line x1="134" y1="44" x2="134" y2="60"/>
+				<line x1="156" y1="44" x2="156" y2="60"/><line x1="178" y1="44" x2="178" y2="60"/>
+				<line x1="612" y1="44" x2="612" y2="60"/><line x1="634" y1="44" x2="634" y2="60"/><line x1="656" y1="44" x2="656" y2="60"/>
+				<line x1="678" y1="44" x2="678" y2="60"/><line x1="700" y1="44" x2="700" y2="60"/><line x1="722" y1="44" x2="722" y2="60"/>
+			</g>
+
+			<rect class="orange" x="20" y="72" width="360" height="34" rx="6" stroke-width="1.5"/>
+			<text x="105" y="94" text-anchor="middle" font-size="13" font-weight="600">Begrenzt</text>
+			<rect class="rot" x="380" y="72" width="222" height="34" rx="6" stroke-width="1.5"/>
+			<text x="491" y="94" text-anchor="middle" font-size="13" font-weight="600">Failsafe</text>
+			<rect class="orange" x="602" y="72" width="138" height="34" rx="6" stroke-width="1.5"/>
+			<text x="671" y="94" text-anchor="middle" font-size="13" font-weight="600">Begrenzt</text>
+
+			<line class="linie" x1="190" y1="30" x2="190" y2="112" stroke-dasharray="4 3"/>
+			<text x="190" y="22" text-anchor="middle" class="leise-text">Heartbeat stoppen</text>
+			<line class="linie" x1="602" y1="30" x2="602" y2="112" stroke-dasharray="4 3"/>
+			<text x="602" y="22" text-anchor="middle" class="leise-text">Heartbeat starten + Grenze senden</text>
+
+			<line class="linie" x1="182" y1="126" x2="378" y2="126" marker-end="url(#pfeil2)" marker-start="url(#pfeil2)"/>
+			<text x="280" y="144" text-anchor="middle" class="leise-text">120 s nach dem letzten Heartbeat</text>
+			<line class="linie" x1="20" y1="166" x2="740" y2="166" marker-end="url(#pfeil2)"/>
+			<text x="736" y="158" text-anchor="end" class="leise-text">Zeit</text>
+		</svg>
+		<p class="legende">Die 120 s zählen ab dem <em>letzten</em> Heartbeat. Dieser Simulator sendet ihn alle 8 s, eine echte Steuerbox seltener.</p>
+	</section>
+
+	</div>
+</main>
+</body>
+</html>

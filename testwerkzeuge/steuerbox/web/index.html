@@ -9,7 +9,10 @@
 <body>
 <main>
 	<header>
-		<h1>Test-Steuerbox</h1>
+		<div class="kopf">
+			<h1>Test-Steuerbox</h1>
+			<nav><a class="aktiv" href="./">Steuerung</a><a href="anleitung">Anleitung</a></nav>
+		</div>
 		<span class="marke orange">Simulator, nicht für den Produktivbetrieb</span>
 	</header>
 
@@ -83,15 +86,33 @@
 		<section class="karte breit">
 			<h2>Kopplung</h2>
 			<dl>
-				<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button id="kopieren" type="button">Kopieren</button></dd>
-				<dt>Gekoppelte Brücke</dt><dd><span class="mono" id="gekoppelt"></span><button class="gefahr" id="entkoppeln" type="button">Entkoppeln</button></dd>
+				<dt>Gekoppelte Brücke</dt><dd><span class="mono" id="gekoppelt"></span> <span id="verfahren"></span> <button class="gefahr" id="entkoppeln" type="button">Entkoppeln</button></dd>
 			</dl>
-			<p class="hinweis">Den eigenen SKI bei der Brücke als <code>EEBUS_REMOTE_SKI</code> eintragen, dann hier die Brücke koppeln.</p>
-			<table class="geraete" style="margin-top:12px">
-				<thead><tr><th>Per mDNS gefunden</th><th>Typ</th><th>SKI</th><th></th></tr></thead>
+			<div class="zweispaltig" style="margin-top:16px">
+				<div>
+					<h3>A · SHIP Pairing Service</h3>
+					<label>QR-Text der Brücke (Statusseite der Brücke, „QR-Text kopieren“)
+						<textarea id="qrText" rows="3" placeholder="SHIP;SKI:…;ID:…;FPH256:…;SPSEC:…;ENDSHIP;"></textarea>
+					</label>
+					<div class="knoepfe" style="margin-top:10px">
+						<button class="primaer" id="pairingKoppeln" type="button">Per Pairing Service koppeln</button>
+					</div>
+					<p class="hinweis">Die Steuerbox kündigt sich mit dem Secret an. Die Brücke vertraut ihr dann ohne weitere Einstellung.</p>
+				</div>
+				<div>
+					<h3>B · SKI-Verfahren</h3>
+					<dl>
+						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
+					</dl>
+					<p class="hinweis">Den eigenen SKI bei der Brücke als <code>EEBUS_REMOTE_SKI</code> eintragen, dann unten bei der gefundenen Brücke „Per SKI koppeln“.</p>
+				</div>
+			</div>
+			<table class="geraete" style="margin-top:16px">
+				<thead><tr><th>Per mDNS gefunden</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
 				<tbody id="gefunden"></tbody>
 			</table>
 			<p class="meldung" id="kopplungMeldung"></p>
+			<p class="hinweis">Diese Steuerbox: SHIP-ID <span class="mono" id="shipId"></span>, Fingerprint <span class="mono" id="fingerprint"></span></p>
 		</section>
 
 		<section class="karte breit">
@@ -139,10 +160,6 @@ function zeigeAmpel(farbe, titel, text) {
 	$("ampelText").textContent = text;
 }
 
-function kurzSki(ski) {
-	return ski.slice(0, 8) + "…";
-}
-
 // Vorlagen füllen nur die Felder, gesendet wird erst mit "Grenze senden".
 const vorlagen = [
 	{ w: 4200, min: 2, text: "4.200 W · 2 min" },
@@ -167,7 +184,9 @@ function zeige(s) {
 	} else if (s.unterbrochen) {
 		zeigeAmpel("rot", "Getrennt (Test)", "Verbindung absichtlich getrennt, unter „Störungen“ wiederherstellen");
 	} else if (!s.verbunden) {
-		zeigeAmpel("orange", "Verbindungsaufbau …", `Brücke ${kurzSki(s.gekoppelt)} noch nicht verbunden`);
+		zeigeAmpel("orange", "Verbindungsaufbau …", s.ankuendigung
+			? "Pairing Service: Ankündigung läuft, warte auf die Brücke"
+			: `Brücke ${s.gekoppelt} noch nicht verbunden`);
 	} else if (!s.heartbeatLaeuft) {
 		zeigeAmpel("rot", "Verbunden, Heartbeat gestoppt", "Brücke geht 120 s nach dem letzten Heartbeat in Failsafe");
 	} else {
@@ -200,25 +219,29 @@ function zeige(s) {
 	$("bSzenarien").textContent = b && b.szenarien && b.szenarien.length ? b.szenarien.join(", ") : unbekannt;
 
 	$("eigenerSki").textContent = s.eigenerSki;
+	$("shipId").textContent = s.shipId;
+	$("fingerprint").textContent = s.fingerprint;
 	$("gekoppelt").textContent = s.gekoppelt || "keine";
+	if (!gekoppelt) $("verfahren").replaceChildren();
+	else marke($("verfahren"), s.verfahren === "pairing" ? (s.ankuendigung ? "Pairing Service · Ankündigung läuft" : "Pairing Service") : "SKI", "");
 	$("entkoppeln").hidden = !gekoppelt;
 
 	const zeilen = s.gefunden.map(g => {
 		const tr = document.createElement("tr");
-		for (const text of [`${g.marke} ${g.modell}`, g.typ, g.ski]) {
+		for (const text of [`${g.marke} ${g.modell}`, g.shipId || "–", g.ski]) {
 			const td = document.createElement("td");
 			td.textContent = text;
 			tr.append(td);
 		}
-		tr.children[2].className = "mono";
+		tr.children[1].className = tr.children[2].className = "mono";
 		const td = document.createElement("td");
-		if (g.ski === s.gekoppelt) {
+		if (g.ski === s.gekoppeltSki) {
 			marke(td, "gekoppelt", "gruen");
 		} else {
 			const knopf = document.createElement("button");
 			knopf.type = "button";
-			knopf.textContent = "Koppeln";
-			knopf.addEventListener("click", () => senden("POST", "api/kopplung", { ski: g.ski }, "kopplungMeldung"));
+			knopf.textContent = "Per SKI koppeln";
+			knopf.addEventListener("click", () => senden("POST", "api/kopplung", { verfahren: "ski", ski: g.ski }, "kopplungMeldung"));
 			td.append(knopf);
 		}
 		tr.append(td);
@@ -294,27 +317,32 @@ $("kurz").addEventListener("click", () =>
 	senden("POST", "api/verbindung", { aktion: "kurz" }, "stoerungMeldung"));
 $("trennen").addEventListener("click", () =>
 	senden("POST", "api/verbindung", { aktion: zuletzt.unterbrochen ? "wiederherstellen" : "trennen" }, "stoerungMeldung"));
+$("pairingKoppeln").addEventListener("click", () =>
+	senden("POST", "api/kopplung", { verfahren: "pairing", qrText: $("qrText").value }, "kopplungMeldung"));
 $("entkoppeln").addEventListener("click", () => {
 	if (confirm("Kopplung mit der Brücke aufheben?")) senden("DELETE", "api/kopplung", {}, "kopplungMeldung");
 });
 
 // navigator.clipboard gibt es nur über HTTPS oder localhost, auf dem PFC
 // (http://<ip>) daher der Weg über ein temporäres Textfeld.
-$("kopieren").addEventListener("click", async () => {
-	const ski = $("eigenerSki").textContent;
-	try {
-		await navigator.clipboard.writeText(ski);
-	} catch {
-		const feld = document.createElement("textarea");
-		feld.value = ski;
-		document.body.append(feld);
-		feld.select();
-		document.execCommand("copy");
-		feld.remove();
-	}
-	$("kopieren").textContent = "Kopiert";
-	setTimeout(() => $("kopieren").textContent = "Kopieren", 1500);
-});
+for (const knopf of document.querySelectorAll("[data-kopieren]")) {
+	knopf.addEventListener("click", async () => {
+		const text = $(knopf.dataset.kopieren).textContent;
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			const feld = document.createElement("textarea");
+			feld.value = text;
+			document.body.append(feld);
+			feld.select();
+			document.execCommand("copy");
+			feld.remove();
+		}
+		const vorher = knopf.textContent;
+		knopf.textContent = "Kopiert";
+		setTimeout(() => knopf.textContent = vorher, 1500);
+	});
+}
 
 async function abfragen() {
 	try {

@@ -9,7 +9,10 @@
 <body>
 <main>
 	<header>
-		<h1>EEBUS-LPC-Brücke</h1>
+		<div class="kopf">
+			<h1>EEBUS-LPC-Brücke</h1>
+			<nav><a class="aktiv" href="./">Status</a><a href="anleitung">Anleitung</a></nav>
+		</div>
 		<span class="leise" id="geraet"></span>
 	</header>
 
@@ -39,9 +42,8 @@
 			<h2>EEBUS</h2>
 			<dl>
 				<dt>Steuerbox</dt><dd id="verbindung"></dd>
+				<dt>Verbunden mit</dt><dd class="mono" id="partner"></dd>
 				<dt>Heartbeat</dt><dd id="heartbeat"></dd>
-				<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button id="kopieren" type="button">Kopieren</button></dd>
-				<dt>Steuerbox-SKI</dt><dd class="mono" id="remoteSki"></dd>
 			</dl>
 		</section>
 
@@ -55,9 +57,41 @@
 		</section>
 
 		<section class="karte breit">
+			<h2>Kopplung mit der Steuerbox</h2>
+			<div class="zweispaltig">
+				<div>
+					<h3>SKI-Verfahren <span id="skiStatus"></span></h3>
+					<dl>
+						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
+						<dt>SKI der Steuerbox</dt><dd class="mono" id="remoteSki"></dd>
+					</dl>
+					<p class="hinweis">Beide Seiten tragen den SKI der Gegenseite ein. Bei der Brücke über <code>EEBUS_REMOTE_SKI</code>.</p>
+				</div>
+				<div>
+					<h3>SHIP Pairing Service <span id="pairingStatus"></span></h3>
+					<dl>
+						<dt>SHIP-ID</dt><dd><span class="mono" id="shipId"></span><button data-kopieren="shipId" type="button">Kopieren</button></dd>
+						<dt>Fingerprint</dt><dd><span class="mono" id="fingerprint"></span><button data-kopieren="fingerprint" type="button">Kopieren</button></dd>
+						<dt>Secret</dt><dd><span class="mono" id="secret"></span><button id="secretZeigen" type="button">Anzeigen</button><button data-kopieren="secret" type="button">Kopieren</button></dd>
+						<dt>Gekoppelt</dt><dd class="mono" id="pairingSteuerbox"></dd>
+					</dl>
+					<p class="hinweis">Der Messstellenbetreiber bekommt SKI, SHIP-ID, Fingerprint und Secret, am einfachsten als QR-Code. Die Steuerbox meldet sich dann selbst an.</p>
+				</div>
+			</div>
+			<div class="qr" id="qrBereich">
+				<img id="qrBild" alt="QR-Code für die Kopplung" width="160" height="160">
+				<div>
+					<div class="leise">QR-Text</div>
+					<div class="mono" id="qrText"></div>
+					<button data-kopieren="qrText" type="button" style="margin:8px 0 0">QR-Text kopieren</button>
+				</div>
+			</div>
+		</section>
+
+		<section class="karte breit">
 			<h2>Per mDNS gefundene EEBUS-Geräte</h2>
 			<table class="geraete">
-				<thead><tr><th>Gerät</th><th>Typ</th><th>SKI</th><th></th></tr></thead>
+				<thead><tr><th>Gerät</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
 				<tbody id="gefunden"></tbody>
 			</table>
 		</section>
@@ -137,9 +171,22 @@ function zeige(s) {
 	$("failsafeDauer").textContent = dauer(s.failsafeMindestdauerS);
 
 	marke($("verbindung"), s.verbindungText, { 0: "", 1: "rot", 2: "gruen" }[s.verbindung]);
+	$("partner").textContent = s.partner || "–";
 	$("heartbeat").textContent = alter(s.heartbeatAlterS);
+
+	const k = s.kennung;
+	marke($("skiStatus"), s.skiVerfahren ? "aktiv" : "nicht konfiguriert", s.skiVerfahren ? "gruen" : "");
 	$("eigenerSki").textContent = s.eigenerSki;
-	$("remoteSki").textContent = s.remoteSki || "nicht konfiguriert";
+	$("remoteSki").textContent = s.remoteSki || "–";
+	marke($("pairingStatus"), s.pairingService ? "aktiv" : "aus", s.pairingService ? "gruen" : "");
+	$("shipId").textContent = k.shipId;
+	$("fingerprint").textContent = k.fingerprint;
+	$("secret").textContent = !k.secret ? "–" : secretSichtbar ? k.secret : "•".repeat(12);
+	$("secret").dataset.wert = k.secret || "";
+	$("secretZeigen").hidden = !k.secret;
+	$("pairingSteuerbox").textContent = s.pairingSteuerbox || (s.pairingService ? "noch keine" : "–");
+	$("qrText").textContent = k.qrText;
+	if (!$("qrBild").src) $("qrBild").src = url("api/qr.png");
 
 	marke($("sps"), s.spsOk ? "OK" : "ausgefallen", s.spsOk ? "gruen" : "rot");
 	$("spsAlter").textContent = alter(s.spsLebenszeichenAlterS);
@@ -147,14 +194,15 @@ function zeige(s) {
 
 	const zeilen = s.gefunden.map(g => {
 		const tr = document.createElement("tr");
-		for (const text of [`${g.marke} ${g.modell}`, g.typ, g.ski]) {
+		for (const text of [`${g.marke} ${g.modell}`, g.shipId || "–", g.ski]) {
 			const td = document.createElement("td");
 			td.textContent = text;
 			tr.append(td);
 		}
-		tr.children[2].className = "mono";
+		tr.children[1].className = tr.children[2].className = "mono";
 		const td = document.createElement("td");
-		if (g.ski === s.remoteSki) marke(td, "konfiguriert", "gruen");
+		if (s.partner && (s.partner.includes(g.ski) || (g.shipId && s.partner.includes(g.shipId)))) marke(td, "verbunden", "gruen");
+		else if (g.ski === s.remoteSki) marke(td, "konfiguriert", "gruen");
 		tr.append(td);
 		return tr;
 	});
@@ -188,8 +236,20 @@ function zeige(s) {
 
 // Ohne Zugangsdaten in der URL: Bei Aufruf als http://benutzer:pw@ip/ lehnt fetch
 // sonst ab. Der Browser sendet die einmal eingegebene Anmeldung trotzdem mit.
-const statusUrl = new URL("api/status", location.href);
-statusUrl.username = statusUrl.password = "";
+function url(pfad) {
+	const u = new URL(pfad, location.href);
+	u.username = u.password = "";
+	return u.href;
+}
+const statusUrl = url("api/status");
+
+// Das Secret erlaubt es, eine Steuerbox zu koppeln: nur auf Wunsch anzeigen.
+let secretSichtbar = false;
+$("secretZeigen").addEventListener("click", () => {
+	secretSichtbar = !secretSichtbar;
+	$("secretZeigen").textContent = secretSichtbar ? "Verbergen" : "Anzeigen";
+	$("secret").textContent = secretSichtbar ? $("secret").dataset.wert : "•".repeat(12);
+});
 
 async function abfragen() {
 	try {
@@ -209,21 +269,25 @@ async function abfragen() {
 
 // navigator.clipboard gibt es nur ueber HTTPS oder localhost, auf dem PFC
 // (http://<ip>) daher der Weg ueber ein temporaeres Textfeld.
-$("kopieren").addEventListener("click", async () => {
-	const ski = $("eigenerSki").textContent;
-	try {
-		await navigator.clipboard.writeText(ski);
-	} catch {
-		const feld = document.createElement("textarea");
-		feld.value = ski;
-		document.body.append(feld);
-		feld.select();
-		document.execCommand("copy");
-		feld.remove();
-	}
-	$("kopieren").textContent = "Kopiert";
-	setTimeout(() => $("kopieren").textContent = "Kopieren", 1500);
-});
+for (const knopf of document.querySelectorAll("[data-kopieren]")) {
+	knopf.addEventListener("click", async () => {
+		const quelle = $(knopf.dataset.kopieren);
+		const text = quelle.dataset.wert || quelle.textContent;
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			const feld = document.createElement("textarea");
+			feld.value = text;
+			document.body.append(feld);
+			feld.select();
+			document.execCommand("copy");
+			feld.remove();
+		}
+		const vorher = knopf.textContent;
+		knopf.textContent = "Kopiert";
+		setTimeout(() => knopf.textContent = vorher, 1500);
+	});
+}
 
 abfragen();
 </script>

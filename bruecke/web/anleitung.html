@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anleitung · EEBUS-Brücke</title>
+<!--STIL-->
+</head>
+<body>
+<main>
+	<header>
+		<div class="kopf">
+			<h1>EEBUS-LPC-Brücke</h1>
+			<nav><a href="./">Status</a><a class="aktiv" href="anleitung">Anleitung</a></nav>
+		</div>
+	</header>
+
+	<div class="anleitung">
+
+	<section class="karte">
+		<h2>Wozu die Brücke da ist</h2>
+		<p>Nach §14a EnWG darf der Netzbetreiber die Leistung steuerbarer Verbraucher (Wallbox, Wärmepumpe …) vorübergehend begrenzen. Das Signal kommt von der <strong>Steuerbox</strong> des Messstellenbetreibers am Smart Meter Gateway, und zwar über das Protokoll <strong>EEBUS</strong> (Use Case „LPC“, Limitation of Power Consumption).</p>
+		<p>Die Brücke läuft als Docker-Container auf dem PFC200. Sie spricht EEBUS mit der Steuerbox und gibt der CODESYS-Applikation per Modbus nur noch das Wesentliche weiter: <em>Begrenzung aktiv ja/nein</em> und <em>Grenze in Watt</em>.</p>
+
+		<svg class="schaubild" viewBox="0 0 760 210" role="img" aria-label="Aufbau: Steuerbox, Brücke im Docker-Container, CODESYS-Applikation, Verbraucher">
+			<defs>
+				<marker id="pfeil1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="pfeilspitze" d="M0,0 L10,5 L0,10 z"/></marker>
+			</defs>
+			<rect class="kasten" x="10" y="60" width="150" height="80" rx="10"/>
+			<text x="85" y="94" text-anchor="middle" font-weight="600" font-size="14">Steuerbox</text>
+			<text x="85" y="114" text-anchor="middle" class="leise-text">am Smart Meter Gateway</text>
+
+			<rect class="kasten-hell" x="215" y="10" width="420" height="190" rx="14"/>
+			<text x="425" y="32" text-anchor="middle" class="leise-text">WAGO PFC200</text>
+
+			<rect class="kasten" x="235" y="60" width="160" height="80" rx="10"/>
+			<text x="315" y="94" text-anchor="middle" font-weight="600" font-size="14">Brücke</text>
+			<text x="315" y="114" text-anchor="middle" class="leise-text">Docker-Container</text>
+
+			<rect class="kasten" x="455" y="60" width="160" height="80" rx="10"/>
+			<text x="535" y="94" text-anchor="middle" font-weight="600" font-size="14">CODESYS</text>
+			<text x="535" y="114" text-anchor="middle" class="leise-text">FbEebusLpc</text>
+
+			<rect class="kasten" x="670" y="60" width="80" height="80" rx="10"/>
+			<text x="710" y="96" text-anchor="middle" font-weight="600" font-size="13">Ver-</text>
+			<text x="710" y="113" text-anchor="middle" font-weight="600" font-size="13">braucher</text>
+
+			<line class="linie" x1="160" y1="100" x2="233" y2="100" marker-end="url(#pfeil1)" marker-start="url(#pfeil1)"/>
+			<text x="196" y="90" text-anchor="middle" class="leise-text">EEBUS</text>
+			<text x="196" y="122" text-anchor="middle" class="leise-text">LAN</text>
+
+			<line class="linie" x1="395" y1="100" x2="453" y2="100" marker-end="url(#pfeil1)" marker-start="url(#pfeil1)"/>
+			<text x="424" y="90" text-anchor="middle" class="leise-text">Modbus</text>
+
+			<line class="linie" x1="615" y1="100" x2="668" y2="100" marker-end="url(#pfeil1)"/>
+
+			<text x="315" y="170" text-anchor="middle" class="leise-text">Status-UI: Port 8090</text>
+			<text x="535" y="170" text-anchor="middle" class="leise-text">127.0.0.1:5502</text>
+		</svg>
+		<p class="legende">Die Brücke übersetzt zwischen EEBUS und Modbus. Die Aufteilung der Leistung auf die Verbraucher macht die CODESYS-Applikation.</p>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>Die Zustände (Ampel auf der Statusseite)</h2>
+		<p>Die Brücke führt den Zustandsautomaten des Use Case LPC. Entscheidend ist der <strong>Heartbeat</strong>: Die Steuerbox meldet sich regelmäßig. Bleibt er 120 Sekunden aus, gilt die sichere Failsafe-Grenze.</p>
+
+		<svg class="schaubild" viewBox="0 0 760 335" role="img" aria-label="Zustände: Init, Begrenzt, Unbegrenzt, Failsafe, Unbegrenzt autonom und ihre Übergänge">
+			<defs>
+				<marker id="pfeil2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="pfeilspitze" d="M0,0 L10,5 L0,10 z"/></marker>
+			</defs>
+
+			<!-- Init -->
+			<rect class="rot" x="10" y="130" width="150" height="56" rx="10" stroke-width="1.5"/>
+			<text x="85" y="154" text-anchor="middle" font-weight="600" font-size="14">Init</text>
+			<text x="85" y="172" text-anchor="middle" class="leise-text">Failsafe-Grenze gilt</text>
+
+			<!-- Gesteuert -->
+			<rect class="kasten-hell" x="245" y="18" width="230" height="258" rx="14"/>
+			<text x="360" y="40" text-anchor="middle" class="leise-text">von der Steuerbox gesteuert</text>
+			<rect class="orange" x="285" y="56" width="150" height="56" rx="10" stroke-width="1.5"/>
+			<text x="360" y="80" text-anchor="middle" font-weight="600" font-size="14">Begrenzt</text>
+			<text x="360" y="98" text-anchor="middle" class="leise-text">Grenze des Netzbetreibers</text>
+			<rect class="gruen" x="285" y="198" width="150" height="56" rx="10" stroke-width="1.5"/>
+			<text x="360" y="222" text-anchor="middle" font-weight="600" font-size="14">Unbegrenzt</text>
+			<text x="360" y="240" text-anchor="middle" class="leise-text">keine Grenze aktiv</text>
+			<line class="linie" x1="360" y1="114" x2="360" y2="196" marker-end="url(#pfeil2)" marker-start="url(#pfeil2)"/>
+			<text x="368" y="150" class="leise-text">Grenze aktiv,</text>
+			<text x="368" y="165" class="leise-text">aufgehoben</text>
+			<text x="368" y="180" class="leise-text">oder abgelaufen</text>
+
+			<!-- Failsafe -->
+			<rect class="rot" x="600" y="40" width="150" height="56" rx="10" stroke-width="1.5"/>
+			<text x="675" y="64" text-anchor="middle" font-weight="600" font-size="14">Failsafe</text>
+			<text x="675" y="82" text-anchor="middle" class="leise-text">Failsafe-Grenze gilt</text>
+
+			<!-- Autonom -->
+			<rect class="gruen" x="600" y="220" width="150" height="56" rx="10" stroke-width="1.5"/>
+			<text x="675" y="244" text-anchor="middle" font-weight="600" font-size="14">Unbegrenzt</text>
+			<text x="675" y="262" text-anchor="middle" class="leise-text">autonom</text>
+
+			<!-- Uebergaenge -->
+			<line class="linie" x1="160" y1="158" x2="243" y2="158" marker-end="url(#pfeil2)"/>
+			<text x="202" y="150" text-anchor="middle" class="leise-text">Heartbeat</text>
+
+			<line class="linie" x1="475" y1="58" x2="598" y2="58" marker-end="url(#pfeil2)"/>
+			<text x="537" y="50" text-anchor="middle" class="leise-text">120 s ohne Heartbeat</text>
+
+			<line class="linie" x1="598" y1="82" x2="477" y2="82" marker-end="url(#pfeil2)"/>
+			<text x="537" y="100" text-anchor="middle" class="leise-text">Heartbeat +</text>
+			<text x="537" y="114" text-anchor="middle" class="leise-text">neue Grenze</text>
+
+			<line class="linie" x1="675" y1="96" x2="675" y2="218" marker-end="url(#pfeil2)"/>
+			<text x="667" y="152" text-anchor="end" class="leise-text">Failsafe-Mindestdauer</text>
+			<text x="667" y="167" text-anchor="end" class="leise-text">(2–24 h) abgelaufen</text>
+
+			<line class="linie" x1="600" y1="248" x2="477" y2="248" marker-end="url(#pfeil2)"/>
+			<text x="537" y="240" text-anchor="middle" class="leise-text">Heartbeat</text>
+
+			<path class="linie" d="M85,186 V300 H675 V278" marker-end="url(#pfeil2)"/>
+			<text x="380" y="320" text-anchor="middle" class="leise-text">120 s nach dem Start keine Kommunikation</text>
+		</svg>
+
+		<table style="margin-top:8px">
+			<thead><tr><th>Zustand</th><th>Was die SPS tun muss</th></tr></thead>
+			<tbody>
+				<tr><td><span class="marke rot">Init</span></td><td>Failsafe-Grenze einhalten, bis die Steuerbox sich meldet.</td></tr>
+				<tr><td><span class="marke orange">Begrenzt</span></td><td>Grenze des Netzbetreibers einhalten.</td></tr>
+				<tr><td><span class="marke gruen">Unbegrenzt</span></td><td>Keine Einschränkung, gesteuert oder autonom.</td></tr>
+				<tr><td><span class="marke rot">Failsafe</span></td><td>Failsafe-Grenze einhalten, bis Heartbeat <em>und</em> eine neue Grenze kommen oder die Mindestdauer abläuft.</td></tr>
+			</tbody>
+		</table>
+		<p class="hinweis">Für die SPS genügt Register 6 (Begrenzung aktiv) und 4–5 (Grenze in W). Fällt die Brücke selbst aus, greift die Ersatzgrenze in <code>FbEebusLpc</code>.</p>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>Kopplung mit der Steuerbox</h2>
+		<p>Damit Brücke und Steuerbox einander vertrauen, gibt es zwei Verfahren. Beide können gleichzeitig aktiv sein. Welches der Messstellenbetreiber nutzt, legt er fest.</p>
+
+		<h3>A · SHIP Pairing Service (neues Verfahren)</h3>
+		<svg class="schaubild" viewBox="0 0 760 175" role="img" aria-label="Pairing Service: Brücke gibt QR-Code an Messstellenbetreiber, der richtet die Steuerbox ein, die Steuerbox meldet sich bei der Brücke an">
+			<defs>
+				<marker id="pfeil3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="pfeilspitze" d="M0,0 L10,5 L0,10 z"/></marker>
+			</defs>
+			<rect class="kasten" x="10" y="40" width="170" height="70" rx="10"/>
+			<text x="95" y="70" text-anchor="middle" font-weight="600" font-size="14">Brücke</text>
+			<text x="95" y="90" text-anchor="middle" class="leise-text">zeigt QR-Code</text>
+
+			<rect class="kasten" x="295" y="40" width="170" height="70" rx="10"/>
+			<text x="380" y="70" text-anchor="middle" font-weight="600" font-size="14">Messstellenbetreiber</text>
+			<text x="380" y="90" text-anchor="middle" class="leise-text">richtet Steuerbox ein</text>
+
+			<rect class="kasten" x="580" y="40" width="170" height="70" rx="10"/>
+			<text x="665" y="70" text-anchor="middle" font-weight="600" font-size="14">Steuerbox</text>
+			<text x="665" y="90" text-anchor="middle" class="leise-text">kennt jetzt das Secret</text>
+
+			<line class="linie" x1="180" y1="75" x2="293" y2="75" marker-end="url(#pfeil3)"/>
+			<text x="236" y="66" text-anchor="middle" font-size="12" font-weight="600">① QR-Code</text>
+			<line class="linie" x1="465" y1="75" x2="578" y2="75" marker-end="url(#pfeil3)"/>
+			<text x="521" y="66" text-anchor="middle" font-size="12" font-weight="600">② eintragen</text>
+
+			<path class="linie" d="M665,110 V145 H95 V112" marker-end="url(#pfeil3)"/>
+			<text x="380" y="138" text-anchor="middle" font-size="12" font-weight="600">③ meldet sich an und beweist das Secret</text>
+			<text x="380" y="166" text-anchor="middle" class="leise-text">Die Brücke prüft den Nachweis und vertraut der Steuerbox automatisch.</text>
+		</svg>
+		<ol>
+			<li>Auf der Statusseite unter „Kopplung“ den QR-Code (oder den QR-Text) an den Messstellenbetreiber geben. Er enthält <strong>SKI, SHIP-ID, Fingerprint und Secret</strong>.</li>
+			<li>Der Messstellenbetreiber trägt die Daten in die Steuerbox ein.</li>
+			<li>Die Steuerbox meldet sich bei der Brücke. Unter „Ereignisse“ erscheint „Steuerbox per Pairing Service gekoppelt“. Fertig, ein Neustart ist nicht nötig.</li>
+		</ol>
+		<p class="hinweis">Das <strong>Secret</strong> ist wie ein Schlüssel: Wer es kennt, kann eine Steuerbox koppeln. Nur an den Messstellenbetreiber geben. Wird die Steuerbox später getauscht, koppelt sich die neue nach 15 Minuten automatisch, wenn sie das Secret kennt.</p>
+
+		<h3 style="margin-top:20px">B · SKI-Verfahren (bisheriges Verfahren)</h3>
+		<ol>
+			<li>Den <strong>eigenen SKI</strong> der Brücke (Statusseite, „Kopplung“) an den Messstellenbetreiber geben.</li>
+			<li>Den SKI der Steuerbox vom Messstellenbetreiber erfragen. Er steht oft auch unter „Per mDNS gefundene EEBUS-Geräte“.</li>
+			<li>Den Container mit <code>-e EEBUS_REMOTE_SKI=&lt;SKI der Steuerbox&gt;</code> neu anlegen.</li>
+		</ol>
+
+		<h3 style="margin-top:20px">Einstellungen</h3>
+		<table>
+			<thead><tr><th>Variable</th><th>Bedeutung</th></tr></thead>
+			<tbody>
+				<tr><td><code>EEBUS_REMOTE_SKI</code></td><td>SKI der Steuerbox, schaltet das SKI-Verfahren ein</td></tr>
+				<tr><td><code>EEBUS_PAIRING_SERVICE</code></td><td><code>an</code> (Vorgabe) oder <code>aus</code></td></tr>
+				<tr><td><code>SHIP_ID</code></td><td>Kennung der Brücke im Netz. Vorgabe: Marke-Modell-MAC-Adresse. Nach der Kopplung nicht mehr ändern.</td></tr>
+			</tbody>
+		</table>
+		<p class="hinweis">Zertifikat (SKI, Fingerprint), Secret und Kopplung liegen im Datenverzeichnis (<code>/home/eebus-bruecke</code>). Geht es verloren, muss neu gekoppelt werden, also sichern.</p>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>Fehlersuche</h2>
+		<table>
+			<thead><tr><th>Anzeige</th><th>Ursache und Abhilfe</th></tr></thead>
+			<tbody>
+				<tr><td>SPS „ausgefallen“</td><td>CODESYS schreibt nicht per Modbus. Im ModbusTCP Master <strong>Auto-Reconnect</strong> aktivieren, Ziel <code>127.0.0.1:5502</code> prüfen, läuft die Applikation?</td></tr>
+				<tr><td>Steuerbox „Kein Partner“</td><td>Noch keine Kopplung eingerichtet, siehe oben.</td></tr>
+				<tr><td>Steuerbox bleibt „Getrennt“</td><td>Steuerbox nicht im selben Netzsegment (mDNS geht nicht über Router), oder die PFC-Firewall sperrt TCP 4712 bzw. UDP 5353.</td></tr>
+				<tr><td>„von Gegenseite abgelehnt“</td><td>Beim SKI-Verfahren ist auf einer Seite ein falscher SKI eingetragen.</td></tr>
+				<tr><td>„Pairing Service abgelehnt“</td><td>Die Steuerbox kennt ein falsches Secret oder einen falschen Fingerprint. QR-Code erneut übergeben.</td></tr>
+				<tr><td>Ampel rot „Failsafe“</td><td>Seit 120 s kein Heartbeat. Verbindung zur Steuerbox prüfen. Zurück geht es, sobald Heartbeat und eine neue Grenze kommen.</td></tr>
+			</tbody>
+		</table>
+	</section>
+
+	</div>
+</main>
+</body>
+</html>

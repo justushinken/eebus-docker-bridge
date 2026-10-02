@@ -18,6 +18,7 @@ import (
 	"github.com/enbility/eebus-go/api"
 	"github.com/enbility/eebus-go/service"
 	eglpc "github.com/enbility/eebus-go/usecases/eg/lpc"
+	shipapi "github.com/enbility/ship-go/api"
 	"github.com/enbility/spine-go/model"
 )
 
@@ -57,17 +58,29 @@ func main() {
 	if err != nil {
 		log.Fatalf("Zertifikat: %v", err)
 	}
-	log.Printf("Eigener SKI: %s (bei der Bruecke als EEBUS_REMOTE_SKI eintragen)", eigenerSki)
+	seriennummer := gemeinsam.GeraeteKennung()
+	if seriennummer == "" {
+		seriennummer = "0001"
+	}
+	shipId := gemeinsam.EnvText("SHIP_ID", "Test-Steuerbox-"+seriennummer)
+	if err := gemeinsam.PruefeShipId(shipId); err != nil {
+		log.Fatalf("SHIP_ID: %v", err)
+	}
+	log.Printf("Eigener SKI: %s (bei der Bruecke als EEBUS_REMOTE_SKI eintragen), SHIP-ID: %s", eigenerSki, shipId)
 
+	// Beim Pairing Service ist die Steuerbox die ankuendigende Seite ("Announcer").
+	// Das Secret kommt je Bruecke aus deren QR-Code, nicht aus der Konfiguration.
 	konfiguration, err := api.NewConfiguration(
-		"Test", "Test", "Steuerbox-Simulator", "0001",
+		"Test", "Test", "Steuerbox-Simulator", seriennummer,
+		[]shipapi.DeviceCategoryType{shipapi.DeviceCategoryTypeGridConnectionHub},
 		model.DeviceTypeTypeElectricitySupplySystem,
 		[]model.EntityTypeType{model.EntityTypeTypeGridGuard},
-		konf.EebusPort, zertifikat, konf.HeartbeatTimeout)
+		konf.EebusPort, zertifikat, konf.HeartbeatTimeout,
+		shipapi.NewPairingConfig(shipapi.PairingModeAnnouncer, nil), nil)
 	if err != nil {
 		log.Fatalf("EEBUS-Konfiguration: %v", err)
 	}
-	konfiguration.SetAlternateIdentifier("Test-Steuerbox-Simulator-0001")
+	konfiguration.SetAlternateIdentifier(shipId)
 
 	steuerbox := NeueSteuerbox(konf, eigenerSki)
 	dienst := service.NewService(konfiguration, steuerbox)
@@ -77,11 +90,19 @@ func main() {
 	steuerbox.dienst = dienst
 	steuerbox.entitaet = dienst.LocalDevice().EntityForType(model.EntityTypeTypeGridGuard)
 	steuerbox.lpc = eglpc.NewLPC(steuerbox.entitaet, steuerbox.LpcEreignis)
-	dienst.AddUseCase(steuerbox.lpc)
+	if err := dienst.AddUseCase(steuerbox.lpc); err != nil {
+		log.Fatalf("Use Case LPC: %v", err)
+	}
+	if fingerprint, err := dienst.GetLocalCertificateFingerprint(); err == nil {
+		steuerbox.fingerprint = fingerprint
+	}
+	steuerbox.shipId = shipId
 
-	if ski := steuerbox.Gekoppelt(); ski != "" {
-		log.Printf("Gekoppelt mit Bruecke %s", ski)
-		dienst.RegisterRemoteSKI(ski)
+	// Nach erfolgreichem Pairing vertraut die Bruecke dieser Steuerbox dauerhaft,
+	// eine erneute Ankuendigung ist nach einem Neustart nicht noetig.
+	if k := steuerbox.Kopplung(); k != nil {
+		log.Printf("Gekoppelt mit Bruecke %s (%s)", gemeinsam.Bezeichnung(k.Identitaet), k.Verfahren)
+		dienst.RegisterRemoteService(k.Identitaet)
 	} else {
 		log.Printf("Noch keine Bruecke gekoppelt: im Web-UI unter \"Kopplung\" auswaehlen")
 	}
@@ -89,7 +110,9 @@ func main() {
 	webBeenden := gemeinsam.StarteWebUi(konf.WebAdresse, konf.WebBenutzer, konf.WebPasswort, webHandler(steuerbox, protokoll))
 	defer webBeenden()
 
-	dienst.Start()
+	if err := dienst.Start(); err != nil {
+		log.Fatalf("EEBUS-Dienst starten: %v", err)
+	}
 	defer dienst.Shutdown()
 
 	signale := make(chan os.Signal, 1)

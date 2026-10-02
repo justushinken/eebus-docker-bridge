@@ -2,12 +2,12 @@
 # Go-Kompilat fuer die Zielplattform, Laufzeit-Image "scratch".
 #
 # Bruecke fuer den PFC200 (ARMv7):
-#   docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.3 --load .
+#   docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.4 --load .
 # Test-Steuerbox:
-#   docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM=testwerkzeuge/steuerbox -t eebus-steuerbox:0.3 --load .
+#   docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM=testwerkzeuge/steuerbox -t eebus-steuerbox:0.4 --load .
 # Fuer lokale Tests auf dem PC (amd64) ohne --platform bauen, oder docker compose verwenden.
 
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS bau
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS bau
 ARG TARGETOS TARGETARCH TARGETVARIANT
 ARG PROGRAMM=bruecke
 WORKDIR /src

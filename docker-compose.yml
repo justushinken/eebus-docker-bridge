@@ -6,9 +6,13 @@
 # Steuerbox:  http://localhost:8091  (admin / test)
 # Modbus:     localhost:5502
 #
-# Einmalig koppeln: SKI der Steuerbox (in ihrem UI) in .env als STEUERBOX_SKI
-# eintragen, "docker compose up -d" wiederholen, dann im Steuerbox-UI die Bruecke
-# koppeln. Zertifikate und Kopplung liegen in Volumes und bleiben erhalten.
+# Einmalig koppeln, wahlweise:
+#  - Pairing Service: im Bruecken-UI "QR-Text kopieren", im Steuerbox-UI
+#    einfuegen und "Per Pairing Service koppeln". Keine Einstellung noetig.
+#  - SKI-Verfahren: SKI der Steuerbox (in ihrem UI) in .env als STEUERBOX_SKI
+#    eintragen, "docker compose up -d" wiederholen, im Steuerbox-UI bei der
+#    Bruecke "Per SKI koppeln".
+# Zertifikate, Secret und Kopplung liegen in Volumes und bleiben erhalten.
 
 services:
   bruecke:
@@ -19,6 +23,9 @@ services:
       - "5502:5502"
     environment:
       EEBUS_REMOTE_SKI: ${STEUERBOX_SKI:-}
+      # Fest statt aus der MAC: Im Docker-Netz kann sich die MAC eines
+      # Containers beim Neuanlegen aendern, auf dem PFC nicht.
+      SHIP_ID: Demo-PFC200-LPC-Bruecke-Lokal
       # Im Container-Netz statt nur 127.0.0.1, damit SPS-Simulator und
       # Modbus-Master auf dem PC herankommen.
       MODBUS_URL: tcp://0.0.0.0:5502
@@ -36,6 +43,7 @@ services:
     ports:
       - "8091:8091"
     environment:
+      SHIP_ID: Test-Steuerbox-Lokal
       WEB_PASSWORT: test
     volumes:
       - steuerbox-daten:/data

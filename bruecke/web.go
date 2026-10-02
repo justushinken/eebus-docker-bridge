@@ -14,9 +14,14 @@ import (
 //go:embed web/index.html
 var indexHtml []byte
 
+//go:embed web/anleitung.html
+var anleitungHtml []byte
+
 func webHandler(b *Bruecke, protokoll *gemeinsam.Ereignisprotokoll) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", gemeinsam.SeiteAusliefern(gemeinsam.MitStil(indexHtml)))
+	mux.HandleFunc("GET /anleitung", gemeinsam.SeiteAusliefern(gemeinsam.MitStil(anleitungHtml)))
+	mux.HandleFunc("GET /api/qr.png", gemeinsam.QrBild(func() string { return b.kennung.QrText }))
 	mux.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) {
 		status := b.Status(time.Now())
 		status.Ereignisse = protokoll.Liste()
@@ -50,6 +55,13 @@ type StatusDaten struct {
 	RemoteSki  string                       `json:"remoteSki"`
 	Gefunden   []gemeinsam.GefundenesGeraet `json:"gefunden"`
 
+	// Kopplung: beide Verfahren koennen gleichzeitig aktiv sein
+	Kennung          Kennung `json:"kennung"`
+	SkiVerfahren     bool    `json:"skiVerfahren"`     // EEBUS_REMOTE_SKI gesetzt
+	PairingService   bool    `json:"pairingService"`   // Pairing Service aktiv
+	PairingSteuerbox string  `json:"pairingSteuerbox"` // per Pairing Service gekoppelt, leer = keine
+	Partner          string  `json:"partner"`          // verbundene Steuerbox, leer = keine
+
 	SpsOk                  bool     `json:"spsOk"`
 	SpsLebenszeichenAlterS *float64 `json:"spsLebenszeichenAlterS"` // nil = nie
 	NennleistungW          float64  `json:"nennleistungW"`
@@ -79,6 +91,13 @@ func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
 	defer b.mu.Unlock()
 
 	aktiv, grenzeW := b.wirksameGrenze()
+	var pairingSteuerbox, partner string
+	if b.pairingKopplung != nil {
+		pairingSteuerbox = gemeinsam.Bezeichnung(b.pairingKopplung.Identitaet)
+	}
+	if !b.partner.IsZero() {
+		partner = gemeinsam.Bezeichnung(b.partner)
+	}
 	var restdauer float64
 	if b.zustand == ZustandBegrenzt && !b.grenzeAblauf.IsZero() {
 		restdauer = max(b.grenzeAblauf.Sub(jetzt).Seconds(), 0)
@@ -106,6 +125,12 @@ func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
 		EigenerSki: b.eigenerSki,
 		RemoteSki:  b.konf.RemoteSki,
 		Gefunden:   gemeinsam.GefundeneGeraete(b.gefunden),
+
+		Kennung:          b.kennung,
+		SkiVerfahren:     b.konf.RemoteSki != "",
+		PairingService:   b.konf.PairingService,
+		PairingSteuerbox: pairingSteuerbox,
+		Partner:          partner,
 
 		SpsOk:                  b.spsOk,
 		SpsLebenszeichenAlterS: alterS(jetzt, b.spsLebenszeichenSeit),

@@ -88,14 +88,48 @@ tr:last-child td { border-bottom: none; }
 
 footer { margin-top: 16px; font-size: 13px; color: var(--text-leise); display: flex; gap: 16px; flex-wrap: wrap; }
 
+/* Kopf mit Navigation */
+.kopf { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; }
+nav { display: flex; gap: 4px; }
+nav a { color: var(--text-leise); text-decoration: none; padding: 3px 10px; border-radius: 999px; font-size: 14px; }
+nav a:hover { color: var(--text); }
+nav a.aktiv { background: var(--flaeche); border: 1px solid var(--rand); color: var(--text); }
+
+h3 { font-size: 15px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+code { font-family: var(--mono); font-size: 12px; background: var(--grau-flaeche); padding: 1px 4px; border-radius: 4px; }
+.zweispaltig { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px 32px; }
+.qr { display: flex; gap: 16px; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--rand); }
+.qr img { width: 160px; height: 160px; flex: none; background: #fff; padding: 6px; border-radius: 6px; image-rendering: pixelated; }
+.qr .mono { font-size: 12px; }
+
+/* Anleitung */
+.anleitung { max-width: 820px; }
+.anleitung p, .anleitung li { line-height: 1.6; }
+.anleitung h2 { margin-top: 8px; }
+.anleitung ol, .anleitung ul { padding-left: 22px; }
+.anleitung li + li { margin-top: 4px; }
+.schaubild { width: 100%; height: auto; display: block; margin: 8px 0 4px; }
+.schaubild text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--text); }
+.schaubild .leise-text { fill: var(--text-leise); font-size: 12px; }
+.schaubild .kasten { fill: var(--flaeche); stroke: var(--rand); stroke-width: 1.5; }
+.schaubild .kasten-hell { fill: var(--grau-flaeche); stroke: var(--rand); stroke-width: 1.5; }
+.schaubild .linie { stroke: var(--text-leise); stroke-width: 1.5; fill: none; }
+.schaubild .pfeilspitze { fill: var(--text-leise); }
+.schaubild .gruen { fill: var(--gruen-flaeche); stroke: var(--gruen); }
+.schaubild .orange { fill: var(--orange-flaeche); stroke: var(--orange); }
+.schaubild .rot { fill: var(--rot-flaeche); stroke: var(--rot); }
+.schaubild .grau { fill: var(--grau-flaeche); stroke: var(--grau); }
+.legende { font-size: 13px; color: var(--text-leise); margin: 0 0 8px; }
+
 /* Formulare (Test-Steuerbox) */
 .felder { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }
 /* space-between: Felder stehen auf einer Linie, auch wenn eine Beschriftung umbricht */
 label { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; font-size: 13px; color: var(--text-leise); }
-input {
+input, textarea {
 	font: inherit; padding: 6px 8px; width: 100%;
 	border: 1px solid var(--rand); border-radius: 6px; background: var(--hintergrund); color: var(--text);
 }
+textarea { font-family: var(--mono); font-size: 12px; resize: vertical; }
 .knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
 .knoepfe button, button.gross { margin-left: 0; padding: 7px 14px; font-size: 14px; }
 button.primaer { background: var(--text); color: var(--flaeche); border-color: var(--text); }
@@ -121,5 +155,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 @media (max-width: 480px) {
 	.raster { grid-template-columns: 1fr; }
+	.qr { flex-direction: column; align-items: flex-start; }
 	.ampel .titel { font-size: 20px; }
 }

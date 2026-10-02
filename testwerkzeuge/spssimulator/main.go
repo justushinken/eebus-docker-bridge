@@ -50,8 +50,13 @@ func main() {
 		if *nennleistung > 0 {
 			werte = append(werte, uint16(*nennleistung>>16), uint16(*nennleistung))
 		}
+		// Wie Auto-Reconnect in CODESYS: Nach einem Neustart der Bruecke ist die
+		// alte TCP-Verbindung tot, also schliessen und neu aufbauen.
 		if err := client.WriteRegisters(0, werte); err != nil {
-			log.Printf("Holding schreiben: %v", err)
+			log.Printf("Holding schreiben: %v, verbinde neu", err)
+			client.Close()
+			client.Open()
+			continue
 		}
 
 		r, err := client.ReadRegisters(0, 14, modbus.INPUT_REGISTER)

@@ -37,15 +37,16 @@ type Pairingprotokoll struct {
 }
 
 // Neu liefert den Text zum Zustand und ob er ins Log gehoert: Der Zustand ist
-// aussagekraeftig und hat sich fuer diesen SKI geaendert.
-func (p *Pairingprotokoll) Neu(ski string, detail *shipapi.ConnectionStateDetail) (text string, melden bool) {
+// aussagekraeftig und hat sich fuer diesen Partner geaendert.
+func (p *Pairingprotokoll) Neu(partner shipapi.ServiceIdentity, detail *shipapi.ConnectionStateDetail) (text string, melden bool) {
 	zustand := detail.State()
+	schluessel := Bezeichnung(partner)
 	p.mu.Lock()
 	if p.zustand == nil {
 		p.zustand = make(map[string]shipapi.ConnectionState)
 	}
-	alt, bekannt := p.zustand[ski]
-	p.zustand[ski] = zustand
+	alt, bekannt := p.zustand[schluessel]
+	p.zustand[schluessel] = zustand
 	p.mu.Unlock()
 
 	text, ok := pairingTexte[zustand]

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -15,8 +14,6 @@ import (
 	"eebus-bruecke/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
-	"github.com/enbility/eebus-go/features/client"
-	"github.com/enbility/eebus-go/service"
 	ucapi "github.com/enbility/eebus-go/usecases/api"
 	eglpc "github.com/enbility/eebus-go/usecases/eg/lpc"
 	shipapi "github.com/enbility/ship-go/api"
@@ -24,8 +21,8 @@ import (
 	"github.com/enbility/spine-go/model"
 )
 
-// Datei im Datenverzeichnis, in der der SKI der gekoppelten Bruecke steht.
-const kopplungsdatei = "bruecke-ski.txt"
+// Datei im Datenverzeichnis mit der gekoppelten Bruecke.
+const kopplungsdatei = "kopplung.json"
 
 var skiMuster = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
@@ -33,91 +30,105 @@ var skiMuster = regexp.MustCompile(`^[0-9a-f]{40}$`)
 // Aufrufe in den EEBUS-Stack immer ausserhalb von mu, damit es keine
 // Verklemmung mit dessen Callbacks gibt.
 type Steuerbox struct {
-	konf       Konfiguration
-	eigenerSki string
-	gestartet  time.Time
-	pairing    gemeinsam.Pairingprotokoll
+	konf        Konfiguration
+	eigenerSki  string
+	shipId      string
+	fingerprint string
+	gestartet   time.Time
+	pairing     gemeinsam.Pairingprotokoll
 
-	dienst   *service.Service
+	dienst   api.ServiceInterface
 	entitaet spineapi.EntityLocalInterface
 	lpc      *eglpc.LPC
 
 	mu           sync.Mutex
-	gekoppelt    string // SKI der Bruecke, leer = nicht gekoppelt
-	unterbrochen bool   // Verbindung absichtlich getrennt (Simulation)
+	kopplung     *gemeinsam.Kopplung // gekoppelte Bruecke, nil = keine
+	unterbrochen bool                // Verbindung absichtlich getrennt (Simulation)
 	verbunden    bool
-	gefunden     []shipapi.RemoteService
+	partner      shipapi.ServiceIdentity // verbundene Bruecke
+	gefunden     []shipapi.RemoteMdnsService
 	gemeldet     map[string]string // zuletzt von der Bruecke gemeldete Werte, fuer das Log
-	abonniert    spineapi.EntityRemoteInterface
 }
 
 func NeueSteuerbox(konf Konfiguration, eigenerSki string) *Steuerbox {
 	s := &Steuerbox{konf: konf, eigenerSki: eigenerSki, gestartet: time.Now()}
-	if inhalt, err := os.ReadFile(filepath.Join(konf.Datenverzeichnis, kopplungsdatei)); err == nil {
-		s.gekoppelt = strings.TrimSpace(string(inhalt))
+	kopplung, err := gemeinsam.LadeKopplung(s.kopplungspfad())
+	if err != nil {
+		log.Printf("Gespeicherte Kopplung nicht lesbar: %v", err)
 	}
+	s.kopplung = kopplung
 	return s
 }
 
-func (s *Steuerbox) Gekoppelt() string {
+func (s *Steuerbox) kopplungspfad() string {
+	return filepath.Join(s.konf.Datenverzeichnis, kopplungsdatei)
+}
+
+func (s *Steuerbox) Kopplung() *gemeinsam.Kopplung {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.gekoppelt
+	return s.kopplung
 }
 
 // --- api.ServiceReaderInterface ---
 
 // Verbindungswechsel nur einmal protokollieren, ship-go meldet sie teils doppelt.
-func (s *Steuerbox) RemoteSKIConnected(dienst api.ServiceInterface, ski string) {
+func (s *Steuerbox) RemoteServiceConnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	s.mu.Lock()
 	neu := !s.verbunden
 	s.verbunden = true
+	s.partner = partner
 	s.mu.Unlock()
 	if neu {
-		log.Printf("Bruecke verbunden: %s", ski)
+		log.Printf("Bruecke verbunden: %s", gemeinsam.Bezeichnung(partner))
 	}
 }
 
-func (s *Steuerbox) RemoteSKIDisconnected(dienst api.ServiceInterface, ski string) {
+func (s *Steuerbox) RemoteServiceDisconnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	s.mu.Lock()
 	neu := s.verbunden
 	s.verbunden = false
+	s.partner = shipapi.ServiceIdentity{}
 	s.mu.Unlock()
 	if neu {
-		log.Printf("Bruecke getrennt: %s", ski)
+		log.Printf("Bruecke getrennt: %s", gemeinsam.Bezeichnung(partner))
 	}
 }
 
-func (s *Steuerbox) VisibleRemoteServicesUpdated(dienst api.ServiceInterface, eintraege []shipapi.RemoteService) {
+func (s *Steuerbox) VisibleRemoteMdnsServicesUpdated(dienst api.ServiceInterface, eintraege []shipapi.RemoteMdnsService) {
 	s.mu.Lock()
 	neu := gemeinsam.NeuGefunden(s.gefunden, eintraege)
 	s.gefunden = slices.Clone(eintraege)
 	s.mu.Unlock()
 
 	for _, e := range neu {
-		log.Printf("Gefunden: %s %s, SKI %s", e.Brand, e.Model, e.Ski)
+		log.Printf("Gefunden: %s %s, SHIP-ID %s, SKI %s", e.Brand, e.Model, e.ShipID, e.Ski)
 	}
 }
 
-func (s *Steuerbox) ServiceShipIDUpdate(ski string, shipId string) {}
+func (s *Steuerbox) ServiceUpdated(partner shipapi.ServiceIdentity) {}
 
-func (s *Steuerbox) ServicePairingDetailUpdate(ski string, detail *shipapi.ConnectionStateDetail) {
-	text, melden := s.pairing.Neu(ski, detail)
+func (s *Steuerbox) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, detail *shipapi.ConnectionStateDetail) {
+	text, melden := s.pairing.Neu(partner, detail)
 	if !melden {
 		return
 	}
-	log.Printf("Pairing %s: %s", ski, text)
-	if detail.State() == shipapi.ConnectionStateRemoteDeniedTrust && ski == s.Gekoppelt() {
-		log.Printf("Die Bruecke vertraut dieser Steuerbox nicht: bei der Bruecke EEBUS_REMOTE_SKI=%s setzen", s.eigenerSki)
+	log.Printf("Pairing %s: %s", gemeinsam.Bezeichnung(partner), text)
+	if detail.State() == shipapi.ConnectionStateRemoteDeniedTrust {
+		if k := s.Kopplung(); k != nil && k.Verfahren == gemeinsam.VerfahrenSki {
+			log.Printf("Die Bruecke vertraut dieser Steuerbox nicht: bei der Bruecke EEBUS_REMOTE_SKI=%s setzen", s.eigenerSki)
+		}
 	}
 }
 
-// Nur der gekoppelten Bruecke wird vertraut, und auch ihr nicht, solange die
-// Verbindung absichtlich getrennt ist. Sonst baut die Bruecke sie sofort wieder auf.
-func (s *Steuerbox) AllowWaitingForTrust(ski string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return ski == s.gekoppelt && !s.unterbrochen
+// Die Steuerbox ist beim Pairing Service die ankuendigende Seite. Diese
+// Ereignisse betreffen die annehmende Seite und kommen hier nur zur Vollstaendigkeit.
+func (s *Steuerbox) ServiceAutoTrusted(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
+}
+func (s *Steuerbox) ServiceAutoTrustFailed(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund error) {
+	log.Printf("Pairing Service fehlgeschlagen fuer %s: %v", gemeinsam.Bezeichnung(partner), grund)
+}
+func (s *Steuerbox) ServiceAutoTrustRemoved(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund string) {
 }
 
 // --- Ereignisse des Use Case LPC (Energy Guard) ---
@@ -125,8 +136,9 @@ func (s *Steuerbox) AllowWaitingForTrust(ski string) bool {
 func (s *Steuerbox) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
 	switch ereignis {
 	case eglpc.UseCaseSupportUpdate:
-		log.Printf("Bruecke unterstuetzt LPC, Szenarien %v", s.lpc.AvailableScenariosForEntity(entitaet))
-		s.pruefeAbo(entitaet)
+		if szenarien := s.lpc.AvailableScenariosForEntity(entitaet); len(szenarien) > 0 {
+			log.Printf("Bruecke unterstuetzt LPC, Szenarien %v", szenarien)
+		}
 
 	case eglpc.DataUpdateLimit:
 		if grenze, err := s.lpc.ConsumptionLimit(entitaet); err == nil {
@@ -148,6 +160,14 @@ func (s *Steuerbox) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterfac
 				log.Printf("Bruecke meldet Failsafe-Mindestdauer: %v", dauer)
 			}
 		}
+
+	// Die Nennleistung kommt von der SPS ueber die Bruecke: Test der ganzen Kette.
+	case eglpc.DataUpdatePowerConsumptionNominalMax:
+		if wert, err := s.lpc.ConsumptionNominalMax(entitaet); err == nil {
+			if s.merke("nennleistung", fmt.Sprintf("%.0f W", wert)) {
+				log.Printf("Bruecke meldet Nennleistung: %.0f W", wert)
+			}
+		}
 	}
 }
 
@@ -163,59 +183,20 @@ func (s *Steuerbox) merke(schluessel, wert string) bool {
 	return neu
 }
 
-// pruefeAbo abonniert die Nennleistung, sobald eine neue Entitaet der Bruecke
-// auftaucht, also auch nach jedem Neuverbinden.
-//
-// eg/lpc fragt die Nennleistung (Szenario 4) nicht selbst ab. Sie kommt von der
-// SPS ueber die Bruecke und ist damit ein guter Test der ganzen Kette.
-func (s *Steuerbox) pruefeAbo(entitaet spineapi.EntityRemoteInterface) {
-	s.mu.Lock()
-	neu := s.abonniert != entitaet
-	s.abonniert = entitaet
-	s.mu.Unlock()
-	if !neu {
-		return
-	}
-
-	verbindung, err := client.NewElectricalConnection(s.entitaet, entitaet)
-	if err != nil {
-		log.Printf("Nennleistung abonnieren: %v", err)
-		return
-	}
-	if !verbindung.HasSubscription() {
-		if _, err := verbindung.Subscribe(); err != nil {
-			log.Printf("Nennleistung abonnieren: %v", err)
-		}
-	}
-	if _, err := verbindung.RequestCharacteristics(nil, nil); err != nil {
-		log.Printf("Nennleistung abfragen: %v", err)
-	}
-}
-
-// ziel liefert die LPC-Entitaet der gekoppelten Bruecke.
+// ziel liefert die LPC-Entitaet der verbundenen Bruecke.
 func (s *Steuerbox) ziel() (spineapi.EntityRemoteInterface, error) {
 	s.mu.Lock()
-	ski, verbunden := s.gekoppelt, s.verbunden
+	gekoppelt, verbunden := s.kopplung != nil, s.verbunden
 	s.mu.Unlock()
-	if ski == "" {
+	if !gekoppelt {
 		return nil, errors.New("keine Bruecke gekoppelt")
 	}
 	if !verbunden {
 		return nil, errors.New("Bruecke nicht verbunden")
 	}
-	// Nicht ueber lpc.RemoteEntitiesScenarios(): eebus-go v0.7.0 entfernt dort beim
-	// Trennen die Entitaet nicht (das Ereignis traegt keine), nach dem Neuverbinden
-	// steht noch das alte Objekt mit der toten Verbindung drin. Daher die Entitaet
-	// des aktuell verbundenen Geraets nehmen. Der Szenarien-Abgleich laeuft ueber
-	// die Adresse und passt auch zum neuen Objekt.
-	geraet := s.dienst.LocalDevice().RemoteDeviceForSki(ski)
-	if geraet == nil {
-		return nil, errors.New("Bruecke nicht verbunden")
-	}
-	for _, e := range geraet.Entities() {
-		if len(s.lpc.AvailableScenariosForEntity(e)) > 0 {
-			s.pruefeAbo(e)
-			return e, nil
+	for _, e := range s.lpc.RemoteEntitiesScenarios() {
+		if e.Entity != nil && len(e.Scenarios) > 0 {
+			return e.Entity, nil
 		}
 	}
 	return nil, errors.New("Bruecke hat LPC noch nicht gemeldet, kurz warten")
@@ -233,7 +214,7 @@ func (s *Steuerbox) SendeGrenze(wertW float64, dauer time.Duration, aktiv bool) 
 		beschreibung = fmt.Sprintf("aktiv=%v, %.0f W, unbefristet", aktiv, wertW)
 	}
 	grenze := ucapi.LoadLimit{Value: wertW, Duration: dauer, IsActive: aktiv}
-	_, err = s.lpc.WriteConsumptionLimit(ziel, grenze, func(ergebnis model.ResultDataType) {
+	_, err = s.lpc.WriteConsumptionLimit(ziel, grenze, func(ergebnis model.ResultDataType, _ model.MsgCounterType) {
 		if ergebnis.ErrorNumber != nil && *ergebnis.ErrorNumber != model.ErrorNumberTypeNoError {
 			grund := ""
 			if ergebnis.Description != nil {
@@ -272,108 +253,138 @@ func (s *Steuerbox) SendeFailsafe(grenzeW float64, mindestdauer time.Duration) e
 }
 
 func (s *Steuerbox) SetzeHeartbeat(an bool) {
-	manager := s.entitaet.HeartbeatManager()
 	if an {
-		if err := manager.StartHeartbeat(); err != nil {
-			log.Printf("Heartbeat starten: %v", err)
-			return
-		}
+		s.lpc.StartHeartbeat()
 		log.Printf("Heartbeat gestartet")
 	} else {
-		manager.StopHeartbeat()
+		s.lpc.StopHeartbeat()
 		log.Printf("Heartbeat gestoppt (Test): Bruecke geht nach 120 s ohne Heartbeat in Failsafe")
 	}
+}
+
+func (s *Steuerbox) HeartbeatLaeuft() bool {
+	manager := s.entitaet.HeartbeatManager()
+	return manager != nil && manager.IsHeartbeatRunning()
 }
 
 // Kurze Unterbrechung: Verbindung schliessen, ship-go baut sie selbst wieder auf.
 func (s *Steuerbox) UnterbrecheKurz() error {
 	s.mu.Lock()
-	ski, verbunden := s.gekoppelt, s.verbunden
+	partner, verbunden := s.partner, s.verbunden
 	s.mu.Unlock()
 	if !verbunden {
 		return errors.New("Bruecke nicht verbunden")
 	}
 	log.Printf("Verbindung kurz unterbrochen (Test), Neuaufbau automatisch")
-	s.dienst.DisconnectSKI(ski, "Test: kurze Unterbrechung")
+	s.dienst.DisconnectService(partner, "Test: kurze Unterbrechung")
 	return nil
 }
 
-// Dauerhafte Trennung, bis sie mit Wiederherstellen aufgehoben wird.
+// Dauerhafte Trennung, bis sie mit Wiederherstellen aufgehoben wird. Die
+// Steuerbox vertraut der Bruecke solange nicht, daher baut auch die Bruecke
+// die Verbindung nicht wieder auf.
 func (s *Steuerbox) Trenne() error {
 	s.mu.Lock()
-	ski := s.gekoppelt
-	s.unterbrochen = ski != ""
+	kopplung := s.kopplung
+	s.unterbrochen = kopplung != nil
 	s.mu.Unlock()
-	if ski == "" {
+	if kopplung == nil {
 		return errors.New("keine Bruecke gekoppelt")
 	}
 	log.Printf("Verbindung getrennt (Test), bleibt getrennt bis \"Wiederherstellen\"")
-	s.dienst.UnregisterRemoteSKI(ski)
+	s.dienst.UnregisterRemoteService(kopplung.Identitaet)
 	return nil
 }
 
 func (s *Steuerbox) StelleWiederHer() error {
 	s.mu.Lock()
-	ski := s.gekoppelt
+	kopplung := s.kopplung
 	s.unterbrochen = false
 	s.mu.Unlock()
-	if ski == "" {
+	if kopplung == nil {
 		return errors.New("keine Bruecke gekoppelt")
 	}
 	log.Printf("Verbindung wird wiederhergestellt")
-	s.dienst.RegisterRemoteSKI(ski)
+	s.dienst.RegisterRemoteService(kopplung.Identitaet)
 	return nil
 }
 
-func (s *Steuerbox) Koppeln(ski string) error {
-	ski = strings.ToLower(strings.TrimSpace(ski))
+// KoppelnPerSki: bisheriges Verfahren. Die Bruecke muss den SKI dieser
+// Steuerbox ebenfalls kennen (EEBUS_REMOTE_SKI).
+func (s *Steuerbox) KoppelnPerSki(ski string) error {
+	ski = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(ski), " ", ""))
 	if !skiMuster.MatchString(ski) {
 		return errors.New("ungueltiger SKI, erwartet 40 Hex-Zeichen")
 	}
 	if ski == s.eigenerSki {
 		return errors.New("das ist der eigene SKI")
 	}
-	if err := s.speichereKopplung(ski); err != nil {
+	kopplung := &gemeinsam.Kopplung{Verfahren: gemeinsam.VerfahrenSki, Identitaet: shipapi.NewServiceIdentity(ski, "", "")}
+	if err := s.ersetzeKopplung(kopplung); err != nil {
 		return err
 	}
-	s.mu.Lock()
-	alt := s.gekoppelt
-	s.gekoppelt = ski
-	s.unterbrochen = false
-	s.mu.Unlock()
+	log.Printf("Gekoppelt per SKI mit Bruecke %s", ski)
+	s.dienst.RegisterRemoteService(kopplung.Identitaet)
+	return nil
+}
 
-	if alt != "" && alt != ski {
-		s.dienst.UnregisterRemoteSKI(alt)
+// KoppelnPerPairingService: neues Verfahren. Der QR-Text der Bruecke enthaelt
+// SKI, SHIP-ID, Fingerprint und Secret. Die Steuerbox vertraut der Bruecke und
+// kuendigt sich per mDNS mit einem HMAC ueber das Secret an. Die Bruecke prueft
+// das und vertraut der Steuerbox dann ohne weiteres Zutun.
+func (s *Steuerbox) KoppelnPerPairingService(qrText string) error {
+	daten, err := gemeinsam.LiesPairingQr(qrText)
+	if err != nil {
+		return err
 	}
-	log.Printf("Gekoppelt mit Bruecke %s", ski)
-	s.dienst.RegisterRemoteSKI(ski)
+	identitaet := shipapi.NewServiceIdentity(daten.Ski, daten.Fingerprint, daten.ShipId)
+	kopplung := &gemeinsam.Kopplung{Verfahren: gemeinsam.VerfahrenPairing, Identitaet: identitaet}
+	if err := s.ersetzeKopplung(kopplung); err != nil {
+		return err
+	}
+	// Die ankuendigende Seite muss der Gegenseite vorher vertrauen.
+	s.dienst.RegisterRemoteService(identitaet)
+	ziel := shipapi.PairingTarget{SKI: daten.Ski, Fingerprint: daten.Fingerprint, ShipID: daten.ShipId, Secret: daten.Secret}
+	if err := s.dienst.StartAnnouncementTo(ziel); err != nil {
+		return fmt.Errorf("Ankuendigung starten: %w", err)
+	}
+	log.Printf("Pairing Service: Ankuendigung an Bruecke %s gestartet", gemeinsam.Bezeichnung(identitaet))
 	return nil
 }
 
 func (s *Steuerbox) Entkoppeln() error {
-	if err := s.speichereKopplung(""); err != nil {
-		return err
-	}
 	s.mu.Lock()
-	alt := s.gekoppelt
-	s.gekoppelt = ""
-	s.unterbrochen = false
+	alt := s.kopplung
 	s.mu.Unlock()
-	if alt == "" {
+	if alt == nil {
 		return errors.New("keine Bruecke gekoppelt")
 	}
-	s.dienst.UnregisterRemoteSKI(alt)
-	log.Printf("Kopplung mit Bruecke %s aufgehoben", alt)
+	if err := s.ersetzeKopplung(nil); err != nil {
+		return err
+	}
+	log.Printf("Kopplung mit Bruecke %s aufgehoben", gemeinsam.Bezeichnung(alt.Identitaet))
 	return nil
 }
 
-func (s *Steuerbox) speichereKopplung(ski string) error {
-	pfad := filepath.Join(s.konf.Datenverzeichnis, kopplungsdatei)
-	if ski == "" {
-		if err := os.Remove(pfad); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		return nil
+// ersetzeKopplung speichert die neue Kopplung und meldet die alte beim
+// EEBUS-Stack ab, samt einer noch laufenden Ankuendigung.
+func (s *Steuerbox) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
+	if err := gemeinsam.SpeichereKopplung(s.kopplungspfad(), neu); err != nil {
+		return err
 	}
-	return os.WriteFile(pfad, []byte(ski+"\n"), 0o600)
+	s.mu.Lock()
+	alt := s.kopplung
+	s.kopplung = neu
+	s.unterbrochen = false
+	s.mu.Unlock()
+
+	if alt != nil {
+		if id := alt.Identitaet.ShipID; id != "" && s.dienst.IsAnnouncingTo(id) {
+			if err := s.dienst.StopAnnouncementTo(id); err != nil {
+				log.Printf("Ankuendigung beenden: %v", err)
+			}
+		}
+		s.dienst.UnregisterRemoteService(alt.Identitaet)
+	}
+	return nil
 }

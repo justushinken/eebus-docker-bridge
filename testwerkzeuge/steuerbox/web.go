@@ -15,6 +15,9 @@ import (
 //go:embed web/index.html
 var indexHtml []byte
 
+//go:embed web/anleitung.html
+var anleitungHtml []byte
+
 type Antwort struct {
 	Text   string `json:"text,omitempty"`
 	Fehler string `json:"fehler,omitempty"`
@@ -23,6 +26,7 @@ type Antwort struct {
 func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", gemeinsam.SeiteAusliefern(gemeinsam.MitStil(indexHtml)))
+	mux.HandleFunc("GET /anleitung", gemeinsam.SeiteAusliefern(gemeinsam.MitStil(anleitungHtml)))
 	mux.HandleFunc("GET /api/status", func(w http.ResponseWriter, r *http.Request) {
 		status := s.Status(time.Now())
 		status.Ereignisse = protokoll.Liste()
@@ -82,9 +86,17 @@ func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handl
 	}))
 
 	mux.HandleFunc("POST /api/kopplung", aktion(func(daten struct {
-		Ski string `json:"ski"`
+		Verfahren string `json:"verfahren"`
+		Ski       string `json:"ski"`
+		QrText    string `json:"qrText"`
 	}) (string, error) {
-		return "Gekoppelt, Verbindung wird aufgebaut", s.Koppeln(daten.Ski)
+		switch daten.Verfahren {
+		case gemeinsam.VerfahrenSki:
+			return "Per SKI gekoppelt, Verbindung wird aufgebaut", s.KoppelnPerSki(daten.Ski)
+		case gemeinsam.VerfahrenPairing:
+			return "Ankuendigung laeuft, die Bruecke sollte sich in einigen Sekunden verbinden", s.KoppelnPerPairingService(daten.QrText)
+		}
+		return "", fmt.Errorf("unbekanntes Verfahren %q", daten.Verfahren)
 	}))
 
 	mux.HandleFunc("DELETE /api/kopplung", aktion(func(struct{}) (string, error) {
@@ -136,7 +148,12 @@ type BrueckenWerte struct {
 
 type StatusDaten struct {
 	EigenerSki        string                       `json:"eigenerSki"`
-	Gekoppelt         string                       `json:"gekoppelt"`
+	ShipId            string                       `json:"shipId"`
+	Fingerprint       string                       `json:"fingerprint"`
+	Gekoppelt         string                       `json:"gekoppelt"`    // Bezeichnung der Bruecke, leer = keine
+	GekoppeltSki      string                       `json:"gekoppeltSki"` // fuer die Markierung in der Geraeteliste
+	Verfahren         string                       `json:"verfahren"`    // ski | pairing
+	Ankuendigung      bool                         `json:"ankuendigung"` // Pairing Service kuendigt gerade an
 	Verbunden         bool                         `json:"verbunden"`
 	Unterbrochen      bool                         `json:"unterbrochen"`
 	HeartbeatLaeuft   bool                         `json:"heartbeatLaeuft"`
@@ -158,17 +175,28 @@ func (s *Steuerbox) Status(jetzt time.Time) StatusDaten {
 	s.mu.Lock()
 	status := StatusDaten{
 		EigenerSki:   s.eigenerSki,
-		Gekoppelt:    s.gekoppelt,
+		ShipId:       s.shipId,
+		Fingerprint:  s.fingerprint,
 		Verbunden:    s.verbunden,
 		Unterbrochen: s.unterbrochen,
 		Gefunden:     gemeinsam.GefundeneGeraete(s.gefunden),
 		LaufzeitS:    jetzt.Sub(s.gestartet).Seconds(),
 	}
+	kopplung := s.kopplung
 	s.mu.Unlock()
+
+	if kopplung != nil {
+		status.Gekoppelt = gemeinsam.Bezeichnung(kopplung.Identitaet)
+		status.GekoppeltSki = kopplung.Identitaet.SKI
+		status.Verfahren = kopplung.Verfahren
+		if id := kopplung.Identitaet.ShipID; id != "" {
+			status.Ankuendigung = s.dienst.IsAnnouncingTo(id)
+		}
+	}
 
 	// Abfragen an den EEBUS-Stack ausserhalb von mu. Sie lesen nur den lokalen
 	// Zwischenspeicher, es geht nichts ueber das Netz.
-	status.HeartbeatLaeuft = s.entitaet.HeartbeatManager().IsHeartbeatRunning()
+	status.HeartbeatLaeuft = s.HeartbeatLaeuft()
 	// Abstand wie im HeartbeatManager von spine-go: Timeout minus 2 s.
 	abstand := s.konf.HeartbeatTimeout
 	if abstand > 2*time.Second {

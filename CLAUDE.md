@@ -4,7 +4,7 @@ Docker-Container auf dem WAGO PFC200: nimmt als EEBUS „Controllable System“ 
 
 ## Stand (Oktober 2026)
 
-- **Branch `ship-pairing`** (noch nicht nach `main` übernommen): SHIP Pairing Service, Kopplung wahlweise per SKI oder Pairing Service, Anleitungsseiten, gespeicherte Failsafe-Werte, SHIP-ID aus der MAC. `main` = Stand 0.3 (nur SKI-Verfahren, eebus-go v0.7.0).
+- **Branch `dev`** (früher `ship-pairing`) (noch nicht nach `main` übernommen): SHIP Pairing Service, Kopplung wahlweise per SKI oder Pairing Service, Anleitungsseiten, gespeicherte Failsafe-Werte, SHIP-ID aus der MAC. `main` = Stand 0.3 (nur SKI-Verfahren, eebus-go v0.7.0).
 - **Images 0.4** für den PFC liegen unter `dist/` (`eebus-bruecke-0.4.tar.gz`, `eebus-steuerbox-0.4.tar.gz`), **noch nicht auf dem PFC getestet**.
 - **Auf dem PFC läuft 0.2** (nur Status-UI), gestartet mit `GERAET_SERIENNUMMER=0001`. Beim Update auf 0.4 diese Zeile weglassen, dann kommt die SHIP-ID aus der MAC.
 - Alles lokal mit der Test-Steuerbox getestet, **noch nicht gegen eine echte Steuerbox**.
@@ -15,7 +15,7 @@ Docker-Container auf dem WAGO PFC200: nimmt als EEBUS „Controllable System“ 
 2. 0.4 auf dem PFC einspielen und testen, auch Brücke + Test-Steuerbox gleichzeitig auf dem PFC (bisher nur lokal getestet).
 3. Netzwerk mit Installateur abstimmen: Steuerbox und PFC im selben Segment, Multicast erlaubt, UDP 5353 / TCP 4712 (README, „Netzwerk“). Idee: X2 separat für die Steuerbox (ungetestet).
 4. Mit dem Partner klären: ab wann Pairing Service, welche Spezifikationsversion, ob er den QR-Code (`SHIP;SKI:…;ID:…;FPH256:…;SPSEC:…;ENDSHIP;`) oder die Einzelwerte will, und wer das Secret erzeugt (wir tun es, so sieht es ship-go vor).
-5. `ship-pairing` nach `main` übernehmen, wenn der PFC-Test passt.
+5. `dev` nach `main` übernehmen, wenn der PFC-Test passt.
 6. Zustandsautomat (`bruecke/bruecke.go`, `Takt`) gegen LPC-Spezifikation und FNN-Lastenheft prüfen.
 
 ## Umgebung und Werkzeuge
@@ -77,4 +77,4 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 
 ## Partner-Info
 
-Der Partner (Messstellenbetreiber-Seite) kündigte an: Künftig braucht die EEBUS-Kopplung statt nur SKI eine **SHIP-ID, einen SHA-256-Fingerprint und ein Secret**. Das ist der „SHIP Pairing Service 1.0.0“ und ist umgesetzt (Branch `ship-pairing`). Firma hat keine IANA-Nummer, daher SHIP-ID-Format `<Marke>-<Modell>-<MAC>`.
+Der Partner (Messstellenbetreiber-Seite) kündigte an: Künftig braucht die EEBUS-Kopplung statt nur SKI eine **SHIP-ID, einen SHA-256-Fingerprint und ein Secret**. Das ist der „SHIP Pairing Service 1.0.0“ und ist umgesetzt (Branch `dev`). Firma hat keine IANA-Nummer, daher SHIP-ID-Format `<Marke>-<Modell>-<MAC>`.

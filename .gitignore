@@ -16,3 +16,5 @@ backup-pfc/
 
 # Lokale Compose-Einstellungen (STEUERBOX_SKI)
 .env
+
+*.pdf

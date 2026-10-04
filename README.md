@@ -97,11 +97,19 @@ Als Messwerte gibt die Brücke je Use Case Leistung und Energie weiter. Mehr ver
 
 ## Bauen und Verteilen
 
-Auf dem Entwicklungsrechner (Docker Desktop, Git Bash) aus dem Repo-Wurzelverzeichnis:
+Die Versionsnummer gibt es nur beim Bauen: Sie ist das Argument des Skripts, steht im Image-Namen und wird als Software-Revision an die Steuerbox gemeldet (Fußzeile des UI). Lokal mit Compose gebaute Images heißen `dev`. Unten steht durchgehend 0.5 als Beispiel.
+
+Auf dem Entwicklungsrechner (Docker Desktop) aus dem Repo-Wurzelverzeichnis, in **Git Bash**:
 
 ```sh
-sh skripte/pfc-images-bauen.sh 0.4
-scp dist/eebus-bruecke-0.4.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
+sh skripte/pfc-images-bauen.sh 0.5
+scp dist/eebus-bruecke-0.5.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
+```
+
+In PowerShell gibt es kein `sh`, dort das von Git mitgelieferte aufrufen:
+
+```powershell
+& "C:\Program Files\Git\bin\sh.exe" skripte/pfc-images-bauen.sh 0.5
 ```
 
 Das Skript baut Brücke und Test-Steuerbox für ARMv7 und legt beide als `.tar.gz` unter `dist/` ab. `scp` aus Git Bash, nicht aus PowerShell. Als `admin` statt `root` erst nach `/tmp` kopieren und auf dem PFC mit `sudo` verschieben.
@@ -110,7 +118,7 @@ Auf dem PFC200 (als root):
 
 ```sh
 mkdir -p /home/eebus-bruecke
-docker load -i /home/eebus-bruecke/eebus-bruecke-0.4.tar.gz
+docker load -i /home/eebus-bruecke/eebus-bruecke-0.5.tar.gz
 
 docker rm -f eebus-bruecke    # falls eine ältere Version läuft
 docker run -d --name eebus-bruecke \
@@ -366,13 +374,13 @@ Für Tests mit der echten CODESYS-Applikation läuft die Test-Steuerbox als zwei
 
 ```sh
 mkdir -p /home/eebus-steuerbox
-docker load -i /home/eebus-steuerbox/eebus-steuerbox-0.4.tar.gz
+docker load -i /home/eebus-steuerbox/eebus-steuerbox-0.5.tar.gz
 docker run -d --name eebus-steuerbox \
   --network host \
   --memory 64m \
   -v /home/eebus-steuerbox:/data \
   -e WEB_PASSWORT='<Passwort>' \
-  eebus-steuerbox:0.4
+  eebus-steuerbox:0.5
 ```
 
 Danach `http://<pfc-ip>:8091` öffnen und die Brücke per Pairing Service koppeln (QR-Text aus dem Brücken-UI). An der Brücke ist dafür nichts einzustellen.

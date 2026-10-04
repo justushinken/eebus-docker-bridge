@@ -2,12 +2,13 @@
 # Baut Bruecke und Test-Steuerbox fuer den PFC200 (ARMv7) und legt sie als
 # .tar.gz unter dist/ ab. Aus dem Repo-Wurzelverzeichnis aufrufen:
 #
-#   sh skripte/pfc-images-bauen.sh 0.3
+#   sh skripte/pfc-images-bauen.sh 0.5                                    (Git Bash)
+#   & "C:\Program Files\Git\bin\sh.exe" skripte/pfc-images-bauen.sh 0.5   (PowerShell)
 #
-# Danach z. B.: scp dist/eebus-bruecke-0.3.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
+# Danach z. B.: scp dist/eebus-bruecke-0.5.tar.gz root@<pfc-ip>:/home/eebus-bruecke/
 set -e
 
-version=${1:?Version angeben, z. B. 0.3}
+version=${1:?Version angeben, z. B. 0.5}
 mkdir -p dist
 
 baue() {

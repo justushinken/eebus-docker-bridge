@@ -11,7 +11,7 @@
 	<header>
 		<div class="kopf">
 			<h1>Test-Steuerbox</h1>
-			<nav><a class="aktiv" href="./">Steuerung</a><a href="anleitung">Anleitung</a></nav>
+			<nav><a href="#steuern" data-reiter="steuern">Steuern</a><a href="#bruecke" data-reiter="bruecke">Brücke</a><a href="#kopplung" data-reiter="kopplung">Kopplung</a><a href="anleitung">Anleitung</a></nav>
 		</div>
 		<span class="marke orange">Simulator, nicht für den Produktivbetrieb</span>
 	</header>
@@ -24,7 +24,8 @@
 		</div>
 	</section>
 
-	<div class="raster">
+	<!-- Steuern: Grenzen senden, Störungen auslösen, Antworten sehen -->
+	<div class="raster" data-reiter-inhalt="steuern">
 		<section class="karte">
 			<h2>Bezug senden · LPC</h2>
 			<div class="abschnitt">
@@ -104,6 +105,14 @@
 			<p class="meldung" id="stoerungMeldung"></p>
 		</section>
 
+		<section class="karte breit">
+			<h2>Ereignisse</h2>
+			<div class="ereignisse" id="ereignisse"></div>
+		</section>
+	</div>
+
+	<!-- Brücke: was die Brücke über EEBUS meldet -->
+	<div class="raster" data-reiter-inhalt="bruecke" hidden>
 		<section class="karte">
 			<h2>Werte bei der Brücke</h2>
 			<dl>
@@ -133,7 +142,10 @@
 			<h2>Netzanschlusspunkt · MGCP</h2>
 			<table class="werte"><tbody id="mgcp"></tbody></table>
 		</section>
+	</div>
 
+	<!-- Kopplung -->
+	<div class="raster" data-reiter-inhalt="kopplung" hidden>
 		<section class="karte breit">
 			<h2>Kopplung</h2>
 			<dl>
@@ -164,11 +176,6 @@
 			</table>
 			<p class="meldung" id="kopplungMeldung"></p>
 			<p class="hinweis">Diese Steuerbox: SHIP-ID <span class="mono" id="shipId"></span>, Fingerprint <span class="mono" id="fingerprint"></span></p>
-		</section>
-
-		<section class="karte breit">
-			<h2>Ereignisse</h2>
-			<div class="ereignisse" id="ereignisse"></div>
 		</section>
 	</div>
 
@@ -472,6 +479,18 @@ for (const knopf of document.querySelectorAll("[data-kopieren]")) {
 		setTimeout(() => knopf.textContent = vorher, 1500);
 	});
 }
+
+// --- Reiter ---
+// Der aktive Reiter steht im Anker der Adresse (#bruecke …).
+const reiter = [...document.querySelectorAll("nav a[data-reiter]")];
+function zeigeReiter() {
+	const gewuenscht = location.hash.slice(1);
+	const name = reiter.some(r => r.dataset.reiter === gewuenscht) ? gewuenscht : reiter[0].dataset.reiter;
+	for (const r of reiter) r.classList.toggle("aktiv", r.dataset.reiter === name);
+	for (const t of document.querySelectorAll("[data-reiter-inhalt]")) t.hidden = t.dataset.reiterInhalt !== name;
+}
+window.addEventListener("hashchange", () => { zeigeReiter(); window.scrollTo(0, 0); });
+zeigeReiter();
 
 async function abfragen() {
 	try {

@@ -139,3 +139,87 @@ func leseKonfiguration() (Konfiguration, error) {
 	}
 	return konf, nil
 }
+
+// --- Anzeige im UI (Tab "Konfiguration") ---
+
+// KonfigEintrag ist eine Einstellung mit der Env-Variable, ueber die sie sich
+// aendern laesst. Das Web-Passwort wird nicht angezeigt.
+type KonfigEintrag struct {
+	Name     string `json:"name"`
+	Wert     string `json:"wert"`
+	Variable string `json:"variable"`
+}
+
+type KonfigGruppe struct {
+	Name      string          `json:"name"`
+	Eintraege []KonfigEintrag `json:"eintraege"`
+}
+
+// Anzeige liefert die beim Start wirksame Konfiguration. Failsafe-Werte aus
+// failsafe.json (Vorgabe der Steuerbox) sind dabei schon eingerechnet.
+func (k Konfiguration) Anzeige() []KonfigGruppe {
+	anAus := func(b bool) string {
+		if b {
+			return "an"
+		}
+		return "aus"
+	}
+	text := func(s string) string {
+		if s == "" {
+			return "–"
+		}
+		return s
+	}
+	watt := func(w float64) string { return fmt.Sprintf("%.0f W", w) }
+	nurMitLpp := func(w float64) string {
+		if !k.Lpp {
+			return "– (LPP aus)"
+		}
+		return watt(w)
+	}
+
+	return []KonfigGruppe{
+		{"Use Cases", []KonfigEintrag{
+			{"Angeboten", useCaseListe(k), "EEBUS_USECASES"},
+			{"MPC auf Entität", k.MpcEntitaet, "MPC_ENTITAET"},
+			{"Herkunft der Messwerte", string(k.MesswertQuelle), "MESSWERT_QUELLE"},
+		}},
+		{"Grenzen beim Start", []KonfigEintrag{
+			{"Nennleistung Bezug", watt(k.NennleistungMaxW), "NENNLEISTUNG_MAX_W"},
+			{"Nennleistung Erzeugung", nurMitLpp(k.NennleistungErzeugungMaxW), "NENNLEISTUNG_ERZEUGUNG_MAX_W"},
+			{"Failsafe-Grenze Bezug", watt(k.FailsafeGrenzeW), "FAILSAFE_GRENZE_W"},
+			{"Failsafe-Grenze Einspeisung", nurMitLpp(k.FailsafeEinspeisegrenzeW), "FAILSAFE_EINSPEISEGRENZE_W"},
+			{"Failsafe-Mindestdauer", stundenMinuten(k.FailsafeMindestdauer), "FAILSAFE_MINDESTDAUER"},
+		}},
+		{"Kopplung", []KonfigEintrag{
+			{"SHIP Pairing Service", anAus(k.PairingService), "EEBUS_PAIRING_SERVICE"},
+			{"Steuerbox fest (SKI)", text(k.RemoteSki), "EEBUS_REMOTE_SKI"},
+			{"Kopplung im UI", anAus(k.WebKopplung && k.RemoteSki == ""), "WEB_KOPPLUNG"},
+			{"SHIP-ID", k.ShipId, "SHIP_ID"},
+		}},
+		{"Gerät", []KonfigEintrag{
+			{"Hersteller", k.Hersteller, "GERAET_HERSTELLER"},
+			{"Marke", k.Marke, "GERAET_MARKE"},
+			{"Modell", k.Modell, "GERAET_MODELL"},
+			{"Seriennummer", k.Seriennummer, "GERAET_SERIENNUMMER"},
+			{"Hardware-Revision", text(k.HwRevision), "GERAET_HW_REVISION"},
+			{"Software-Version", Version, "Image-Version"},
+		}},
+		{"Schnittstellen", []KonfigEintrag{
+			{"EEBUS-Port", fmt.Sprint(k.EebusPort), "EEBUS_PORT"},
+			{"Modbus-Server", k.ModbusUrl, "MODBUS_URL"},
+			{"Datenverzeichnis", k.Datenverzeichnis, "DATENVERZEICHNIS"},
+			{"Web-UI", k.WebAdresse, "WEB_ADRESSE"},
+			{"Web-Benutzer", k.WebBenutzer, "WEB_BENUTZER"},
+			{"EEBUS-Protokoll auf stdout", anAus(k.EebusDebug), "EEBUS_DEBUG"},
+		}},
+	}
+}
+
+func stundenMinuten(d time.Duration) string {
+	minuten := int(d.Round(time.Minute).Minutes())
+	if minuten%60 == 0 {
+		return fmt.Sprintf("%d h", minuten/60)
+	}
+	return fmt.Sprintf("%d h %d min", minuten/60, minuten%60)
+}

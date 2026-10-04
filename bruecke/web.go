@@ -29,6 +29,11 @@ func webHandler(b *Bruecke, protokoll *gemeinsam.Ereignisprotokoll) http.Handler
 		gemeinsam.SchreibeJson(w, http.StatusOK, status)
 	})
 
+	// Die Konfiguration aendert sich nach dem Start nicht: ohne mu lesbar.
+	mux.HandleFunc("GET /api/konfiguration", func(w http.ResponseWriter, r *http.Request) {
+		gemeinsam.SchreibeJson(w, http.StatusOK, b.konf.Anzeige())
+	})
+
 	mux.HandleFunc("POST /api/suchmodus", gemeinsam.Aktion(func(daten struct {
 		An bool `json:"an"`
 	}) (string, error) {

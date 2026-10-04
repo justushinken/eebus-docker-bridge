@@ -71,7 +71,8 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
   - `gegenstelle.go`: Diagnose der verbundenen Steuerbox.
   - `anlage.go`: Revisionen, Anlagenstatus.
   - `modbus.go`: Registerlayout.
-  - `web.go` + `web/`: Status-UI, Aktionen, Anleitung.
+  - `web.go` + `web/`: Status-UI, Aktionen, Anleitung. `GET /api/konfiguration` liefert `Konfiguration.Anzeige()` (ohne Passwort).
+  - UIs (Brücke und Test-Steuerbox) mit Reitern: Links `href="#name" data-reiter="name"`, Inhalte `data-reiter-inhalt="name"`, umgeschaltet über `location.hash`. Element-IDs dürfen nicht wie ein Reiter heißen, sonst springt der Browser beim Hash dorthin.
 - `testwerkzeuge/steuerbox/`: Steuerbox-Simulator (eg/lpc, eg/lpp, ma/mpc, ma/mgcp) mit UI. `senden.go`: Grenzen und Failsafe-Werte senden. `messwerte.go` liest MPC selbst, weil ma/mpc keine CEM-Entität akzeptiert. `testwerkzeuge/spssimulator/`: Modbus-Client mit Anlagenmodell.
 - `internal/gemeinsam/`:
   - Zertifikat, Env, Ereignisprotokoll (hängt am Standard-Log), Web-UI mit Basic Auth und `Aktion[T]`.

@@ -91,7 +91,12 @@ footer { margin-top: 16px; font-size: 13px; color: var(--text-leise); display: f
 
 /* Kopf mit Navigation */
 .kopf { display: flex; align-items: baseline; gap: 20px; flex-wrap: wrap; }
-nav { display: flex; gap: 4px; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+/* Zaehler am Reiter, z. B. offene Kopplungsanfragen */
+.zaehler { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--orange); color: var(--flaeche); font-size: 12px; font-weight: 700; }
+/* Konfiguration: Name mit Variable darunter, Wert rechts */
+table.konfig code { font-size: 11px; color: var(--text-leise); background: none; padding: 0; }
+table.konfig td:last-child { text-align: right; overflow-wrap: anywhere; }
 nav a { color: var(--text-leise); text-decoration: none; padding: 3px 10px; border-radius: 999px; font-size: 14px; }
 nav a:hover { color: var(--text); }
 nav a.aktiv { background: var(--flaeche); border: 1px solid var(--rand); color: var(--text); }

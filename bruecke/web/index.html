@@ -11,7 +11,13 @@
 	<header>
 		<div class="kopf">
 			<h1>EEBUS-Brücke</h1>
-			<nav><a class="aktiv" href="./">Status</a><a href="anleitung">Anleitung</a></nav>
+			<nav>
+				<a href="#uebersicht" data-reiter="uebersicht">Übersicht</a>
+				<a href="#kopplung" data-reiter="kopplung">Kopplung<span class="zaehler" id="anfragenZaehler" hidden></span></a>
+				<a href="#diagnose" data-reiter="diagnose">Diagnose</a>
+				<a href="#konfiguration" data-reiter="konfiguration">Konfiguration</a>
+				<a href="anleitung">Anleitung</a>
+			</nav>
 		</div>
 		<span class="leise" id="geraet"></span>
 	</header>
@@ -24,7 +30,8 @@
 		</div>
 	</section>
 
-	<div class="raster">
+	<!-- Übersicht: was im Betrieb zählt -->
+	<div class="raster" data-reiter-inhalt="uebersicht">
 		<section class="karte" id="karteBezug">
 			<h2>Bezug · LPC</h2>
 			<dl>
@@ -56,9 +63,9 @@
 		</section>
 
 		<section class="karte">
-			<h2>EEBUS</h2>
+			<h2>Steuerbox</h2>
 			<dl>
-				<dt>Steuerbox</dt><dd id="verbindung"></dd>
+				<dt>Verbindung</dt><dd id="verbindung"></dd>
 				<dt>Verbunden mit</dt><dd class="mono" id="partner"></dd>
 				<dt>Heartbeat</dt><dd id="heartbeat"></dd>
 				<dt>Failsafe-Mindestdauer</dt><dd id="failsafeDauer"></dd>
@@ -76,15 +83,6 @@
 			<p class="hinweis">Ohne SPS lehnt die Brücke neue Grenzen ab und meldet der Steuerbox eine Störung.</p>
 		</section>
 
-		<section class="karte">
-			<h2>Use Cases</h2>
-			<table>
-				<thead><tr><th>Use Case</th><th>Brücke</th><th>Steuerbox</th></tr></thead>
-				<tbody id="useCases"></tbody>
-			</table>
-			<p class="hinweis">LPC Bezug, LPP Einspeisung, MPC Messwerte der Anlage, MGCP Messwerte am Netzanschlusspunkt.</p>
-		</section>
-
 		<section class="karte" id="karteMpc" hidden>
 			<h2>Messwerte Anlage · MPC</h2>
 			<table class="werte"><tbody id="mpc"></tbody></table>
@@ -94,31 +92,18 @@
 			<h2>Netzanschlusspunkt · MGCP</h2>
 			<table class="werte"><tbody id="mgcp"></tbody></table>
 		</section>
+	</div>
 
-		<section class="karte breit" id="karteGegenstelle" hidden>
-			<h2>Steuerbox: gemeldete Daten</h2>
-			<dl>
-				<dt>Gerät</dt><dd id="gGeraet"></dd>
-				<dt>Gerätetyp</dt><dd id="gTyp"></dd>
-				<dt>Software / Hardware</dt><dd id="gRevision"></dd>
-				<dt>Entitäten</dt><dd class="mono" id="gEntitaeten"></dd>
-			</dl>
-			<div class="ueberlauf">
-				<table style="margin-top:12px">
-					<thead><tr><th>Use Case</th><th>Akteur</th><th>Version</th><th>Szenarien</th><th>Entität</th></tr></thead>
-					<tbody id="gUseCases"></tbody>
-				</table>
-			</div>
-		</section>
-
+	<!-- Kopplung: alles für die Inbetriebnahme mit der Steuerbox -->
+	<div class="raster" data-reiter-inhalt="kopplung" hidden>
 		<section class="karte breit">
-			<h2>Kopplung mit der Steuerbox</h2>
+			<h2>Gekoppelte Steuerbox</h2>
 			<dl>
-				<dt>Gekoppelt</dt><dd><span class="mono" id="kopplung"></span> <span id="kopplungQuelle"></span>
+				<dt>Gekoppelt</dt><dd><span class="mono" id="kopplungPartner"></span> <span id="kopplungQuelle"></span>
 					<button class="gefahr kopplung-aktion" id="entkoppeln" type="button" hidden>Kopplung lösen</button></dd>
 			</dl>
 
-			<div class="abschnitt kopplung-aktion" id="suchBereich" style="margin-top:16px">
+			<div class="abschnitt kopplung-aktion" style="margin-top:16px">
 				<h3>Suchmodus <span id="suchStatus"></span></h3>
 				<div class="knoepfe">
 					<button class="primaer" id="suchmodus" type="button">Steuerbox suchen</button>
@@ -130,15 +115,19 @@
 				</table>
 				<p class="meldung" id="kopplungMeldung"></p>
 			</div>
+			<p class="hinweis" id="kopplungFest" hidden>Die Kopplung ist per Einstellung festgelegt und lässt sich hier nicht ändern (siehe Konfiguration).</p>
+		</section>
 
-			<div class="zweispaltig abschnitt" style="margin-top:16px">
+		<section class="karte breit">
+			<h2>Daten für den Messstellenbetreiber</h2>
+			<div class="zweispaltig">
 				<div>
 					<h3>SKI-Verfahren</h3>
 					<dl>
 						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
 						<dt>SHIP-ID</dt><dd><span class="mono" id="shipId"></span><button data-kopieren="shipId" type="button">Kopieren</button></dd>
 					</dl>
-					<p class="hinweis">Beide Seiten tragen den SKI der Gegenseite ein. Bei der Brücke unten „Vertrauen“ oder im Suchmodus die Anfrage annehmen.</p>
+					<p class="hinweis">Der Messstellenbetreiber trägt SKI und SHIP-ID in der Steuerbox ein. Danach hier den Suchmodus starten und die Anfrage annehmen.</p>
 				</div>
 				<div>
 					<h3>SHIP Pairing Service <span id="pairingStatus"></span></h3>
@@ -146,10 +135,10 @@
 						<dt>Fingerprint</dt><dd><span class="mono" id="fingerprint"></span><button data-kopieren="fingerprint" type="button">Kopieren</button></dd>
 						<dt>Secret</dt><dd><span class="mono" id="secret"></span><button id="secretZeigen" type="button">Anzeigen</button><button data-kopieren="secret" type="button">Kopieren</button></dd>
 					</dl>
-					<p class="hinweis">Der Messstellenbetreiber bekommt SKI, SHIP-ID, Fingerprint und Secret, am einfachsten als QR-Code. Die Steuerbox meldet sich dann selbst an.</p>
+					<p class="hinweis">Zusätzlich Fingerprint und Secret, am einfachsten als QR-Code. Die Steuerbox meldet sich dann selbst an.</p>
 				</div>
 			</div>
-			<div class="qr" id="qrBereich">
+			<div class="qr">
 				<img id="qrBild" alt="QR-Code für die Kopplung" width="160" height="160">
 				<div>
 					<div class="leise">QR-Text</div>
@@ -165,12 +154,52 @@
 				<thead><tr><th>Gerät</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
 				<tbody id="gefunden"></tbody>
 			</table>
+			<p class="hinweis">Fehlt die Steuerbox hier, liegt es am Netz (siehe Anleitung, „Netzwerk“), nicht an der Kopplung.</p>
+		</section>
+	</div>
+
+	<!-- Diagnose: was die Steuerbox meldet und was passiert ist -->
+	<div class="raster" data-reiter-inhalt="diagnose" hidden>
+		<section class="karte">
+			<h2>Use Cases</h2>
+			<table>
+				<thead><tr><th>Use Case</th><th>Brücke</th><th>Steuerbox</th></tr></thead>
+				<tbody id="useCases"></tbody>
+			</table>
+			<p class="hinweis">LPC Bezug, LPP Einspeisung, MPC Messwerte der Anlage, MGCP Messwerte am Netzanschlusspunkt.</p>
+		</section>
+
+		<section class="karte">
+			<h2>Steuerbox: gemeldete Daten</h2>
+			<p class="leise" id="gegenstelleLeer">Erst nach dem Verbinden verfügbar.</p>
+			<dl id="gegenstelleDaten" hidden>
+				<dt>Gerät</dt><dd id="gGeraet"></dd>
+				<dt>Gerätetyp</dt><dd id="gTyp"></dd>
+				<dt>Software / Hardware</dt><dd id="gRevision"></dd>
+				<dt>Entitäten</dt><dd class="mono" id="gEntitaeten"></dd>
+			</dl>
+		</section>
+
+		<section class="karte breit" id="karteGegenstelleUseCases" hidden>
+			<h2>Steuerbox: Use Cases im Detail</h2>
+			<div class="ueberlauf">
+				<table>
+					<thead><tr><th>Use Case</th><th>Akteur</th><th>Version</th><th>Szenarien</th><th>Entität</th></tr></thead>
+					<tbody id="gUseCases"></tbody>
+				</table>
+			</div>
 		</section>
 
 		<section class="karte breit">
 			<h2>Ereignisse</h2>
 			<div class="ereignisse" id="ereignisse"></div>
 		</section>
+	</div>
+
+	<!-- Konfiguration: nur lesend, geändert wird per Env-Variable -->
+	<div data-reiter-inhalt="konfiguration" hidden>
+		<p class="hinweis" style="margin:0 0 16px">Die Einstellungen kommen aus den Umgebungsvariablen des Containers. Ändern: Container mit <code>-e VARIABLE=wert</code> neu anlegen. Von der Steuerbox vorgegebene Failsafe-Werte haben Vorrang vor den Startwerten, aktuelle Werte unter „Übersicht“.</p>
+		<div class="raster" id="konfigListe"><p class="leise">Lade …</p></div>
 	</div>
 
 	<footer>
@@ -343,7 +372,9 @@ function zeige(s) {
 	if (s.mgcp) zeigeMesswerte("mgcp", s.mgcp);
 
 	const g = s.gegenstelle;
-	$("karteGegenstelle").hidden = !g;
+	$("gegenstelleLeer").hidden = !!g;
+	$("gegenstelleDaten").hidden = !g;
+	$("karteGegenstelleUseCases").hidden = !g;
 	if (g) {
 		$("gGeraet").textContent = [g.hersteller, g.marke, g.modell].filter(x => x).join(" · ") + (g.seriennummer ? ` · SN ${g.seriennummer}` : "") || "–";
 		$("gTyp").textContent = g.geraetetyp || "–";
@@ -377,10 +408,13 @@ const quellen = { env: "fest per EEBUS_REMOTE_SKI", ui: "SKI, im UI gekoppelt", 
 
 function zeigeKopplung(s) {
 	const k = s.kopplung;
-	$("kopplung").textContent = k ? (k.shipId ? `${k.shipId} (SKI ${k.ski})` : `SKI ${k.ski}`) : "keine";
+	$("kopplungPartner").textContent = k ? (k.shipId ? `${k.shipId} (SKI ${k.ski})` : `SKI ${k.ski}`) : "keine";
 	if (k) marke($("kopplungQuelle"), quellen[k.quelle] || k.quelle, "");
 	else $("kopplungQuelle").replaceChildren();
 	for (const el of document.querySelectorAll(".kopplung-aktion")) el.hidden = !s.kopplungAenderbar;
+	$("kopplungFest").hidden = s.kopplungAenderbar;
+	$("anfragenZaehler").hidden = s.anfragen.length === 0;
+	$("anfragenZaehler").textContent = s.anfragen.length;
 	$("entkoppeln").hidden = !s.kopplungAenderbar || !k || k.quelle === "env";
 
 	const sucht = s.suchmodusRestS > 0;
@@ -512,6 +546,56 @@ for (const k of document.querySelectorAll("[data-kopieren]")) {
 	});
 }
 
+// --- Reiter ---
+// Der aktive Reiter steht im Anker der Adresse (#kopplung …), so bleibt er
+// beim Neuladen erhalten und lässt sich verlinken.
+const reiter = [...document.querySelectorAll("nav a[data-reiter]")];
+function zeigeReiter() {
+	const gewuenscht = location.hash.slice(1);
+	const name = reiter.some(r => r.dataset.reiter === gewuenscht) ? gewuenscht : reiter[0].dataset.reiter;
+	for (const r of reiter) r.classList.toggle("aktiv", r.dataset.reiter === name);
+	for (const t of document.querySelectorAll("[data-reiter-inhalt]")) t.hidden = t.dataset.reiterInhalt !== name;
+	if (name === "konfiguration") ladeKonfiguration();
+}
+window.addEventListener("hashchange", () => { zeigeReiter(); window.scrollTo(0, 0); });
+
+// Die Konfiguration ändert sich nur mit einem Neustart: einmal laden genügt.
+let konfigurationGeladen = false;
+async function ladeKonfiguration() {
+	if (konfigurationGeladen) return;
+	try {
+		const antwort = await fetch(url("api/konfiguration"), { cache: "no-store" });
+		if (!antwort.ok) throw new Error(antwort.status);
+		const gruppen = await antwort.json();
+		$("konfigListe").replaceChildren(...gruppen.map(g => {
+			const karte = document.createElement("section");
+			karte.className = "karte";
+			const titel = document.createElement("h2");
+			titel.textContent = g.name;
+			const tabelle = document.createElement("table");
+			tabelle.className = "konfig";
+			tabelle.append(...g.eintraege.map(e => {
+				// Name, darunter klein die Variable, über die man ihn ändert
+				const name = document.createElement("div");
+				const titel = document.createElement("div");
+				titel.textContent = e.name;
+				const variable = document.createElement("code");
+				variable.textContent = e.variable;
+				name.append(titel, variable);
+				const tr = zeile([name, e.wert]);
+				tr.children[1].className = "mono";
+				return tr;
+			}));
+			karte.append(titel, tabelle);
+			return karte;
+		}));
+		konfigurationGeladen = true;
+	} catch (fehler) {
+		$("konfigListe").textContent = "Konfiguration nicht ladbar";
+	}
+}
+
+zeigeReiter();
 abfragen();
 </script>
 </body>

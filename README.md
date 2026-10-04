@@ -177,18 +177,12 @@ Welche Werte gerade gültig sind, meldet die SPS über die Gültigkeitsmasken (H
 
 ## Status-UI der Brücke
 
-`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Die Seite zeigt den Zustand an. Ändern lässt sich nur die Kopplung mit der Steuerbox (Suchmodus, Anfrage annehmen, „Vertrauen“, „Kopplung lösen“), mit `WEB_KOPPLUNG=aus` auch das nicht:
+`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Oben steht immer die Ampel mit dem kritischsten Zustand von Bezug und Einspeisung, darunter vier Reiter (direkt aufrufbar, z. B. `…:8090/#kopplung`). Ändern lässt sich nur die Kopplung mit der Steuerbox, mit `WEB_KOPPLUNG=aus` auch das nicht.
 
-- Ampel mit dem kritischsten Zustand von Bezug und Einspeisung
-- je Richtung (LPC, LPP): Zustand, wirksame Grenze, Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Grenze, Nennleistung, letzter Ablehnungsgrund
-- EEBUS-Verbindung, Alter des Heartbeats, gemeinsame Failsafe-Mindestdauer
-- SPS-Lebenszeichen und Anlagenstatus
-- Use Cases: was die Brücke anbietet und was die Steuerbox unterstützt
-- Messwerte für MPC und MGCP, ungültige Werte gekennzeichnet
-- Steuerbox: gemeldete Daten (Gerät, Software, Entitäten, Use Cases mit Version und Szenarien)
-- Kopplung: aktuelle Steuerbox, Suchmodus mit Kopplungsanfragen, SKI, SHIP-ID, Fingerprint, Secret (verdeckt) und QR-Code für den Messstellenbetreiber
-- per mDNS gefundene Geräte, Steuerboxen markiert und oben
-- die letzten 100 Log-Meldungen
+- **Übersicht** (Betrieb): je Richtung (LPC, LPP) Zustand, wirksame Grenze, Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Grenze, Nennleistung und letzter Ablehnungsgrund; Steuerbox-Verbindung, Heartbeat, gemeinsame Failsafe-Mindestdauer; SPS-Lebenszeichen und Anlagenstatus; Messwerte MPC und MGCP, ungültige Werte gekennzeichnet.
+- **Kopplung** (Inbetriebnahme): gekoppelte Steuerbox und „Kopplung lösen“, Suchmodus mit Kopplungsanfragen (offene Anfragen zählt der Reiter), SKI, SHIP-ID, Fingerprint, Secret (verdeckt) und QR-Code für den Messstellenbetreiber, per mDNS gefundene Geräte (Steuerboxen oben, mit „Vertrauen“).
+- **Diagnose:** Use Cases der Brücke und der Steuerbox, von der Steuerbox gemeldete Daten (Gerät, Software, Entitäten, Use Cases mit Version und Szenarien), die letzten 100 Log-Meldungen.
+- **Konfiguration:** alle Einstellungen aus den Umgebungsvariablen mit Variablenname, gruppiert nach Use Cases, Startwerten, Kopplung, Gerät und Schnittstellen. Nur lesend, das Passwort wird nicht angezeigt.
 
 Unter **„Anleitung“** erklärt eine eigene Seite mit Schaubildern den Aufbau, die Use Cases, die Zustände, die Kopplungsverfahren, die PROLAN-Steuerbox und die Fehlersuche.
 
@@ -323,6 +317,7 @@ Falls der Gerätebaum Localhost als Ziel nicht akzeptiert, alternativ `FbMbMaste
 - **Werte bei der Brücke:** Grenzen, Failsafe-Werte, Nennleistungen, Anlagenstatus und angebotene Use Cases, so wie die Brücke sie über EEBUS meldet. Die Nennleistungen kommen von der SPS, das prüft also die ganze Kette.
 - **Kopplung, wahlweise:** per SHIP Pairing Service (QR-Text der Brücke einfügen, die Steuerbox kündigt sich mit dem Secret an) oder per SKI (bei der gefundenen Brücke „Per SKI koppeln“, an der Brücke per Suchmodus annehmen). Die Kopplung wird im Volume gespeichert.
 - **Ereignisse:** Antworten der Brücke (angenommen/abgelehnt), Verbindungswechsel, Pairing.
+- **Reiter:** „Steuern“ (Grenzen, Failsafe, Störungen, Ereignisse), „Brücke“ (Werte bei der Brücke, Messwerte), „Kopplung“.
 - **Anleitung:** eigene Seite mit Testaufbau, Kopplung und 17 Testszenarien mit erwartetem Ergebnis.
 
 Der SPS-Simulator rechnet eine kleine Anlage durch: steuerbare Last (`-last`, folgt der Bezugsgrenze), PV (`-pv`, wird bei Einspeisegrenze abgeregelt) und Grundlast (`-grundlast`). Weitere Schalter: `-stoerung` (Anlagenstatus Störung), `-ungueltig-mpc`/`-ungueltig-mgcp` (Gültigkeitsbits löschen), `-zaehlerstart` (Zählerstände über 2³² testen).

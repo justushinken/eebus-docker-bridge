@@ -1,35 +1,45 @@
-# EEBUS-LPC-Brücke für WAGO PFC200
+# EEBUS-Brücke für WAGO PFC200
 
-Docker-Container, der auf dem PFC200 als EEBUS "Controllable System" (Use Case LPC, §14a EnWG) läuft und die Leistungsgrenze der Steuerbox per Modbus TCP an die CODESYS-Applikation weitergibt.
+Docker-Container, der auf dem PFC200 als EEBUS "Controllable System" läuft. Er bildet die Use Cases des VDE FNN Hinweises „Schnittstellen der Steuerungseinrichtung“ ab und tauscht Grenzen und Messwerte per Modbus TCP mit der CODESYS-Applikation aus.
+
+| Use Case | Zweck | Laut FNN-Hinweis |
+|---|---|---|
+| **LPC** Limitation of Power Consumption | Bezug begrenzen (§14a EnWG) | Pflicht |
+| **LPP** Limitation of Power Production | Einspeisung begrenzen (§9 EEG) | Pflicht bei Erzeugung |
+| **MPC** Monitoring of Power Consumption | Messwerte der Anlage | aktuelle Wirkleistung muss abrufbar sein (4.1.2.3) |
+| **MGCP** Monitoring of Grid Connection Point | Messwerte am Netzanschlusspunkt | „zusätzlich vorgesehen“ |
 
 ```
- Steuerbox (Energy Guard)                     PFC200
+ Steuerbox                                    PFC200
  am Smart Meter Gateway      ┌──────────────────────────────────────────────┐
-          │                  │  Docker (--network host)                     │
-          │  SHIP/SPINE      │  ┌───────────────────────┐                   │
-          └──────────────────┼─►│ eebus-bruecke (Go)    │                   │
-            TLS-WebSocket,   │  │ eebus-go, cs/lpc      │                   │
-            mDNS, Port 4712  │  │ LPC-Zustandsautomat   │                   │
-                             │  └──────────┬────────────┘                   │
+ (Energy Guard,              │  Docker (--network host)                     │
+  Monitoring Appliance)      │  ┌───────────────────────┐                   │
+          │  SHIP/SPINE      │  │ eebus-bruecke (Go)    │                   │
+          └──────────────────┼─►│ LPC, LPP, MPC, MGCP   │                   │
+            TLS-WebSocket,   │  │ Zustandsautomaten     │                   │
+            mDNS, Port 4712  │  └──────────┬────────────┘                   │
                              │             │ Modbus TCP 127.0.0.1:5502      │
                              │  ┌──────────▼────────────┐                   │
-                             │  │ CODESYS: FbEebusLpc   │──► Verbraucher    │
-                             │  │ Watchdog, Ersatzgrenze│                   │
+                             │  │ CODESYS: FbEebus*     │◄─► Anlage         │
+                             │  │ Watchdog, Ersatzgrenze│    (Last, PV, …)  │
                              │  └───────────────────────┘                   │
                              └──────────────────────────────────────────────┘
 ```
 
-Aufgabenteilung: Der Go-Dienst kapselt das Protokoll und den LPC-Zustandsautomaten (Init, Begrenzt, Failsafe, …). Die SPS sieht nur noch "Begrenzung aktiv ja/nein" und einen Wert in W. Zusätzlich überwacht die SPS die Brücke selbst: Steht deren Lebenszeichen, gilt die lokale Ersatzgrenze.
+Aufgabenteilung: Der Go-Dienst kapselt das Protokoll und die Zustandsautomaten (Init, Begrenzt, Failsafe, …) für Bezug und Einspeisung. Die SPS sieht je Richtung nur noch „Begrenzung aktiv ja/nein“ und einen Wert in W und liefert die Messwerte. Zusätzlich überwacht die SPS die Brücke selbst: Steht deren Lebenszeichen, gilt die lokale Ersatzgrenze.
+
+**Wichtig für die Regelung:** Die Grenzen beziehen sich laut FNN-Hinweis (Fußnote 4) auf den **Netzanschlusspunkt**. Die CODESYS-Applikation muss sie am Zähler des Netzanschlusspunkts einhalten. Bei einem EMS ist außerdem die Mindestbezugsleistung nach BNetzA BK6-22-300, Anlage 1, im EMS einzustellen.
 
 ## Aufbau des Repos
 
 | Pfad | Inhalt |
 |---|---|
-| `bruecke/` | Die Brücke (läuft auf dem PFC): EEBUS-Anbindung, LPC-Zustandsautomat, Modbus-Server, Status-UI |
-| `codesys/` | CODESYS-Quellen: `FbEebusLpc`, GVL, Enums, Beispielprogramm |
-| `testwerkzeuge/steuerbox/` | Test-Steuerbox mit Web-UI: Grenzen senden, Heartbeat- und Verbindungsausfall simulieren |
-| `testwerkzeuge/spssimulator/` | Modbus-Client, der die CODESYS-Seite spielt |
+| `bruecke/` | Die Brücke (läuft auf dem PFC): EEBUS-Anbindung, Zustandsautomaten, Messwerte, Kopplung, Modbus-Server, Status-UI |
+| `codesys/` | CODESYS-Quellen: `FbEebusBruecke`, `FbEebusBegrenzung`, `FbEebusMesswerte`, Strukturen, GVL, Enums, Beispielprogramm. `FbEebusLpc` für bestehende Projekte |
+| `testwerkzeuge/steuerbox/` | Test-Steuerbox mit Web-UI: Grenzen für Bezug und Einspeisung senden, Messwerte anzeigen, Heartbeat- und Verbindungsausfall simulieren |
+| `testwerkzeuge/spssimulator/` | Modbus-Client, der die CODESYS-Seite spielt: Last, PV, Messwerte |
 | `internal/gemeinsam/` | Gemeinsamer Go-Code: Zertifikat, Umgebungsvariablen, Ereignisprotokoll, Web-UI-Grundlagen |
+| `third_party/spine-go/` | spine-go mit einem Fix, siehe `PATCH.md` |
 | `Dockerfile` | Ein Dockerfile für alle Programme, Auswahl per `--build-arg PROGRAMM=…` |
 | `docker-compose.yml` | Lokale Testumgebung: Brücke, Test-Steuerbox, SPS-Simulator |
 | `skripte/pfc-images-bauen.sh` | Baut Brücke und Test-Steuerbox für den PFC nach `dist/` |
@@ -40,31 +50,58 @@ Alle Go-Programme liegen in einem Modul. Gebaut wird ausschließlich in Docker (
 
 **eebus-go-Version:** Für den SHIP Pairing Service wird der noch unveröffentlichte Entwicklungsstand von eebus-go und ship-go genutzt, auf feste Commits gepinnt (siehe `go.mod`: eebus-go `8583642861c3` vom 30.09.2026, ship-go `a84426bc3810` vom 28.09.2026). Die Schnittstelle kann sich bis zur Veröffentlichung noch ändern. Vor einem Update die Aufrufe in `bruecke/` und `testwerkzeuge/steuerbox/` abgleichen und die Testszenarien wiederholen.
 
-## Registerlayout (Schnittstellenversion 1)
+## Registerlayout (Schnittstellenversion 1, Erweiterung 2)
 
-32-Bit-Werte als zwei Register, High-Word zuerst. Unit-ID beliebig.
+Mehrwortige Werte High-Word zuerst. Unit-ID beliebig. Gegenüber Version 1 sind nur Register angehängt: Register 1 bleibt `1`, die Erweiterungsversion steht in Register 14. Ältere SPS-Programme (14 Input-, 3 Holding-Register, `FbEebusLpc`) laufen unverändert weiter.
 
-Input-Register (FC04), Brücke → SPS:
+Input-Register (FC04), Brücke → SPS. Bezug (LPC) und Einspeisung (LPP) haben je einen gleich aufgebauten Block, Bezug ab Register 2, Einspeisung ab Register 17:
 
-| Adr. | Inhalt | Einheit |
+| Bezug | Einspeisung | Inhalt | Einheit |
+|---|---|---|---|
+| 2 | 17 | Zustand (0 Init, 1 Unbegrenzt/gesteuert, 2 Begrenzt, 3 Failsafe, 4 Unbegrenzt/autonom) | – |
+| 3 | 18 | Verbindung (0 kein Partner, 1 getrennt, 2 verbunden), in beiden Blöcken gleich | – |
+| 4–5 | 19–20 | wirksame Leistungsgrenze | W |
+| 6 | 21 | Begrenzung aktiv (0/1) | – |
+| 7–8 | 22–23 | letzte Grenze des Netzbetreibers (Diagnose) | W |
+| 9–10 | 24–25 | Restlaufzeit der Grenze, 0 = unbefristet | s |
+| 11–12 | 26–27 | Failsafe-Grenze (Diagnose) | W |
+| 13 | 28 | Sekunden seit letztem Heartbeat, 65535 = nie, in beiden Blöcken gleich | s |
+
+| Adr. | Inhalt |
+|---|---|
+| 0 | Lebenszeichen Brücke (+1 pro Sekunde) |
+| 1 | Schnittstellenversion (1) |
+| 14 | Erweiterungsversion (2) |
+| 15 | Use Cases, die die Brücke anbietet (Bit 0 LPC, 1 LPP, 2 MPC, 3 MGCP) |
+| 16 | Use Cases, die die Steuerbox unterstützt (Bits wie Register 15) |
+| 29–30 | Failsafe-Mindestdauer in s, gilt für beide Richtungen |
+
+Holding-Register (FC03/FC16), SPS → Brücke. Alle in **einem** FC16-Aufruf schreiben, dann sieht die Brücke einen zusammengehörigen Stand:
+
+| Adr. | Inhalt | Typ, Einheit |
 |---|---|---|
-| 0 | Lebenszeichen Brücke (+1 pro Sekunde) | – |
-| 1 | Schnittstellenversion | – |
-| 2 | LPC-Zustand (0 Init, 1 Unbegrenzt/gesteuert, 2 Begrenzt, 3 Failsafe, 4 Unbegrenzt/autonom) | – |
-| 3 | Verbindung (0 kein Partner, 1 getrennt, 2 verbunden) | – |
-| 4–5 | wirksame Leistungsgrenze | W |
-| 6 | Begrenzung aktiv (0/1) | – |
-| 7–8 | letzte Grenze des Netzbetreibers (Diagnose) | W |
-| 9–10 | Restlaufzeit der Grenze, 0 = unbefristet | s |
-| 11–12 | Failsafe-Grenze (Diagnose) | W |
-| 13 | Sekunden seit letztem Heartbeat, 65535 = nie | s |
+| 0 | Lebenszeichen SPS (+1 pro Sekunde) | UINT |
+| 1–2 | Nennleistung Bezug (an die Steuerbox), 0 = `NENNLEISTUNG_MAX_W` | UDINT W |
+| 3–4 | Nennleistung Erzeugung (LPP), 0 = `NENNLEISTUNG_ERZEUGUNG_MAX_W` | UDINT W |
+| 5 | Gültigkeit MPC: Bit 0 P, 1–3 P L1–L3, 4 E Bezug, 5 E Erzeugung, 6–8 I, 9–11 U, 12 f | WORD |
+| 6 | Gültigkeit MGCP: Bit 0 P, 1 E Einspeisung, 2 E Bezug, 3–5 I, 6–8 U, 9 f, 10 PV-Faktor | WORD |
+| 7 | Anlagenstatus: 0 normal, 1 Störung, 2 Standby | UINT |
+| 8–9 | MPC Leistung (Bezug +, Erzeugung −) | DINT W |
+| 10–15 | MPC Leistung L1, L2, L3 | 3× DINT W |
+| 16–19 | MPC Energie Bezug (Zählerstand) | ULINT Wh |
+| 20–23 | MPC Energie Erzeugung (Zählerstand) | ULINT Wh |
+| 24–29 | MPC Strom L1, L2, L3 | 3× DINT mA |
+| 30–32 | MPC Spannung L1, L2, L3 | 3× UINT 0,1 V |
+| 33 | MPC Frequenz | UINT 0,01 Hz |
+| 40–41 | MGCP Leistung (Bezug aus dem Netz +, Einspeisung −) | DINT W |
+| 42–45 | MGCP Energie Einspeisung | ULINT Wh |
+| 46–49 | MGCP Energie Bezug | ULINT Wh |
+| 50–55 | MGCP Strom L1, L2, L3 | 3× DINT mA |
+| 56–58 | MGCP Spannung L1, L2, L3 | 3× UINT 0,1 V |
+| 59 | MGCP Frequenz | UINT 0,01 Hz |
+| 60 | MGCP PV-Einspeisebegrenzungsfaktor | UINT 0,1 % |
 
-Holding-Register (FC03/FC16), SPS → Brücke:
-
-| Adr. | Inhalt | Einheit |
-|---|---|---|
-| 0 | Lebenszeichen SPS (+1 pro Sekunde) | – |
-| 1–2 | Nennleistung max. der Anlage (wird an die Steuerbox gemeldet) | W |
+Ein Messwert ohne Gültigkeitsbit, oder alle Werte bei ausgefallener SPS, gehen als „ungültig“ (ValueState `error`) an die Steuerbox. Energie in 64 Bit, weil 32 Bit Wh an einem größeren Netzanschluss nach wenigen Jahren überlaufen. Strom in mA, weil 0,01 A in 16 Bit nur bis 327 A reicht.
 
 ## Bauen und Verteilen
 
@@ -90,11 +127,20 @@ docker run -d --name eebus-bruecke \
   --memory 64m \
   -v /home/eebus-bruecke:/data \
   -e GERAET_MARKE=<Firmenkürzel> \
+  -e EEBUS_USECASES=lpc,mpc \
   -e NENNLEISTUNG_MAX_W=22000 \
   -e FAILSAFE_GRENZE_W=4200 \
   -e FAILSAFE_MINDESTDAUER=2h \
   -e WEB_PASSWORT='<Passwort für das Status-UI>' \
-  eebus-bruecke:0.4
+  eebus-bruecke:0.5
+```
+
+Mit Erzeugung (PV, Speicher) zusätzlich `lpp` und die beiden Pflichtwerte dafür, bei einem EMS mit Zähler am Netzanschlusspunkt `mgcp`:
+
+```sh
+  -e EEBUS_USECASES=lpc,lpp,mpc,mgcp \
+  -e NENNLEISTUNG_ERZEUGUNG_MAX_W=8000 \
+  -e FAILSAFE_EINSPEISEGRENZE_W=4800 \
 ```
 
 Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sonst als Umleitung. Das Passwort in einfache Anführungszeichen setzen. Nach dem ersten Start die angezeigte SHIP-ID zusätzlich mit `-e SHIP_ID=…` fest eintragen (siehe „Vor der Übergabe an den Messstellenbetreiber“).
@@ -106,34 +152,63 @@ Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sons
 | `zertifikat.pem`, `schluessel.pem` | Zertifikat, daraus SKI und Fingerprint |
 | `pairing-secret.txt` | Secret für den SHIP Pairing Service |
 | `steuerbox-pairing.json` | per Pairing Service gekoppelte Steuerbox |
+| `steuerbox-ski.json` | im UI per SKI gekoppelte Steuerbox (Suchmodus oder „Vertrauen“) |
 | `pairing-verlauf.json` | Schutz gegen wiederholte Ankündigungen |
 | `failsafe.json` | zuletzt von der Steuerbox vorgegebene Failsafe-Werte |
 
 `--network host` ist nötig, weil mDNS (Multicast) über das Docker-Bridge-Netz nicht zuverlässig funktioniert. Der Modbus-Server bindet trotzdem nur auf 127.0.0.1, ist also aus dem LAN nicht erreichbar. Zum Testen mit einem Modbus-Master auf dem PC `-e MODBUS_URL=tcp://0.0.0.0:5502` setzen. Dann ist der Port ohne Schutz im ganzen LAN offen, danach wieder entfernen.
 
-Weitere Variablen: `EEBUS_PORT` (4712), `MODBUS_URL` (`tcp://127.0.0.1:5502`), `DATENVERZEICHNIS` (`/data`), `GERAET_HERSTELLER`, `GERAET_MARKE`, `GERAET_MODELL`, `GERAET_SERIENNUMMER` (Vorgabe: MAC-Adresse des PFC). Zur Kopplung siehe unten.
+### Use Cases und Messwerte
 
-**Failsafe-Werte:** `FAILSAFE_GRENZE_W` und `FAILSAFE_MINDESTDAUER` sind nur die Startwerte. Schreibt die Steuerbox eigene Werte, merkt die Brücke sie sich in `failsafe.json` und nutzt sie auch nach einem Neustart. Gerade dann, im Zustand „Init“, gelten sie.
+| Variable | Vorgabe | Bedeutung |
+|---|---|---|
+| `EEBUS_USECASES` | `lpc` | Angebotene Use Cases, kommagetrennt aus `lpc`, `lpp`, `mpc`, `mgcp`. `lpc` oder `lpp` ist Pflicht. Nur einschalten, was die Anlage liefern kann |
+| `NENNLEISTUNG_MAX_W` | 11000 | Nennleistung Bezug, bis die SPS einen Wert schreibt |
+| `NENNLEISTUNG_ERZEUGUNG_MAX_W` | – | Nennleistung Erzeugung, **Pflicht mit `lpp`** |
+| `FAILSAFE_GRENZE_W` | 4200 | Failsafe-Grenze Bezug (Startwert) |
+| `FAILSAFE_EINSPEISEGRENZE_W` | – | Failsafe-Grenze Einspeisung (Startwert), **Pflicht mit `lpp`** |
+| `FAILSAFE_MINDESTDAUER` | `2h` | Failsafe-Mindestdauer, gilt für Bezug und Einspeisung gemeinsam |
+| `MPC_MESSWERTE` | alle | Angekündigte MPC-Werte: `phasenleistung`, `energie_bezug`, `energie_erzeugung`, `strom`, `spannung`, `frequenz`. Die Gesamtleistung ist immer dabei |
+| `MPC_PHASEN` | `abc` | Angeschlossene Phasen, z. B. `a` bei einphasigen Anlagen |
+| `MPC_ENTITAET` | `cem` | `cem`: MPC auf der Entität des Energiemanagers (wie LPC). `submeter`: eigene Entität „Unterzähler“, falls eine Steuerbox MPC auf CEM nicht liest |
+| `MGCP_MESSWERTE` | `strom,spannung,frequenz` | Zusätzliche MGCP-Werte, dazu `pv_faktor`. Leistung und beide Energien sind immer dabei |
+| `MESSWERT_QUELLE` | `measuredValue` | Herkunft der Messwerte: `measuredValue`, `calculatedValue` oder `empiricalValue` |
+
+Welche Werte gerade gültig sind, meldet die SPS über die Gültigkeitsmasken (Holding-Register 5 und 6).
+
+### Weitere Variablen
+
+`EEBUS_PORT` (4712), `MODBUS_URL` (`tcp://127.0.0.1:5502`), `DATENVERZEICHNIS` (`/data`), `GERAET_HERSTELLER`, `GERAET_MARKE`, `GERAET_MODELL`, `GERAET_SERIENNUMMER` (Vorgabe: MAC-Adresse des PFC), `GERAET_HW_REVISION` (Hardware-Revision, wird an die Steuerbox gemeldet). Die Software-Revision ist die Image-Version (`skripte/pfc-images-bauen.sh <Version>`). Zur Kopplung siehe unten.
+
+`EEBUS_DEBUG=an` schreibt das ausführliche Protokoll von eebus-go, ship-go und spine-go nach stdout (`docker logs eebus-bruecke`), nicht ins Ereignisprotokoll. Für die Fehlersuche mit einer neuen Steuerbox, danach wieder ausschalten.
+
+**Failsafe-Werte:** Die `FAILSAFE_*`-Werte sind nur die Startwerte. Schreibt die Steuerbox eigene Werte, merkt die Brücke sie sich in `failsafe.json` und nutzt sie auch nach einem Neustart. Gerade dann, im Zustand „Init“, gelten sie.
+
+**Freigabe von Grenzen:** Die Brücke nimmt eine Grenze nur an, wenn die SPS erreichbar ist (FNN-Hinweis 4.1.2.2: Übernahme *und* Umsetzung bestätigen). Sonst lehnt sie mit „SPS nicht erreichbar“ ab und meldet der Steuerbox den Anlagenstatus „Störung“.
 
 ## Status-UI der Brücke
 
-`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Die Seite zeigt nur an, ändern lässt sich darüber nichts:
+`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Die Seite zeigt den Zustand an. Ändern lässt sich nur die Kopplung mit der Steuerbox (Suchmodus, Anfrage annehmen, „Vertrauen“, „Kopplung lösen“), mit `WEB_KOPPLUNG=aus` auch das nicht:
 
-- Ampel mit LPC-Zustand und wirksamer Grenze
-- Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Werte
-- EEBUS-Verbindung, Alter des Heartbeats
-- Kopplung: SKI, SHIP-ID, Fingerprint, Secret (verdeckt) und QR-Code für den Messstellenbetreiber
-- per mDNS gefundene Geräte mit SHIP-ID und SKI
-- SPS-Lebenszeichen, gemeldete Nennleistung
+- Ampel mit dem kritischsten Zustand von Bezug und Einspeisung
+- je Richtung (LPC, LPP): Zustand, wirksame Grenze, Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Grenze, Nennleistung, letzter Ablehnungsgrund
+- EEBUS-Verbindung, Alter des Heartbeats, gemeinsame Failsafe-Mindestdauer
+- SPS-Lebenszeichen und Anlagenstatus
+- Use Cases: was die Brücke anbietet und was die Steuerbox unterstützt
+- Messwerte für MPC und MGCP, ungültige Werte gekennzeichnet
+- Steuerbox: gemeldete Daten (Gerät, Software, Entitäten, Use Cases mit Version und Szenarien)
+- Kopplung: aktuelle Steuerbox, Suchmodus mit Kopplungsanfragen, SKI, SHIP-ID, Fingerprint, Secret (verdeckt) und QR-Code für den Messstellenbetreiber
+- per mDNS gefundene Geräte, Steuerboxen markiert und oben
 - die letzten 100 Log-Meldungen
 
-Unter **„Anleitung“** erklärt eine eigene Seite mit Schaubildern den Aufbau, die LPC-Zustände, beide Kopplungsverfahren und die Fehlersuche.
+Unter **„Anleitung“** erklärt eine eigene Seite mit Schaubildern den Aufbau, die Use Cases, die Zustände, die Kopplungsverfahren, die PROLAN-Steuerbox und die Fehlersuche.
 
 | Variable | Vorgabe | Bedeutung |
 |---|---|---|
 | `WEB_PASSWORT` | – | **Ohne Passwort startet das UI nicht**, die Brücke selbst läuft normal weiter. |
 | `WEB_BENUTZER` | `admin` | Benutzername |
 | `WEB_ADRESSE` | `:8090` | Adresse und Port, leer (`WEB_ADRESSE=`) schaltet das UI ab |
+| `WEB_KOPPLUNG` | `an` | `aus` macht das UI rein lesend (z. B. nach der Inbetriebnahme) |
 
 Port 8090 statt 8080, weil auf dem PFC die CODESYS-WebVisu oft 8080 belegt. Bei aktiver PFC-Firewall Port 8090 freigeben.
 
@@ -141,16 +216,20 @@ Die Anmeldung läuft über HTTP Basic Auth ohne HTTPS, das Passwort ist im LAN a
 
 ## Kopplung mit der Steuerbox
 
-Es gibt zwei Verfahren, die auch gleichzeitig aktiv sein können. Welches gilt, legt der Messstellenbetreiber fest.
+Beide Seiten müssen einander vertrauen. Auf Seiten der Steuerbox trägt der Messstellenbetreiber die Brücke ein, bei PROLAN nur aus der Ferne. Auf Seiten der Brücke gibt es drei Wege. Welches Verfahren gilt, legt der Messstellenbetreiber fest. Gekoppelt ist immer genau eine Steuerbox, eine neue Kopplung ersetzt die alte.
 
 **A · SHIP Pairing Service (neues Verfahren, Vorgabe an).** Die Brücke erzeugt beim ersten Start ein zufälliges Secret. Die Statusseite zeigt unter „Kopplung“ einen QR-Code mit SKI, SHIP-ID, SHA-256-Fingerprint und Secret (`SHIP;SKI:…;ID:…;FPH256:…;SPSEC:…;ENDSHIP;`). Der Messstellenbetreiber trägt ihn in die Steuerbox ein. Die Steuerbox kündigt sich dann per mDNS an und beweist per HMAC, dass sie das Secret kennt. Die Brücke vertraut ihr daraufhin automatisch und speichert die Kopplung. Ein Neustart ist nicht nötig. Wird die Steuerbox getauscht, koppelt sich die neue nach 15 Minuten selbst, sofern sie das Secret kennt.
 
-**B · SKI-Verfahren (bisher).** Den eigenen SKI an den Messstellenbetreiber geben, den SKI der Steuerbox als `EEBUS_REMOTE_SKI` setzen und den Container neu anlegen.
+**B · SKI-Verfahren mit Suchmodus.** SKI und SHIP-ID der Brücke an den Messstellenbetreiber geben. Auf der Statusseite „Steuerbox suchen“ drücken: Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht abgewiesen, sondern als Kopplungsanfrage angezeigt. Meldet sich die Steuerbox, „Annehmen“. Alternativ bei der gefundenen Steuerbox „Vertrauen“, dann verbindet sich die Brücke selbst. Die Kopplung landet in `steuerbox-ski.json`. Eine automatische Annahme gibt es bewusst nicht (`SetAutoAccept` bleibt aus), sonst könnte jedes Gerät im LAN Grenzen setzen. Ohne Suchmodus meldet die Brücke abgelehnte Versuche unbekannter Geräte einmal im Ereignisprotokoll.
+
+**C · SKI fest per Einstellung.** Den SKI der Steuerbox als `EEBUS_REMOTE_SKI` setzen und den Container neu anlegen. Im UI lässt sich die Kopplung dann nicht ändern.
+
+Den Pairing Service mit vertauschten Rollen (Brücke kündigt sich an) gibt es nicht: Das ginge nur, wenn die Steuerbox selbst einen QR-Code mit Secret zeigt.
 
 | Variable | Vorgabe | Bedeutung |
 |---|---|---|
 | `EEBUS_PAIRING_SERVICE` | `an` | `aus` schaltet den Pairing Service ab |
-| `EEBUS_REMOTE_SKI` | – | SKI der Steuerbox, schaltet das SKI-Verfahren ein |
+| `EEBUS_REMOTE_SKI` | – | SKI der Steuerbox, fest eingestellt (Verfahren C) |
 | `SHIP_ID` | `<Marke>-<Modell>-<MAC>` | Kennung der Brücke im Netz, z. B. `Demo-PFC200-LPC-Bruecke-0030DE683ADC` |
 
 ### SHIP-ID
@@ -170,7 +249,8 @@ Was danach geändert wird, erzwingt ein neues Pairing. Deshalb vorher:
 2. **SHIP-ID festschreiben:** Die SHIP-ID von der Statusseite kopieren und mit `-e SHIP_ID=…` im `docker run` eintragen. Danach hängt sie nicht mehr an der MAC, und auch ein Tausch des PFC (mit übertragenem Datenverzeichnis) ändert sie nicht. **Ab der Übergabe SHIP-ID und Datenverzeichnis nicht mehr ändern.**
 3. **Datenverzeichnis sichern** (`/home/eebus-bruecke`, siehe Tabelle oben): Zertifikat, Secret und Kopplung.
 4. **Netzwerk mit dem Installateur abstimmen**, siehe nächster Abschnitt.
-5. **Verfahren klären:** Pairing Service (QR-Code bzw. SKI, SHIP-ID, Fingerprint, Secret übergeben) oder SKI-Verfahren (SKIs austauschen).
+5. **Verfahren klären:** Pairing Service (QR-Code bzw. SKI, SHIP-ID, Fingerprint, Secret übergeben) oder SKI-Verfahren (SKI und SHIP-ID übergeben, an der Brücke per Suchmodus annehmen).
+6. **Use Cases festlegen:** `EEBUS_USECASES` passend zur Anlage, die Steuerbox muss sie ebenfalls aktiviert haben.
 
 ### Netzwerk: damit sich Brücke und Steuerbox finden
 
@@ -196,9 +276,24 @@ Mit dem Installateur bzw. Messstellenbetreiber klären:
 - In welches Netz kommt der LAN-Anschluss der Steuerbox? Am einfachsten in dasselbe Netz wie X1 des PFC.
 - Wie werden die IP-Adressen vergeben: DHCP oder fest? Gibt es VLANs?
 - Ist ein verwalteter Switch mit Multicast-Filter dazwischen?
-- Alternative mit sauberer Trennung: X2 des PFC im WBM als eigene Schnittstelle konfigurieren und die Steuerbox direkt oder über einen einfachen Switch an X2 anschließen, mit festem gemeinsamem Subnetz. Die Brücke lauscht dank `--network host` auf allen Schnittstellen. Das ist noch nicht ausprobiert.
+- Alternative mit sauberer Trennung: X2 des PFC im WBM als eigene Schnittstelle konfigurieren und die EEBUS-Buchse der Steuerbox (bei PROLAN „ETH1“) direkt an X2 anschließen, mit festem gemeinsamem Subnetz. Die Brücke lauscht dank `--network host` auf allen Schnittstellen. Das ist noch nicht ausprobiert, vorab mit einem Laptop und der Test-Steuerbox direkt an X2 testen. Offen ist dabei auch, ob ship-go IPv6-Link-Local-Adressen (ohne DHCP) korrekt anspricht.
 
 Zur Kontrolle zeigt die Statusseite unter „Per mDNS gefundene EEBUS-Geräte“, ob die Steuerbox gesehen wird. Erscheint sie dort nicht, liegt es am Netz, nicht an der Kopplung.
+
+## PROLAN-Steuerbox (STB-142E)
+
+Die erste echte Steuerbox an der Brücke. Stand der Recherche (Gebrauchsanleitung v1.1, Datenblatt 07/2025, BSI-Zertifikatsliste):
+
+- **Typen:** STB-142 nur mit Relais, **STB-142E** mit aktivierbarer EEBUS-Schnittstelle, beide nach FNN-Lastenheft 1.4. Zertifiziert ist die STB-142E mit HW 3.4 und FW 1.1.3 (TR-03109-5 `BSI-K-TR-0907-2026`, BSZ `BSI-DSZ-BSZ-0025-2026`). Laut Sekundärquellen unterstützt sie LPC, LPP, MPC und MGCP.
+- **Anschluss:** EEBUS über die Buchse **ETH1**, die Buchse **CLS** geht zum Smart Meter Gateway. ETH1 dient auch zur Kaskadierung weiterer Steuerboxen.
+- **Verplombung:** Aus dem verplombten Bereich dürfen nur Kabel zu EEBUS-Geräten herausgeführt werden. Kann ETH1 kaskadieren, darf die Buchse außerhalb nicht erreichbar sein: Der Messstellenbetreiber muss die Kaskadierung dann abschalten.
+- **Kopplung:** Der Messstellenbetreiber (Steuerbox-Administrator) richtet den EEBUS-Partner aus der Ferne ein, vor Ort lässt sich nichts einstellen. Er braucht SKI und SHIP-ID der Brücke, beim Pairing Service zusätzlich Fingerprint und Secret. An der Brücke dann Suchmodus und „Annehmen“.
+- **LED „PWR“:** blinkt im Sekundentakt, solange eine eingerichtete EEBUS-Verbindung fehlt.
+- **Details** zu EEBUS (Use-Case-Versionen, Heartbeat, IP-Konfiguration von ETH1, Pairing Service) stehen im „Technischen Handbuch“, das es nur im Prolan-Kundenportal gibt.
+
+Fragen an den Messstellenbetreiber vor dem Anschluss: Firmware-Stand (≥ 1.1.3) und EEBUS aktiviert? Welche Use Cases sind aktiv? Kopplung per SKI oder Pairing Service? Wie bekommt ETH1 seine IP-Adresse? Ist die Kaskadierung auf ETH1 abgeschaltet? Welche Failsafe-Werte und welcher Heartbeat-Takt? Zugang zum Technischen Handbuch?
+
+Beim ersten Anschluss hilft die Karte „Steuerbox: gemeldete Daten“ auf der Statusseite: Sie zeigt, welche Use Cases die Box in welcher Version auf welcher Entität meldet. Für mehr Details `EEBUS_DEBUG=an` setzen.
 
 ## CODESYS-Seite
 
@@ -209,24 +304,39 @@ Gerätebaum:
 1. *Ethernet-Adapter → Ethernet* anhängen, Schnittstelle mit der IP des PFC wählen (X1 meist `br0`). Für die Verbindung zu `127.0.0.1` ist die Wahl egal, CODESYS verlangt aber einen Adapter.
 2. Darunter *ModbusTCP Master*, **Auto-Reconnect aktivieren**. Sonst gibt CODESYS nach einem Neustart der Brücke auf, und die Brücke zeigt „SPS ausgefallen“.
 3. Darunter *ModbusTCP Slave* mit IP `127.0.0.1`, Port `5502`, Unit-ID beliebig.
-4. Kanäle wie in `codesys/GvlEebus.st`: FC04 Offset 0 Länge 14 (200 ms) und FC16 Offset 0 Länge 3 (1 s).
+4. Kanäle wie in `codesys/GvlEebus.st`: FC04 Offset 0 Länge 31 (200 ms) und FC16 Offset 0 Länge 61 (1 s).
 5. Im E/A-Abbild die Kanäle als Ganzes auf `GvlEebus.aInputRegister` bzw. `GvlEebus.aHoldingRegister` legen, Buszyklus-Task = Task von `PrgEnergiemanagement`.
 
-Falls der Gerätebaum Localhost als Ziel nicht akzeptiert, alternativ `FbMbMasterTcp` aus WagoAppPlcModbus mit `sHost := '127.0.0.1'` verwenden. `FbEebusLpc` bleibt dabei unverändert, da er nur die Register-Arrays sieht.
+Bausteine (Beispiel in `PrgEnergiemanagement.st`):
+
+| Baustein | Aufgabe |
+|---|---|
+| `FbEebusBruecke` | Lebenszeichen, Versionsprüfung, Verbindung, Use-Case-Masken; schreibt SPS-Lebenszeichen, Nennleistungen und Anlagenstatus (`eAnlagenstatus`) |
+| `FbEebusBegrenzung` | eine Richtung, zweimal aufrufen: `iBasis := 2` Bezug, `iBasis := 17` Einspeisung. Ersatzgrenze, wenn die Brücke ausfällt oder den Use Case nicht anbietet |
+| `FbEebusMesswerte` | schreibt `ST_EebusMpc` und `ST_EebusMgcp` samt Gültigkeitsbits |
+| `FbEebusLpc` | veraltet, nur für bestehende Projekte mit 14/3 Registern |
+
+Die Quellen sind ohne CODESYS-Umgebung geschrieben und noch nicht kompiliert. Beim Übernehmen auf Typfehler achten.
+
+Falls der Gerätebaum Localhost als Ziel nicht akzeptiert, alternativ `FbMbMasterTcp` aus WagoAppPlcModbus mit `sHost := '127.0.0.1'` verwenden. Die Bausteine bleiben dabei unverändert, da sie nur die Register-Arrays sehen.
 
 ## Test-Steuerbox
 
-`testwerkzeuge/steuerbox` spielt die Steuerbox des Messstellenbetreibers (EEBUS Energy Guard). Sie wird über ein Web-UI bedient (Port 8091):
+`testwerkzeuge/steuerbox` spielt die Steuerbox des Messstellenbetreibers (Energy Guard für LPC und LPP, Monitoring Appliance für MPC und MGCP). Sie wird über ein Web-UI bedient (Port 8091). Mit `STEUERBOX_USECASES` (Vorgabe `lpc,lpp,mpc,mgcp`) lässt sich eine Steuerbox nachstellen, die nur einen Teil kann.
 
-- **Senden:** Grenze mit Leistung und Dauer, Grenze aufheben, Vorlagen für typische Werte. Failsafe-Grenze und Failsafe-Mindestdauer (2–24 h).
+- **Bezug senden (LPC) und Einspeisung senden (LPP):** Grenze mit Leistung und Dauer, Grenze aufheben, Vorlagen. Failsafe-Grenze je Richtung und Failsafe-Mindestdauer (2–24 h, gemeinsam).
+- **Beide Grenzen in einer Nachricht:** wie es andere EEBUS-Stacks tun können, die Brücke muss beide getrennt freigeben.
+- **Messwerte:** MPC und MGCP so, wie die Brücke sie meldet, ungültige Werte gekennzeichnet.
 - **Störungen simulieren:**
   - Heartbeat stoppen: Die Brücke geht 120 s nach dem letzten Heartbeat in Failsafe. Zurück geht es nur mit Heartbeat *und* einer neuen Grenze.
   - Verbindung kurz unterbrechen: Die Verbindung wird automatisch neu aufgebaut.
   - Trennen: Die Verbindung bleibt getrennt, bis sie wiederhergestellt wird.
-- **Werte bei der Brücke:** Grenze, Failsafe-Werte und die Nennleistung, so wie die Brücke sie über EEBUS meldet. Die Nennleistung kommt von der SPS, das prüft also die ganze Kette.
-- **Kopplung, wahlweise:** per SHIP Pairing Service (QR-Text der Brücke einfügen, die Steuerbox kündigt sich mit dem Secret an) oder per SKI (bei der gefundenen Brücke „Per SKI koppeln“). Die Kopplung wird im Volume gespeichert.
+- **Werte bei der Brücke:** Grenzen, Failsafe-Werte, Nennleistungen, Anlagenstatus und angebotene Use Cases, so wie die Brücke sie über EEBUS meldet. Die Nennleistungen kommen von der SPS, das prüft also die ganze Kette.
+- **Kopplung, wahlweise:** per SHIP Pairing Service (QR-Text der Brücke einfügen, die Steuerbox kündigt sich mit dem Secret an) oder per SKI (bei der gefundenen Brücke „Per SKI koppeln“, an der Brücke per Suchmodus annehmen). Die Kopplung wird im Volume gespeichert.
 - **Ereignisse:** Antworten der Brücke (angenommen/abgelehnt), Verbindungswechsel, Pairing.
-- **Anleitung:** eigene Seite mit Testaufbau, Kopplung und zehn Testszenarien mit erwartetem Ergebnis.
+- **Anleitung:** eigene Seite mit Testaufbau, Kopplung und 17 Testszenarien mit erwartetem Ergebnis.
+
+Der SPS-Simulator rechnet eine kleine Anlage durch: steuerbare Last (`-last`, folgt der Bezugsgrenze), PV (`-pv`, wird bei Einspeisegrenze abgeregelt) und Grundlast (`-grundlast`). Weitere Schalter: `-stoerung` (Anlagenstatus Störung), `-ungueltig-mpc`/`-ungueltig-mgcp` (Gültigkeitsbits löschen), `-zaehlerstart` (Zählerstände über 2³² testen).
 
 Die Steuerbox sendet ihren Heartbeat alle 8 s (`HEARTBEAT_TIMEOUT`, Vorgabe 10 s, minus 2 s), damit die Brücke nach dem Verbinden schnell aus „Init“ kommt. Weitere Variablen: `EEBUS_PORT` (4713), `SHIP_ID` (Vorgabe `Test-Steuerbox-<MAC>`), `WEB_ADRESSE` (`:8091`), `WEB_BENUTZER` (`admin`), `WEB_PASSWORT` (Pflicht), `DATENVERZEICHNIS` (`/data`).
 
@@ -246,7 +356,9 @@ docker compose up -d --build
 
 Einmalig koppeln, am einfachsten per Pairing Service: Im Brücken-UI auf „QR-Text kopieren“ klicken, den Text im Steuerbox-UI unter „Kopplung“ einfügen und „Per Pairing Service koppeln“ wählen.
 
-Alternativ per SKI: Den SKI der Steuerbox in eine Datei `.env` im Repo-Wurzelverzeichnis eintragen (`STEUERBOX_SKI=<SKI>`), `docker compose up -d` wiederholen und im Steuerbox-UI bei der Brücke „Per SKI koppeln“ wählen.
+Alternativ per SKI wie bei PROLAN: Im Steuerbox-UI bei der Brücke „Per SKI koppeln“, im Brücken-UI „Steuerbox suchen“ und die Anfrage annehmen. Oder fest per `.env` im Repo-Wurzelverzeichnis (`STEUERBOX_SKI=<SKI>`) und `docker compose up -d`.
+
+Die Compose-Datei schaltet alle vier Use Cases ein, der Simulator spielt 9 kW Last und 8 kW PV.
 
 Die SHIP-IDs sind in `docker-compose.yml` fest eingetragen, weil sich die MAC eines Containers beim Neuanlegen ändern kann. Zertifikate, Secret und Kopplung liegen in Docker-Volumes und überstehen Neustarts. SPS-Ausfall testen: `docker compose stop spssimulator`. Alles entfernen inklusive Volumes: `docker compose down -v`.
 
@@ -281,11 +393,13 @@ Das ist auf dem PFC noch nicht ausprobiert. Lokal laufen beide Container im selb
 
 ## Offene Punkte vor dem Produktiveinsatz
 
-- **Unveröffentlichte eebus-go-Version:** Der Pairing Service stammt aus dem Entwicklungsstand von eebus-go/ship-go (siehe oben). Lokal mit der Test-Steuerbox getestet: Kopplung per Pairing Service und per SKI, falsches Secret wird abgelehnt, Neustart, Grenze, Ablauf, Failsafe-Werte inklusive Speicherung, Heartbeat-Ausfall, Verbindungsabbrüche, Nennleistung. **Noch nicht gegen eine echte Steuerbox.** Vor allem das Zusammenspiel des Pairing Service mit der Steuerbox des Messstellenbetreibers muss sich erst zeigen.
+- **Unveröffentlichte eebus-go-Version:** Der Pairing Service stammt aus dem Entwicklungsstand von eebus-go/ship-go (siehe oben). Lokal mit der Test-Steuerbox getestet: Kopplung per Pairing Service, per SKI und per Suchmodus, falsches Secret wird abgelehnt, Neustart, Grenzen für Bezug und Einspeisung (auch beide in einer Nachricht), Ablauf, Failsafe-Werte inklusive Speicherung, Heartbeat-Ausfall beider Richtungen, Verbindungsabbrüche, Nennleistungen, Messwerte MPC und MGCP, Ablehnung ohne SPS, Anlagenstatus. **Noch nicht gegen eine echte Steuerbox.**
+- **Workarounds für eebus-go/spine-go** (bei einem Update prüfen, ob noch nötig): MGCP kündigt den falschen Akteur an (`bruecke/messwerte.go`), `Set*NominalMax` findet die Kennlinie nicht, wenn MPC auf derselben Entität liegt (`bruecke/begrenzung.go`), Freigabe gleichzeitiger Schreibanfragen (`third_party/spine-go`).
+- **MPC auf der CEM-Entität:** Ob die PROLAN-Steuerbox MPC dort liest, ist offen. Sonst `MPC_ENTITAET=submeter`.
 - **Verbindungsstatus:** Beim allerersten Test mit dem eebus-go-Beispiel kam nach dem Stoppen der Gegenseite keine Trennungsmeldung. In allen späteren Tests wurde die Trennung sofort gemeldet. Bei der echten Steuerbox beobachten. Für die Grenze ist das unkritisch, dort entscheidet der Heartbeat.
-- **Zustandsautomat:** Die Übergänge in `bruecke/bruecke.go` (insbesondere Init und Verlassen von Failsafe) gegen die aktuelle Spezifikation "EEBUS UC Limitation of Power Consumption" und das FNN-Lastenheft Steuerbox prüfen.
+- **Zustandsautomat:** Die Übergänge in `bruecke/begrenzung.go` (insbesondere Init und Verlassen von Failsafe) gegen die Spezifikationen „Limitation of Power Consumption/Production“ und das FNN-Lastenheft Steuerbox 1.4 prüfen. Der FNN-Hinweis nennt keine Update-Raten für Messwerte. Die Brücke sendet bei jeder Änderung, gegebenenfalls ein Totband ergänzen.
 - **Zertifizierung:** Diese Brücke ist nicht EEBUS-zertifiziert. Für Pilot- und Eigenanlagen ausreichend, für Serienanlagen vorher mit Netzbetreiber bzw. MSB klären.
 - **Docker auf dem PFC200:** Nur ab neueren Firmware-Ständen verfügbar, bei gemischtem Gerätepark vorab je Steuerung prüfen. Docker-Datenverzeichnis wegen begrenztem internem Speicher möglichst auf die SD-Karte legen.
 - **mDNS:** Läuft auf dem PFC bereits ein Avahi-Dienst, auf Port-Konflikte an 5353 achten. Netzwerk vorab mit dem Installateur abstimmen (siehe „Netzwerk“).
 - **Brücke und Test-Steuerbox gleichzeitig auf dem PFC:** noch nicht ausprobiert, lokal funktioniert es.
-- **Erweiterung:** MPC (Messwerte an die Steuerbox) und LPP (Einspeisebegrenzung) lassen sich nach gleichem Muster ergänzen. Dafür ist die Schnittstellenversion zu erhöhen.
+- **CODESYS-Bausteine** für Erweiterung 2 noch nicht in CODESYS kompiliert und nicht auf dem PFC getestet.

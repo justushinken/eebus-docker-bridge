@@ -333,11 +333,14 @@ function ampel(s) {
 	const weitere = richtungen.slice(1).map(x => `${x.name}: ${x.r.zustandText}`).join(" · ");
 	const zusatz = weitere ? " · " + weitere : "";
 	const name = richtungen.length > 1 ? w.name + " " : "";
+	// Steuerbox weg, aber noch innerhalb der 120 s bis zum Failsafe
+	const weg = s.verbindung !== 2 && s.heartbeatAlterS != null
+		? ` · Steuerbox getrennt, Failsafe in ${dauer(Math.max(0, 120 - s.heartbeatAlterS))}` : "";
 	switch (r.zustand) {
 		case 0: zeigeAmpel("rot", `${name}Failsafe-Grenze ${watt(r.wirksameGrenzeW)}`, `Init: wartet auf Steuerbox · ${seit}${zusatz}`); break;
-		case 1: zeigeAmpel("gruen", "Unbegrenzt", `Von der Steuerbox gesteuert, keine Grenze aktiv · ${seit}${zusatz}`); break;
+		case 1: zeigeAmpel(weg ? "orange" : "gruen", "Unbegrenzt", `Von der Steuerbox gesteuert, keine Grenze aktiv · ${seit}${weg}${zusatz}`); break;
 		case 2: zeigeAmpel("orange", `${name}begrenzt auf ${watt(r.wirksameGrenzeW)}`,
-			`Grenze des Netzbetreibers · ${seit}` + (r.restdauerS > 0 ? ` · noch ${dauer(r.restdauerS)}` : " · unbefristet") + zusatz); break;
+			`Grenze des Netzbetreibers · ${seit}` + (r.restdauerS > 0 ? ` · noch ${dauer(r.restdauerS)}` : " · unbefristet") + weg + zusatz); break;
 		case 3: {
 			const rest = Math.max(0, s.failsafeMindestdauerS - r.zustandSeitS);
 			const grund = heartbeatOk(s)

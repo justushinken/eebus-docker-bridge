@@ -97,6 +97,15 @@
 	<!-- Kopplung: alles für die Inbetriebnahme mit der Steuerbox -->
 	<div class="raster" data-reiter-inhalt="kopplung" hidden>
 		<section class="karte breit">
+			<h2>Per mDNS gefundene EEBUS-Geräte</h2>
+			<table class="geraete">
+				<thead><tr><th>Gerät</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
+				<tbody id="gefunden"></tbody>
+			</table>
+			<p class="hinweis">Fehlt die Steuerbox hier, liegt es am Netz (siehe Anleitung, „Netzwerk“), nicht an der Kopplung.</p>
+		</section>
+
+		<section class="karte breit">
 			<h2>Gekoppelte Steuerbox</h2>
 			<dl>
 				<dt>Gekoppelt</dt><dd><span class="mono" id="kopplungPartner"></span> <span id="kopplungQuelle"></span>
@@ -146,15 +155,6 @@
 					<button data-kopieren="qrText" type="button" style="margin:8px 0 0">QR-Text kopieren</button>
 				</div>
 			</div>
-		</section>
-
-		<section class="karte breit">
-			<h2>Per mDNS gefundene EEBUS-Geräte</h2>
-			<table class="geraete">
-				<thead><tr><th>Gerät</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
-				<tbody id="gefunden"></tbody>
-			</table>
-			<p class="hinweis">Fehlt die Steuerbox hier, liegt es am Netz (siehe Anleitung, „Netzwerk“), nicht an der Kopplung.</p>
 		</section>
 	</div>
 

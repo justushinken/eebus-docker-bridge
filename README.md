@@ -370,6 +370,22 @@ Die Compose-Datei schaltet alle vier Use Cases ein, der Simulator spielt 9 kW La
 
 Die SHIP-IDs sind in `docker-compose.yml` fest eingetragen, weil sich die MAC eines Containers beim Neuanlegen ändern kann. Zertifikate, Secret und Kopplung liegen in Docker-Volumes und überstehen Neustarts. SPS-Ausfall testen: `docker compose stop spssimulator`. Alles entfernen inklusive Volumes: `docker compose down -v`.
 
+### Als Windows-Programm gegen die Brücke auf dem PFC
+
+Docker Desktop kann das nicht: Die Container laufen in einer eigenen VM, mDNS kommt nicht ins LAN, `--network host` gibt es dort nicht. Stattdessen die Test-Steuerbox als `.exe` bauen und direkt starten (PowerShell, Repo-Wurzel):
+
+```powershell
+docker run --rm -v "${PWD}:/src" -v eebus-gomod:/go/pkg/mod -w /src -e GOOS=windows -e CGO_ENABLED=0 golang:1.24-alpine go build -o dist/steuerbox.exe ./testwerkzeuge/steuerbox
+mkdir dist\steuerbox-daten -Force
+$env:WEB_PASSWORT = "test"; $env:DATENVERZEICHNIS = "$PWD\dist\steuerbox-daten"
+.\dist\steuerbox.exe
+```
+
+- Netzwerkprofil des PCs auf „Privat“ stellen und beim Firewall-Dialog den Zugriff erlauben. Im WLAN kann der Access Point Multicast zum Kabelnetz filtern, dann ein LAN-Kabel nehmen.
+- **Die `.exe` sieht selbst keine Geräte** (Liste „Per mDNS gefunden“ bleibt leer), weil Windows den mDNS-Port 5353 belegt. Ankündigen geht, die Brücke findet die Steuerbox also. Deshalb:
+  - Pairing Service: funktioniert wie gewohnt (QR-Text einfügen).
+  - SKI-Verfahren: SKI der Brücke in der Test-Steuerbox von Hand eintragen, dann an der Brücke bei der gefundenen Test-Steuerbox „Vertrauen“. Suchmodus mit Kopplungsanfrage geht hier nicht, weil die Steuerbox die Brücke nicht findet und sich nicht selbst verbindet.
+
 ### Auf dem PFC
 
 Für Tests mit der echten CODESYS-Applikation läuft die Test-Steuerbox als zweiter Container auf demselben PFC. Das Image baut `skripte/pfc-images-bauen.sh` mit.

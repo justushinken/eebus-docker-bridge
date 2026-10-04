@@ -167,7 +167,13 @@
 					<dl>
 						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
 					</dl>
-					<p class="hinweis">Unten bei der gefundenen Brücke „Per SKI koppeln“, dann an der Brücke „Steuerbox suchen“ und die Anfrage annehmen. Oder dort fest per <code>EEBUS_REMOTE_SKI</code>.</p>
+					<label>SKI der Brücke (Statusseite der Brücke, Reiter „Kopplung“)
+						<input id="skiBruecke" class="mono" placeholder="40 Hex-Zeichen" autocomplete="off">
+					</label>
+					<div class="knoepfe" style="margin-top:10px">
+						<button class="primaer" id="skiKoppeln" type="button">Per SKI koppeln</button>
+					</div>
+					<p class="hinweis">Oder unten bei der gefundenen Brücke „Per SKI koppeln“. Dann an der Brücke diese Steuerbox in der Geräteliste „Vertrauen“, oder dort „Steuerbox suchen“ und die Anfrage annehmen.</p>
 				</div>
 			</div>
 			<table class="geraete" style="margin-top:16px">
@@ -351,7 +357,12 @@ function zeige(s) {
 	$("fingerprint").textContent = s.fingerprint;
 	$("gekoppelt").textContent = s.gekoppelt || "keine";
 	if (!gekoppelt) $("verfahren").replaceChildren();
-	else marke($("verfahren"), s.verfahren === "pairing" ? (s.ankuendigung ? "Pairing Service · Ankündigung läuft" : "Pairing Service") : "SKI", "");
+	else if (s.verfahren !== "pairing") marke($("verfahren"), "SKI", "");
+	// Nach SHIP-Spezifikation läuft die Ankündigung weiter, bis die Verbindung
+	// 15 Minuten ununterbrochen stand; danach beendet ship-go sie selbst.
+	else marke($("verfahren"), !s.ankuendigung ? "Pairing Service"
+		: s.verbunden ? "Pairing Service · Ankündigung endet 15 min nach dem Verbinden"
+		: "Pairing Service · Ankündigung läuft", "");
 	$("entkoppeln").hidden = !gekoppelt;
 
 	const zeilen = s.gefunden.map(g => {
@@ -380,7 +391,7 @@ function zeige(s) {
 		const td = document.createElement("td");
 		td.colSpan = 4;
 		td.className = "leise";
-		td.textContent = "Noch keine Geräte gefunden";
+		td.textContent = "Noch keine Geräte gefunden. Unter Windows (steuerbox.exe) sieht die Steuerbox keine anderen Geräte, weil Windows den mDNS-Port belegt: SKI oben von Hand eintragen.";
 		tr.append(td);
 		zeilen.push(tr);
 	}
@@ -453,6 +464,8 @@ $("kurz").addEventListener("click", () =>
 	senden("POST", "api/verbindung", { aktion: "kurz" }, "stoerungMeldung"));
 $("trennen").addEventListener("click", () =>
 	senden("POST", "api/verbindung", { aktion: zuletzt.unterbrochen ? "wiederherstellen" : "trennen" }, "stoerungMeldung"));
+$("skiKoppeln").addEventListener("click", () =>
+	senden("POST", "api/kopplung", { verfahren: "ski", ski: $("skiBruecke").value }, "kopplungMeldung"));
 $("pairingKoppeln").addEventListener("click", () =>
 	senden("POST", "api/kopplung", { verfahren: "pairing", qrText: $("qrText").value }, "kopplungMeldung"));
 $("entkoppeln").addEventListener("click", () => {

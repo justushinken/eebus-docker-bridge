@@ -343,9 +343,11 @@ function ampel(s) {
 			`Grenze des Netzbetreibers · ${seit}` + (r.restdauerS > 0 ? ` · noch ${dauer(r.restdauerS)}` : " · unbefristet") + weg + zusatz); break;
 		case 3: {
 			const rest = Math.max(0, s.failsafeMindestdauerS - r.zustandSeitS);
+			// Ohne Steuerbox endet der Failsafe genau nach der Mindestdauer (dann
+			// unbegrenzt/autonom), mit Steuerbox auch früher durch eine neue Grenze.
 			const grund = heartbeatOk(s)
-				? `Steuerbox wieder da, Failsafe endet mit der nächsten Grenze oder in ${dauer(rest)}`
-				: `Kein Heartbeat der Steuerbox · Failsafe noch mindestens ${dauer(rest)}`;
+				? `Steuerbox wieder da, Failsafe endet mit ihrer nächsten Grenze, spätestens in ${dauer(rest)}`
+				: `Kein Heartbeat der Steuerbox · in ${dauer(rest)} unbegrenzt (autonom), falls sie sich bis dahin nicht meldet`;
 			zeigeAmpel("rot", `${name}Failsafe: ${watt(r.wirksameGrenzeW)}`, `${grund} · ${seit}${zusatz}`); break;
 		}
 		case 4: zeigeAmpel("gruen", "Unbegrenzt", `Autonom: keine Kommunikation mit der Steuerbox · ${seit}${zusatz}`); break;

@@ -22,16 +22,16 @@
 		<span class="leise" id="geraet"></span>
 	</header>
 
-	<section class="ampel" id="ampel">
+	<!-- Gesamtstatus in allen Reitern: Begrenzung, darunter die beiden Verbindungen -->
+	<section class="gesamtstatus">
+	<div class="ampel" id="ampel">
 		<div class="punkt"></div>
 		<div>
 			<div class="titel" id="ampelTitel">Lade …</div>
 			<div class="leise" id="ampelText"></div>
 		</div>
-	</section>
-
-	<!-- Verbindungen auf einen Blick, in allen Reitern -->
-	<section class="statusleiste">
+	</div>
+	<div class="statusleiste">
 		<div class="statusfeld" id="stSteuerbox">
 			<span class="punkt"></span>
 			<div><div class="statusname">Steuerbox</div><div class="statuswert" id="stSteuerboxWert">…</div><div class="statustext" id="stSteuerboxText"></div></div>
@@ -40,6 +40,7 @@
 			<span class="punkt"></span>
 			<div><div class="statusname">SPS (Modbus)</div><div class="statuswert" id="stSpsWert">…</div><div class="statustext" id="stSpsText"></div></div>
 		</div>
+	</div>
 	</section>
 
 	<!-- Übersicht: was im Betrieb zählt -->

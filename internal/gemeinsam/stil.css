@@ -57,9 +57,16 @@ h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacin
 .ampel.orange { background: var(--orange-flaeche); } .ampel.orange .punkt { background: var(--orange); }
 .ampel.rot { background: var(--rot-flaeche); } .ampel.rot .punkt { background: var(--rot); }
 
-/* Statusleiste unter der Ampel (Bruecke) */
-.statusleiste { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: -4px 0 16px; }
-.statusfeld { display: flex; gap: 10px; align-items: flex-start; background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; padding: 10px 14px; min-width: 0; }
+/* Gesamtstatus (Bruecke): Ampel und darunter die Verbindungen in einem Rahmen */
+.gesamtstatus { border: 1px solid var(--rand); border-radius: 10px; overflow: hidden; margin-bottom: 16px; background: var(--flaeche); }
+.gesamtstatus .ampel { margin: 0; border: none; border-radius: 0; }
+.statusleiste { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rand); }
+.statusfeld { display: flex; gap: 10px; align-items: flex-start; padding: 12px 20px 12px 24px; min-width: 0; } /* Punkt mittig unter dem der Ampel */
+.statusfeld + .statusfeld { border-left: 1px solid var(--rand); }
+@media (max-width: 600px) {
+	.statusleiste { grid-template-columns: 1fr; }
+	.statusfeld + .statusfeld { border-left: none; border-top: 1px solid var(--rand); }
+}
 .statusfeld .punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--grau); flex: none; margin-top: 5px; }
 .statusfeld.gruen .punkt { background: var(--gruen); }
 .statusfeld.orange .punkt { background: var(--orange); }

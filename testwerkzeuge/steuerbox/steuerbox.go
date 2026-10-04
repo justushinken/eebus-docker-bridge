@@ -14,11 +14,16 @@ import (
 	"eebus-bruecke/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
+	"github.com/enbility/eebus-go/features/client"
 	ucapi "github.com/enbility/eebus-go/usecases/api"
 	eglpc "github.com/enbility/eebus-go/usecases/eg/lpc"
+	eglpp "github.com/enbility/eebus-go/usecases/eg/lpp"
+	mamgcp "github.com/enbility/eebus-go/usecases/ma/mgcp"
+	mampc "github.com/enbility/eebus-go/usecases/ma/mpc"
 	shipapi "github.com/enbility/ship-go/api"
 	spineapi "github.com/enbility/spine-go/api"
 	"github.com/enbility/spine-go/model"
+	"github.com/enbility/spine-go/util"
 )
 
 // Datei im Datenverzeichnis mit der gekoppelten Bruecke.
@@ -40,6 +45,9 @@ type Steuerbox struct {
 	dienst   api.ServiceInterface
 	entitaet spineapi.EntityLocalInterface
 	lpc      *eglpc.LPC
+	lpp      *eglpp.LPP   // nil = per STEUERBOX_USECASES abgeschaltet
+	mpc      *mampc.MPC   // nil = abgeschaltet
+	mgcp     *mamgcp.MGCP // nil = abgeschaltet
 
 	mu           sync.Mutex
 	kopplung     *gemeinsam.Kopplung // gekoppelte Bruecke, nil = keine
@@ -48,6 +56,9 @@ type Steuerbox struct {
 	partner      shipapi.ServiceIdentity // verbundene Bruecke
 	gefunden     []shipapi.RemoteMdnsService
 	gemeldet     map[string]string // zuletzt von der Bruecke gemeldete Werte, fuer das Log
+
+	abonniert          string // MPC-Entitaet, deren Messwerte abonniert sind
+	zustandAngefordert string // Entitaet, deren Betriebszustand angefordert wurde
 }
 
 func NeueSteuerbox(konf Konfiguration, eigenerSki string) *Steuerbox {
@@ -86,6 +97,12 @@ func (s *Steuerbox) RemoteServiceConnected(dienst api.ServiceInterface, partner 
 
 func (s *Steuerbox) RemoteServiceDisconnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	s.mu.Lock()
+	// Nur die Bruecke, mit der die Steuerbox verbunden ist. Andere EEBUS-Geraete
+	// im LAN koennen sich ebenfalls melden und wieder trennen.
+	if s.verbunden && !s.partner.IsZero() && !gemeinsam.GleicheIdentitaet(partner, s.partner) {
+		s.mu.Unlock()
+		return
+	}
 	neu := s.verbunden
 	s.verbunden = false
 	s.partner = shipapi.ServiceIdentity{}
@@ -116,7 +133,7 @@ func (s *Steuerbox) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, 
 	log.Printf("Pairing %s: %s", gemeinsam.Bezeichnung(partner), text)
 	if detail.State() == shipapi.ConnectionStateRemoteDeniedTrust {
 		if k := s.Kopplung(); k != nil && k.Verfahren == gemeinsam.VerfahrenSki {
-			log.Printf("Die Bruecke vertraut dieser Steuerbox nicht: bei der Bruecke EEBUS_REMOTE_SKI=%s setzen", s.eigenerSki)
+			log.Printf("Die Bruecke vertraut dieser Steuerbox nicht: an der Bruecke den Suchmodus starten und die Anfrage annehmen (SKI %s)", s.eigenerSki)
 		}
 	}
 }
@@ -171,6 +188,48 @@ func (s *Steuerbox) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterfac
 	}
 }
 
+// --- Ereignisse der Use Cases LPP, MPC und MGCP ---
+
+func (s *Steuerbox) LppEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
+	switch ereignis {
+	case eglpp.UseCaseSupportUpdate:
+		if szenarien := s.lpp.AvailableScenariosForEntity(entitaet); len(szenarien) > 0 {
+			log.Printf("Bruecke unterstuetzt LPP, Szenarien %v", szenarien)
+		}
+
+	case eglpp.DataUpdateLimit:
+		if grenze, err := s.lpp.ProductionLimit(entitaet); err == nil {
+			log.Printf("Bruecke meldet Einspeisegrenze: aktiv=%v, %.0f W, Dauer %v", grenze.IsActive, grenze.Value, grenze.Duration.Round(time.Second))
+		}
+
+	case eglpp.DataUpdateFailsafeProductionActivePowerLimit:
+		if wert, err := s.lpp.FailsafeProductionActivePowerLimit(entitaet); err == nil {
+			if s.merke("failsafeEinspeisung", fmt.Sprintf("%.0f W", wert)) {
+				log.Printf("Bruecke meldet Failsafe-Einspeisegrenze: %.0f W", wert)
+			}
+		}
+
+	case eglpp.DataUpdatePowerProductionNominalMax:
+		if wert, err := s.lpp.ProductionNominalMax(entitaet); err == nil {
+			if s.merke("nennleistungErzeugung", fmt.Sprintf("%.0f W", wert)) {
+				log.Printf("Bruecke meldet Nennleistung Erzeugung: %.0f W", wert)
+			}
+		}
+	}
+}
+
+// MPC: nur fuer Geraete-Entitaeten (siehe messwerte.go), hier nichts zu tun.
+func (s *Steuerbox) MpcEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
+}
+
+func (s *Steuerbox) MgcpEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
+	if ereignis == mamgcp.UseCaseSupportUpdate {
+		if szenarien := s.mgcp.AvailableScenariosForEntity(entitaet); len(szenarien) > 0 {
+			log.Printf("Bruecke unterstuetzt MGCP, Szenarien %v", szenarien)
+		}
+	}
+}
+
 // merke speichert den zuletzt gemeldeten Wert und liefert, ob er neu ist.
 func (s *Steuerbox) merke(schluessel, wert string) bool {
 	s.mu.Lock()
@@ -183,8 +242,20 @@ func (s *Steuerbox) merke(schluessel, wert string) bool {
 	return neu
 }
 
+type ucMitEntitaeten interface {
+	RemoteEntitiesScenarios() []api.RemoteEntityScenarios
+}
+
 // ziel liefert die LPC-Entitaet der verbundenen Bruecke.
 func (s *Steuerbox) ziel() (spineapi.EntityRemoteInterface, error) {
+	return s.zielFuer(s.lpc, "LPC")
+}
+
+// zielFuer liefert die Entitaet der verbundenen Bruecke, die den Use Case anbietet.
+func (s *Steuerbox) zielFuer(uc ucMitEntitaeten, name string) (spineapi.EntityRemoteInterface, error) {
+	if uc == nil || (name == "LPP" && s.lpp == nil) || (name == "MGCP" && s.mgcp == nil) {
+		return nil, fmt.Errorf("%s ist in dieser Steuerbox abgeschaltet (STEUERBOX_USECASES)", name)
+	}
 	s.mu.Lock()
 	gekoppelt, verbunden := s.kopplung != nil, s.verbunden
 	s.mu.Unlock()
@@ -194,12 +265,12 @@ func (s *Steuerbox) ziel() (spineapi.EntityRemoteInterface, error) {
 	if !verbunden {
 		return nil, errors.New("Bruecke nicht verbunden")
 	}
-	for _, e := range s.lpc.RemoteEntitiesScenarios() {
+	for _, e := range uc.RemoteEntitiesScenarios() {
 		if e.Entity != nil && len(e.Scenarios) > 0 {
 			return e.Entity, nil
 		}
 	}
-	return nil, errors.New("Bruecke hat LPC noch nicht gemeldet, kurz warten")
+	return nil, fmt.Errorf("Bruecke hat %s nicht gemeldet (noch nicht oder dort abgeschaltet)", name)
 }
 
 // --- Aktionen aus dem Web-UI ---
@@ -209,26 +280,11 @@ func (s *Steuerbox) SendeGrenze(wertW float64, dauer time.Duration, aktiv bool) 
 	if err != nil {
 		return err
 	}
-	beschreibung := fmt.Sprintf("aktiv=%v, %.0f W, Dauer %v", aktiv, wertW, dauer)
-	if dauer == 0 {
-		beschreibung = fmt.Sprintf("aktiv=%v, %.0f W, unbefristet", aktiv, wertW)
-	}
 	grenze := ucapi.LoadLimit{Value: wertW, Duration: dauer, IsActive: aktiv}
-	_, err = s.lpc.WriteConsumptionLimit(ziel, grenze, func(ergebnis model.ResultDataType, _ model.MsgCounterType) {
-		if ergebnis.ErrorNumber != nil && *ergebnis.ErrorNumber != model.ErrorNumberTypeNoError {
-			grund := ""
-			if ergebnis.Description != nil {
-				grund = string(*ergebnis.Description)
-			}
-			log.Printf("Bruecke lehnt Grenze ab (Fehler %d): %s", *ergebnis.ErrorNumber, grund)
-			return
-		}
-		log.Printf("Bruecke hat Grenze angenommen")
-	})
-	if err != nil {
+	if _, err := s.lpc.WriteConsumptionLimit(ziel, grenze, ergebnisMelden("Grenze")); err != nil {
 		return err
 	}
-	log.Printf("Grenze gesendet: %s", beschreibung)
+	log.Printf("Grenze gesendet: %s", beschreibeGrenze(wertW, dauer, aktiv))
 	return nil
 }
 
@@ -249,6 +305,114 @@ func (s *Steuerbox) SendeFailsafe(grenzeW float64, mindestdauer time.Duration) e
 		return fmt.Errorf("Failsafe-Mindestdauer: %w", err)
 	}
 	log.Printf("Failsafe-Werte gesendet: %.0f W, Mindestdauer %v", grenzeW, mindestdauer)
+	return nil
+}
+
+// ergebnisMelden protokolliert die Antwort der Bruecke auf eine Grenze.
+func ergebnisMelden(was string) func(model.ResultDataType, model.MsgCounterType) {
+	return func(ergebnis model.ResultDataType, _ model.MsgCounterType) {
+		if ergebnis.ErrorNumber != nil && *ergebnis.ErrorNumber != model.ErrorNumberTypeNoError {
+			grund := ""
+			if ergebnis.Description != nil {
+				grund = string(*ergebnis.Description)
+			}
+			log.Printf("Bruecke lehnt %s ab (Fehler %d): %s", was, *ergebnis.ErrorNumber, grund)
+			return
+		}
+		log.Printf("Bruecke hat %s angenommen", was)
+	}
+}
+
+func beschreibeGrenze(wertW float64, dauer time.Duration, aktiv bool) string {
+	if dauer == 0 {
+		return fmt.Sprintf("aktiv=%v, %.0f W, unbefristet", aktiv, wertW)
+	}
+	return fmt.Sprintf("aktiv=%v, %.0f W, Dauer %v", aktiv, wertW, dauer)
+}
+
+func (s *Steuerbox) SendeEinspeisegrenze(wertW float64, dauer time.Duration, aktiv bool) error {
+	ziel, err := s.zielFuer(s.lpp, "LPP")
+	if err != nil {
+		return err
+	}
+	grenze := ucapi.LoadLimit{Value: wertW, Duration: dauer, IsActive: aktiv}
+	if _, err := s.lpp.WriteProductionLimit(ziel, grenze, ergebnisMelden("Einspeisegrenze")); err != nil {
+		return err
+	}
+	log.Printf("Einspeisegrenze gesendet: %s", beschreibeGrenze(wertW, dauer, aktiv))
+	return nil
+}
+
+func (s *Steuerbox) SendeFailsafeEinspeisung(grenzeW float64, mindestdauer time.Duration) error {
+	if mindestdauer < 2*time.Hour || mindestdauer > 24*time.Hour {
+		return errors.New("Failsafe-Mindestdauer muss zwischen 2 und 24 h liegen")
+	}
+	ziel, err := s.zielFuer(s.lpp, "LPP")
+	if err != nil {
+		return err
+	}
+	if _, err := s.lpp.WriteFailsafeProductionActivePowerLimit(ziel, grenzeW); err != nil {
+		return fmt.Errorf("Failsafe-Einspeisegrenze: %w", err)
+	}
+	if _, err := s.lpp.WriteFailsafeDurationMinimum(ziel, mindestdauer); err != nil {
+		return fmt.Errorf("Failsafe-Mindestdauer: %w", err)
+	}
+	log.Printf("Failsafe-Werte Einspeisung gesendet: %.0f W, Mindestdauer %v", grenzeW, mindestdauer)
+	return nil
+}
+
+// SendeGrenzenGemeinsam schreibt Bezugs- und Einspeisegrenze in einer
+// Nachricht. eebus-go schreibt jede Grenze einzeln; andere EEBUS-Stacks
+// (z. B. in einer echten Steuerbox) koennen beide zusammen schreiben. Die
+// Bruecke muss das in LPC und LPP getrennt freigeben.
+func (s *Steuerbox) SendeGrenzenGemeinsam(bezugW, einspeisungW float64, dauer time.Duration) error {
+	ziel, err := s.ziel()
+	if err != nil {
+		return err
+	}
+	if _, err := s.zielFuer(s.lpp, "LPP"); err != nil {
+		return err
+	}
+	steuerung, err := client.NewLoadControl(s.entitaet, ziel)
+	if err != nil {
+		return err
+	}
+	var daten []model.LoadControlLimitDataType
+	for _, g := range []struct {
+		richtung model.EnergyDirectionType
+		wertW    float64
+	}{{model.EnergyDirectionTypeConsume, bezugW}, {model.EnergyDirectionTypeProduce, einspeisungW}} {
+		vorhanden, err := steuerung.GetLimitDataForFilter(model.LoadControlLimitDescriptionDataType{
+			LimitType:      util.Ptr(model.LoadControlLimitTypeTypeSignDependentAbsValueLimit),
+			LimitDirection: util.Ptr(g.richtung),
+			ScopeType:      util.Ptr(model.ScopeTypeTypeActivePowerLimit),
+		})
+		if err != nil || len(vorhanden) != 1 || vorhanden[0].LimitId == nil {
+			return fmt.Errorf("Grenze %s bei der Bruecke nicht gefunden", g.richtung)
+		}
+		grenze := model.LoadControlLimitDataType{
+			LimitId:       vorhanden[0].LimitId,
+			IsLimitActive: util.Ptr(true),
+			Value:         model.NewScaledNumberType(g.wertW),
+		}
+		if dauer > 0 {
+			grenze.TimePeriod = &model.TimePeriodType{EndTime: model.NewAbsoluteOrRelativeTimeTypeFromDuration(dauer)}
+		}
+		daten = append(daten, grenze)
+	}
+	zaehler, err := steuerung.WriteLimitData(daten, nil, nil)
+	if err != nil {
+		return err
+	}
+	if zaehler != nil {
+		melden := ergebnisMelden("beide Grenzen")
+		steuerung.AddResponseCallback(*zaehler, func(msg spineapi.ResponseMessage) {
+			if ergebnis, ok := msg.Data.(*model.ResultDataType); ok {
+				melden(*ergebnis, *zaehler)
+			}
+		})
+	}
+	log.Printf("Beide Grenzen in einer Nachricht gesendet: Bezug %.0f W, Einspeisung %.0f W", bezugW, einspeisungW)
 	return nil
 }
 
@@ -387,4 +551,41 @@ func (s *Steuerbox) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
 		s.dienst.UnregisterRemoteService(alt.Identitaet)
 	}
 	return nil
+}
+
+// UseCaseNamen liefert die eingeschalteten Use Cases dieser Steuerbox.
+func (s *Steuerbox) UseCaseNamen() []string {
+	namen := []string{"LPC"}
+	for _, uc := range []struct {
+		an   bool
+		name string
+	}{{s.lpp != nil, "LPP"}, {s.mpc != nil, "MPC"}, {s.mgcp != nil, "MGCP"}} {
+		if uc.an {
+			namen = append(namen, uc.name)
+		}
+	}
+	return namen
+}
+
+// brueckenUseCases: Welche Use Cases bietet die Bruecke an (Akteur auf ihrer Seite)?
+func (s *Steuerbox) brueckenUseCases() []UseCaseDaten {
+	eigene := s.UseCaseNamen()
+	var liste []UseCaseDaten
+	for _, uc := range []struct {
+		name   string
+		akteur model.UseCaseActorType
+		uc     model.UseCaseNameType
+	}{
+		{"LPC", model.UseCaseActorTypeControllableSystem, model.UseCaseNameTypeLimitationOfPowerConsumption},
+		{"LPP", model.UseCaseActorTypeControllableSystem, model.UseCaseNameTypeLimitationOfPowerProduction},
+		{"MPC", model.UseCaseActorTypeMonitoredUnit, model.UseCaseNameTypeMonitoringOfPowerConsumption},
+		{"MGCP", model.UseCaseActorTypeGridConnectionPoint, model.UseCaseNameTypeMonitoringOfGridConnectionPoint},
+	} {
+		liste = append(liste, UseCaseDaten{
+			Name:         uc.name,
+			Steuerbox:    slices.Contains(eigene, uc.name),
+			Unterstuetzt: s.entitaetFuerUseCase(uc.akteur, uc.uc) != nil,
+		})
+	}
+	return liste
 }

@@ -20,7 +20,8 @@
 
 	<section class="karte">
 		<h2>Wozu die Test-Steuerbox da ist</h2>
-		<p>Die echte Steuerbox gehört dem Messstellenbetreiber und sendet nur, wenn der Netzbetreiber wirklich begrenzt. Zum Testen spielt diese Software ihre Rolle (EEBUS „Energy Guard“). Damit lassen sich Grenzen, Failsafe-Werte und Störungen jederzeit auslösen und an Brücke und SPS beobachten.</p>
+		<p>Die echte Steuerbox gehört dem Messstellenbetreiber und sendet nur, wenn der Netzbetreiber wirklich begrenzt. Zum Testen spielt diese Software ihre Rolle: „Energy Guard“ für die Begrenzung von Bezug (LPC) und Einspeisung (LPP), „Monitoring Appliance“ für die Messwerte (MPC, MGCP). Damit lassen sich Grenzen, Failsafe-Werte und Störungen jederzeit auslösen und an Brücke und SPS beobachten.</p>
+		<p class="hinweis">Mit <code>STEUERBOX_USECASES</code> (Vorgabe <code>lpc,lpp,mpc,mgcp</code>) lässt sich eine Steuerbox nachstellen, die nur einen Teil kann. LPC ist immer dabei.</p>
 
 		<svg class="schaubild" viewBox="0 0 760 170" role="img" aria-label="Testaufbau: Test-Steuerbox, Brücke, CODESYS oder SPS-Simulator">
 			<defs>
@@ -55,18 +56,19 @@
 			<li>Hier unter „Kopplung“ in das Feld einfügen und <strong>„Per Pairing Service koppeln“</strong> klicken.</li>
 			<li>Nach wenigen Sekunden steht oben „Verbunden mit der Brücke“. Die Brücke meldet „Steuerbox per Pairing Service gekoppelt“. An der Brücke musst du nichts einstellen.</li>
 		</ol>
-		<h3 style="margin-top:20px">B · SKI-Verfahren (bisheriges Verfahren)</h3>
+		<h3 style="margin-top:20px">B · SKI-Verfahren mit Suchmodus (wie bei der PROLAN-Steuerbox)</h3>
 		<ol>
-			<li>Hier unter „Kopplung“ den <strong>eigenen SKI</strong> kopieren.</li>
-			<li>Die Brücke mit <code>EEBUS_REMOTE_SKI=&lt;SKI&gt;</code> neu starten (lokal: Datei <code>.env</code>, dann <code>docker compose up -d</code>).</li>
-			<li>Hier bei der gefundenen Brücke auf <strong>„Per SKI koppeln“</strong> klicken.</li>
+			<li>Hier bei der gefundenen Brücke auf <strong>„Per SKI koppeln“</strong> klicken. Das entspricht dem Eintrag durch den Messstellenbetreiber.</li>
+			<li>An der Brücke <strong>„Steuerbox suchen“</strong> drücken. Nach einigen Sekunden erscheint die Kopplungsanfrage dieser Steuerbox.</li>
+			<li>An der Brücke <strong>„Annehmen“</strong>. Oben steht dann „Verbunden mit der Brücke“.</li>
 		</ol>
+		<p class="hinweis">Statt Suchmodus geht auch: an der Brücke bei dieser Steuerbox „Vertrauen“, oder fest per <code>EEBUS_REMOTE_SKI=&lt;SKI&gt;</code> (lokal: Datei <code>.env</code>, dann <code>docker compose up -d</code>).</p>
 		<p class="hinweis">Die Kopplung wird gespeichert und übersteht Neustarts. „Entkoppeln“ hebt sie auf.</p>
 	</section>
 
 	<section class="karte" style="margin-top:16px">
 		<h2>Testszenarien</h2>
-		<p>Jeweils auslösen und an der Statusseite der Brücke (Ampel) sowie in CODESYS (<code>fbEebusLpc</code>) prüfen.</p>
+		<p>Jeweils auslösen und an der Statusseite der Brücke (Ampel) sowie in CODESYS (<code>fbBezug</code>, <code>fbEinspeisung</code>) prüfen.</p>
 		<table>
 			<thead><tr><th>Test</th><th>So geht's</th><th>Erwartetes Ergebnis</th></tr></thead>
 			<tbody>
@@ -79,7 +81,14 @@
 				<tr><td>7 · Langer Abbruch</td><td><em>Trennen</em>, über 2 min warten, <em>Wiederherstellen</em>, Grenze senden</td><td>nach 120 s „Failsafe“, danach wie Test 5</td></tr>
 				<tr><td>8 · Failsafe-Werte</td><td>z. B. 5.000 W und 3 h senden</td><td>„Werte bei der Brücke“ und Statusseite zeigen die neuen Werte</td></tr>
 				<tr><td>9 · Ungültige Werte</td><td>Mindestdauer 1 h senden</td><td>wird abgewiesen (erlaubt sind 2 bis 24 h)</td></tr>
-				<tr><td>10 · Kette bis zur SPS</td><td>in CODESYS <code>udiNennleistungMaxW</code> ändern</td><td>erscheint hier unter „Nennleistung (von SPS)“</td></tr>
+				<tr><td>10 · Kette bis zur SPS</td><td>in CODESYS <code>udiNennleistungBezugW</code> ändern</td><td>erscheint hier unter „Nennleistung (von SPS)“</td></tr>
+				<tr><td>11 · Einspeisegrenze</td><td>„Einspeisung senden“: Vorlage „3.000 W · 2 min“</td><td>„Brücke hat Einspeisegrenze angenommen“, an der Brücke Karte „Einspeisung · LPP“ begrenzt, im SPS-Simulator wird PV abgeregelt</td></tr>
+				<tr><td>12 · Beide Richtungen</td><td>Bezug und Einspeisung nacheinander senden, dann „Beide Grenzen in einer Nachricht“</td><td>beide angenommen, beide Karten begrenzt</td></tr>
+				<tr><td>13 · Gemeinsame Mindestdauer</td><td>Failsafe-Werte unter „Bezug senden“ mit 3 h, dann unter „Einspeisung senden“ mit 4 h</td><td>beide angenommen, an der Brücke gilt 4 h für beide Richtungen</td></tr>
+				<tr><td>14 · Heartbeat beide Richtungen</td><td>wie Test 4 und 5</td><td>beide gehen in Failsafe, jede Richtung kommt erst mit ihrer eigenen neuen Grenze zurück</td></tr>
+				<tr><td>15 · SPS ausgefallen</td><td><code>docker compose stop spssimulator</code>, 15 s warten, Grenze senden</td><td>„Brücke lehnt Grenze ab: SPS nicht erreichbar“, Anlagenstatus „Störung“, Messwerte „ungültig“</td></tr>
+				<tr><td>16 · Messwerte</td><td>Karten „Messwerte Anlage · MPC“ und „Netzanschlusspunkt · MGCP“</td><td>Werte ändern sich mit den Grenzen: Leistung folgt der Bezugsgrenze, Einspeisung bleibt unter der Einspeisegrenze</td></tr>
+				<tr><td>17 · Suchmodus</td><td>An der Brücke „Kopplung lösen“, hier „Per SKI koppeln“, an der Brücke „Steuerbox suchen“</td><td>Kopplungsanfrage erscheint an der Brücke, nach „Annehmen“ verbunden</td></tr>
 			</tbody>
 		</table>
 	</section>

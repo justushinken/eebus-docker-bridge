@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"log"
+	"mime"
 	"net"
 	"net/http"
 	"time"
@@ -74,4 +76,39 @@ func SchreibeJson(w http.ResponseWriter, status int, wert any) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(wert)
+}
+
+// Antwort auf eine Aktion aus dem Web-UI.
+type Antwort struct {
+	Text   string `json:"text,omitempty"`
+	Fehler string `json:"fehler,omitempty"`
+}
+
+// ErrVerboten laesst Aktion mit 403 statt 409 antworten.
+var ErrVerboten = errors.New("verboten")
+
+// Aktion liest den JSON-Rumpf, fuehrt die Aktion aus und antwortet mit Text
+// oder Fehler. Nur Content-Type application/json: Ein Formular einer fremden
+// Seite kann das nicht senden, das schuetzt bei gespeicherter Anmeldung.
+func Aktion[T any](ausfuehren func(T) (string, error)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if typ, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); typ != "application/json" {
+			SchreibeJson(w, http.StatusUnsupportedMediaType, Antwort{Fehler: "Content-Type application/json erwartet"})
+			return
+		}
+		var daten T
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&daten); err != nil {
+			SchreibeJson(w, http.StatusBadRequest, Antwort{Fehler: "ungueltige Anfrage: " + err.Error()})
+			return
+		}
+		text, err := ausfuehren(daten)
+		switch {
+		case errors.Is(err, ErrVerboten):
+			SchreibeJson(w, http.StatusForbidden, Antwort{Fehler: err.Error()})
+		case err != nil:
+			SchreibeJson(w, http.StatusConflict, Antwort{Fehler: err.Error()})
+		default:
+			SchreibeJson(w, http.StatusOK, Antwort{Text: text})
+		}
+	}
 }

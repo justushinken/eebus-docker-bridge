@@ -10,7 +10,7 @@
 <main>
 	<header>
 		<div class="kopf">
-			<h1>EEBUS-LPC-Brücke</h1>
+			<h1>EEBUS-Brücke</h1>
 			<nav><a href="./">Status</a><a class="aktiv" href="anleitung">Anleitung</a></nav>
 		</div>
 	</header>
@@ -19,8 +19,21 @@
 
 	<section class="karte">
 		<h2>Wozu die Brücke da ist</h2>
-		<p>Nach §14a EnWG darf der Netzbetreiber die Leistung steuerbarer Verbraucher (Wallbox, Wärmepumpe …) vorübergehend begrenzen. Das Signal kommt von der <strong>Steuerbox</strong> des Messstellenbetreibers am Smart Meter Gateway, und zwar über das Protokoll <strong>EEBUS</strong> (Use Case „LPC“, Limitation of Power Consumption).</p>
-		<p>Die Brücke läuft als Docker-Container auf dem PFC200. Sie spricht EEBUS mit der Steuerbox und gibt der CODESYS-Applikation per Modbus nur noch das Wesentliche weiter: <em>Begrenzung aktiv ja/nein</em> und <em>Grenze in Watt</em>.</p>
+		<p>Nach §14a EnWG darf der Netzbetreiber den Bezug steuerbarer Verbraucher (Wallbox, Wärmepumpe …) vorübergehend begrenzen, nach §9 EEG auch die Einspeisung von Erzeugungsanlagen. Das Signal kommt von der <strong>Steuerbox</strong> des Messstellenbetreibers am Smart Meter Gateway, und zwar über das Protokoll <strong>EEBUS</strong>.</p>
+		<p>Die Brücke läuft als Docker-Container auf dem PFC200. Sie spricht EEBUS mit der Steuerbox und tauscht mit der CODESYS-Applikation per Modbus nur das Wesentliche aus: <em>Begrenzung aktiv ja/nein</em> und <em>Grenze in Watt</em> je Richtung, in der Gegenrichtung die Messwerte der Anlage.</p>
+
+		<h3 style="margin-top:16px">Die Use Cases nach VDE FNN</h3>
+		<table>
+			<thead><tr><th>Use Case</th><th>Was er leistet</th><th>Wann nötig</th></tr></thead>
+			<tbody>
+				<tr><td><strong>LPC</strong></td><td>Begrenzung des Bezugs</td><td>immer (§14a)</td></tr>
+				<tr><td><strong>LPP</strong></td><td>Begrenzung der Einspeisung</td><td>bei Erzeugung (PV, Speicher)</td></tr>
+				<tr><td><strong>MPC</strong></td><td>Messwerte der Anlage: Leistung, Energie, Strom, Spannung, Frequenz</td><td>aktuelle Wirkleistung muss abrufbar sein</td></tr>
+				<tr><td><strong>MGCP</strong></td><td>Messwerte am Netzanschlusspunkt</td><td>„zusätzlich vorgesehen“, typisch bei einem EMS</td></tr>
+			</tbody>
+		</table>
+		<p class="hinweis">Welche Use Cases die Brücke anbietet, steht in <code>EEBUS_USECASES</code> (Vorgabe <code>lpc</code>). Nur einschalten, was die Anlage liefern kann. Die Statusseite zeigt unter „Use Cases“, was die Brücke anbietet und was die Steuerbox unterstützt.</p>
+		<p class="hinweis"><strong>Wichtig für die Regelung:</strong> Die Grenzen beziehen sich laut FNN-Hinweis auf den <strong>Netzanschlusspunkt</strong>. Die CODESYS-Applikation muss sie am Zähler des Netzanschlusspunkts einhalten, nicht an einer einzelnen Last. Bei einem EMS ist außerdem die Mindestbezugsleistung nach BNetzA BK6-22-300, Anlage 1, im EMS einzustellen.</p>
 
 		<svg class="schaubild" viewBox="0 0 760 210" role="img" aria-label="Aufbau: Steuerbox, Brücke im Docker-Container, CODESYS-Applikation, Verbraucher">
 			<defs>
@@ -39,11 +52,11 @@
 
 			<rect class="kasten" x="455" y="60" width="160" height="80" rx="10"/>
 			<text x="535" y="94" text-anchor="middle" font-weight="600" font-size="14">CODESYS</text>
-			<text x="535" y="114" text-anchor="middle" class="leise-text">FbEebusLpc</text>
+			<text x="535" y="114" text-anchor="middle" class="leise-text">FbEebusBruecke …</text>
 
 			<rect class="kasten" x="670" y="60" width="80" height="80" rx="10"/>
-			<text x="710" y="96" text-anchor="middle" font-weight="600" font-size="13">Ver-</text>
-			<text x="710" y="113" text-anchor="middle" font-weight="600" font-size="13">braucher</text>
+			<text x="710" y="96" text-anchor="middle" font-weight="600" font-size="13">Anlage</text>
+			<text x="710" y="113" text-anchor="middle" class="leise-text">Last, PV</text>
 
 			<line class="linie" x1="160" y1="100" x2="233" y2="100" marker-end="url(#pfeil1)" marker-start="url(#pfeil1)"/>
 			<text x="196" y="90" text-anchor="middle" class="leise-text">EEBUS</text>
@@ -52,17 +65,17 @@
 			<line class="linie" x1="395" y1="100" x2="453" y2="100" marker-end="url(#pfeil1)" marker-start="url(#pfeil1)"/>
 			<text x="424" y="90" text-anchor="middle" class="leise-text">Modbus</text>
 
-			<line class="linie" x1="615" y1="100" x2="668" y2="100" marker-end="url(#pfeil1)"/>
+			<line class="linie" x1="615" y1="100" x2="668" y2="100" marker-end="url(#pfeil1)" marker-start="url(#pfeil1)"/>
 
 			<text x="315" y="170" text-anchor="middle" class="leise-text">Status-UI: Port 8090</text>
 			<text x="535" y="170" text-anchor="middle" class="leise-text">127.0.0.1:5502</text>
 		</svg>
-		<p class="legende">Die Brücke übersetzt zwischen EEBUS und Modbus. Die Aufteilung der Leistung auf die Verbraucher macht die CODESYS-Applikation.</p>
+		<p class="legende">Die Brücke übersetzt zwischen EEBUS und Modbus. Die Aufteilung der Leistung auf Verbraucher und Erzeuger macht die CODESYS-Applikation, sie liefert auch die Messwerte.</p>
 	</section>
 
 	<section class="karte" style="margin-top:16px">
 		<h2>Die Zustände (Ampel auf der Statusseite)</h2>
-		<p>Die Brücke führt den Zustandsautomaten des Use Case LPC. Entscheidend ist der <strong>Heartbeat</strong>: Die Steuerbox meldet sich regelmäßig. Bleibt er 120 Sekunden aus, gilt die sichere Failsafe-Grenze.</p>
+		<p>Die Brücke führt den Zustandsautomaten der Use Cases LPC und LPP, je Richtung einmal. Entscheidend ist der <strong>Heartbeat</strong>: Die Steuerbox meldet sich regelmäßig. Bleibt er 120 Sekunden aus, gilt die sichere Failsafe-Grenze, für Bezug und Einspeisung jeweils eine eigene. Die Failsafe-Mindestdauer gilt für beide gemeinsam.</p>
 
 		<svg class="schaubild" viewBox="0 0 760 335" role="img" aria-label="Zustände: Init, Begrenzt, Unbegrenzt, Failsafe, Unbegrenzt autonom und ihre Übergänge">
 			<defs>
@@ -129,12 +142,12 @@
 				<tr><td><span class="marke rot">Failsafe</span></td><td>Failsafe-Grenze einhalten, bis Heartbeat <em>und</em> eine neue Grenze kommen oder die Mindestdauer abläuft.</td></tr>
 			</tbody>
 		</table>
-		<p class="hinweis">Für die SPS genügt Register 6 (Begrenzung aktiv) und 4–5 (Grenze in W). Fällt die Brücke selbst aus, greift die Ersatzgrenze in <code>FbEebusLpc</code>.</p>
+		<p class="hinweis">Für die SPS genügt je Richtung „Begrenzung aktiv“ und „Grenze in W“: Bezug in Register 6 und 4–5, Einspeisung in Register 21 und 19–20. Fällt die Brücke selbst aus, greift die Ersatzgrenze in <code>FbEebusBegrenzung</code>. Ist die SPS nicht erreichbar, lehnt die Brücke neue Grenzen ab und meldet der Steuerbox eine Störung, denn umsetzen könnte sie sie nicht (FNN-Hinweis 4.1.2.2).</p>
 	</section>
 
 	<section class="karte" style="margin-top:16px">
 		<h2>Kopplung mit der Steuerbox</h2>
-		<p>Damit Brücke und Steuerbox einander vertrauen, gibt es zwei Verfahren. Beide können gleichzeitig aktiv sein. Welches der Messstellenbetreiber nutzt, legt er fest.</p>
+		<p>Damit Brücke und Steuerbox einander vertrauen, muss <strong>jede Seite die andere eintragen</strong>. Auf Seiten der Steuerbox macht das der Messstellenbetreiber. Auf Seiten der Brücke gibt es drei Wege. Welches Verfahren gilt, legt der Messstellenbetreiber fest. Gekoppelt ist immer genau eine Steuerbox, eine neue ersetzt die alte.</p>
 
 		<h3>A · SHIP Pairing Service (neues Verfahren)</h3>
 		<svg class="schaubild" viewBox="0 0 760 175" role="img" aria-label="Pairing Service: Brücke gibt QR-Code an Messstellenbetreiber, der richtet die Steuerbox ein, die Steuerbox meldet sich bei der Brücke an">
@@ -169,19 +182,25 @@
 		</ol>
 		<p class="hinweis">Das <strong>Secret</strong> ist wie ein Schlüssel: Wer es kennt, kann eine Steuerbox koppeln. Nur an den Messstellenbetreiber geben. Wird die Steuerbox später getauscht, koppelt sich die neue nach 15 Minuten automatisch, wenn sie das Secret kennt.</p>
 
-		<h3 style="margin-top:20px">B · SKI-Verfahren (bisheriges Verfahren)</h3>
+		<h3 style="margin-top:20px">B · SKI-Verfahren mit Suchmodus</h3>
 		<ol>
-			<li>Den <strong>eigenen SKI</strong> der Brücke (Statusseite, „Kopplung“) an den Messstellenbetreiber geben.</li>
-			<li>Den SKI der Steuerbox vom Messstellenbetreiber erfragen. Er steht oft auch unter „Per mDNS gefundene EEBUS-Geräte“.</li>
-			<li>Den Container mit <code>-e EEBUS_REMOTE_SKI=&lt;SKI der Steuerbox&gt;</code> neu anlegen.</li>
+			<li><strong>SKI und SHIP-ID</strong> der Brücke (Statusseite, „Kopplung“) an den Messstellenbetreiber geben. Er trägt sie in der Steuerbox ein.</li>
+			<li>Auf der Statusseite <strong>„Steuerbox suchen“</strong> drücken. Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht abgewiesen, sondern als <strong>Kopplungsanfrage</strong> angezeigt.</li>
+			<li>Sobald die Steuerbox sich meldet, die Anfrage prüfen (SKI, Marke, Modell) und <strong>„Annehmen“</strong>. Die Brücke merkt sich die Steuerbox dauerhaft.</li>
 		</ol>
+		<p>Alternativ ohne Anfrage: In der Liste „Per mDNS gefundene EEBUS-Geräte“ bei der Steuerbox <strong>„Vertrauen“</strong> wählen. Die Brücke verbindet sich dann selbst, sobald auch die Steuerbox ihr vertraut.</p>
+		<p class="hinweis">Ohne Suchmodus lehnt die Brücke unbekannte Geräte ab und meldet das einmal unter „Ereignisse“. Taucht dort eine Steuerbox auf, hat der Messstellenbetreiber die Brücke schon eingetragen, es fehlt nur noch die Brückenseite. Eine automatische Annahme gibt es bewusst nicht: Sonst könnte jedes Gerät im Netz Grenzen setzen.</p>
+
+		<h3 style="margin-top:20px">C · SKI fest per Einstellung</h3>
+		<p>Den Container mit <code>-e EEBUS_REMOTE_SKI=&lt;SKI der Steuerbox&gt;</code> anlegen. Die Kopplung lässt sich dann auf der Statusseite nicht ändern.</p>
 
 		<h3 style="margin-top:20px">Einstellungen</h3>
 		<table>
 			<thead><tr><th>Variable</th><th>Bedeutung</th></tr></thead>
 			<tbody>
-				<tr><td><code>EEBUS_REMOTE_SKI</code></td><td>SKI der Steuerbox, schaltet das SKI-Verfahren ein</td></tr>
+				<tr><td><code>EEBUS_REMOTE_SKI</code></td><td>SKI der Steuerbox, fest eingestellt (Verfahren C)</td></tr>
 				<tr><td><code>EEBUS_PAIRING_SERVICE</code></td><td><code>an</code> (Vorgabe) oder <code>aus</code></td></tr>
+				<tr><td><code>WEB_KOPPLUNG</code></td><td><code>an</code> (Vorgabe). Mit <code>aus</code> ist die Statusseite rein lesend, Suchmodus und Kopplung sind dann gesperrt.</td></tr>
 				<tr><td><code>SHIP_ID</code></td><td>Kennung der Brücke im Netz. Vorgabe: Marke-Modell-MAC-Adresse. Nach der Kopplung nicht mehr ändern.</td></tr>
 			</tbody>
 		</table>
@@ -207,6 +226,31 @@
 			<li>PFC-Firewall: UDP 5353 und TCP 4712 müssen erlaubt sein</li>
 		</ul>
 		<p class="hinweis">Kontrolle vor Ort: Erscheint die Steuerbox auf der Statusseite unter „Per mDNS gefundene EEBUS-Geräte“, ist das Netz in Ordnung. Fehlt sie dort, liegt es am Netz, nicht an der Kopplung.</p>
+		<h3 style="margin-top:20px">Direktes Kabel an X2 (noch nicht getestet)</h3>
+		<p>Viele Steuerboxen haben eine eigene Buchse für EEBUS (bei PROLAN „ETH1“). Ein direktes Kabel von dort an X2 des PFC trennt das EEBUS-Netz sauber vom übrigen LAN. Dazu X2 im WBM als eigene Schnittstelle (nicht als Switch mit X1) einrichten und eine Adresse im selben Subnetz wie die Steuerbox vergeben. Wie die Steuerbox an dieser Buchse ihre Adresse bekommt (fest, DHCP oder automatisch 169.254.x.x), beim Messstellenbetreiber erfragen.</p>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>PROLAN-Steuerbox (STB-142E)</h2>
+		<p>Die PROLAN-Steuerbox gibt es als STB-142 (nur Relais) und <strong>STB-142E</strong> (mit aktivierbarer EEBUS-Schnittstelle). Für die Brücke wird die STB-142E gebraucht, zertifiziert ist sie mit Firmware 1.1.3.</p>
+		<ul>
+			<li><strong>Anschluss:</strong> EEBUS läuft über die Buchse <strong>ETH1</strong>. Die Buchse „CLS“ geht zum Smart Meter Gateway.</li>
+			<li><strong>Einrichtung:</strong> Vor Ort lässt sich an der Box nichts einstellen. Der Messstellenbetreiber (Steuerbox-Administrator) trägt die Brücke aus der Ferne ein. Er braucht <strong>SKI und SHIP-ID</strong>, beim Pairing Service zusätzlich Fingerprint und Secret, am einfachsten den QR-Code der Statusseite.</li>
+			<li><strong>Brückenseite:</strong> Suchmodus starten und die Anfrage der Steuerbox annehmen, oder bei der gefundenen Steuerbox „Vertrauen“ (Verfahren B).</li>
+			<li><strong>LED „PWR“:</strong> blinkt im Sekundentakt, solange eine eingerichtete EEBUS-Verbindung fehlt. Leuchtet sie dauerhaft, steht die Verbindung.</li>
+			<li><strong>Verplombung:</strong> Aus dem verplombten Bereich dürfen nur Kabel zu EEBUS-Geräten führen. Kann ETH1 auch weitere Steuerboxen anbinden (Kaskadierung), darf die Buchse nicht außerhalb erreichbar sein: Der Messstellenbetreiber muss die Kaskadierung dann abschalten.</li>
+		</ul>
+		<p>Nach dem Verbinden zeigt die Statusseite unter „Steuerbox: gemeldete Daten“, welche Use Cases in welcher Version die Box meldet und auf welcher Entität.</p>
+		<h3 style="margin-top:16px">Vorab mit dem Messstellenbetreiber klären</h3>
+		<ul>
+			<li>Firmware-Stand (mindestens 1.1.3?), EEBUS-Schnittstelle aktiviert?</li>
+			<li>Welche Use Cases aktiv sind (LPC, LPP, MPC, MGCP)</li>
+			<li>Kopplung nur per SKI oder per SHIP Pairing Service?</li>
+			<li>Wie ETH1 seine IP-Adresse bekommt</li>
+			<li>Ist die Kaskadierung auf ETH1 abgeschaltet?</li>
+			<li>Welche Failsafe-Werte und welcher Heartbeat-Takt gelten</li>
+			<li>Zugang zum „Technischen Handbuch“ (Prolan-Kundenportal), zumindest zum EEBUS-Teil</li>
+		</ul>
 	</section>
 
 	<section class="karte" style="margin-top:16px">
@@ -218,6 +262,11 @@
 				<tr><td>Steuerbox „Kein Partner“</td><td>Noch keine Kopplung eingerichtet, siehe oben.</td></tr>
 				<tr><td>Steuerbox bleibt „Getrennt“</td><td>Steuerbox nicht im selben Netzsegment oder Subnetz wie der PFC, oder die PFC-Firewall sperrt TCP 4712 bzw. UDP 5353. Siehe „Netzwerk“ oben.</td></tr>
 				<tr><td>„von Gegenseite abgelehnt“</td><td>Beim SKI-Verfahren ist auf einer Seite ein falscher SKI eingetragen.</td></tr>
+				<tr><td>„Verbindungsversuch eines unbekannten Geräts abgelehnt“</td><td>Die Steuerbox vertraut der Brücke, die Brücke ihr noch nicht. Suchmodus starten und die Anfrage annehmen.</td></tr>
+				<tr><td>„SHIP ID mismatch“</td><td>Die gespeicherte Steuerbox meldet sich mit einer anderen SHIP-ID als bei der Kopplung. „Kopplung lösen“ und neu koppeln.</td></tr>
+				<tr><td>„Grenze abgelehnt: SPS nicht erreichbar“</td><td>Ohne SPS kann die Brücke Grenzen nicht umsetzen und lehnt sie ab. CODESYS-Applikation und Modbus prüfen.</td></tr>
+				<tr><td>Use Case bei „Steuerbox“ auf „nein“</td><td>Die Steuerbox bietet den Use Case nicht an oder hat ihn nicht freigeschaltet. Unter „Steuerbox: gemeldete Daten“ nachsehen, was sie meldet, und beim Messstellenbetreiber nachfragen.</td></tr>
+				<tr><td>Messwert „ungültig“</td><td>Die SPS hat das Gültigkeitsbit nicht gesetzt (Holding-Register 5 bzw. 6) oder ist ausgefallen.</td></tr>
 				<tr><td>„Pairing Service abgelehnt“</td><td>Die Steuerbox kennt ein falsches Secret oder einen falschen Fingerprint. QR-Code erneut übergeben.</td></tr>
 				<tr><td>Ampel rot „Failsafe“</td><td>Seit 120 s kein Heartbeat. Verbindung zur Steuerbox prüfen. Zurück geht es, sobald Heartbeat und eine neue Grenze kommen.</td></tr>
 			</tbody>

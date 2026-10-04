@@ -38,6 +38,21 @@ func Bezeichnung(id shipapi.ServiceIdentity) string {
 	return id.String()
 }
 
+// GleicheIdentitaet: a und b bezeichnen dasselbe Geraet. Verglichen wird, was
+// beide kennen: SKI, sonst Fingerprint, sonst SHIP-ID. Eine per Pairing
+// Service entstandene Kopplung kennt oft nur Fingerprint und SHIP-ID.
+func GleicheIdentitaet(a, b shipapi.ServiceIdentity) bool {
+	switch {
+	case a.SKI != "" && b.SKI != "":
+		return strings.EqualFold(a.SKI, b.SKI)
+	case a.Fingerprint != "" && b.Fingerprint != "":
+		return strings.EqualFold(a.Fingerprint, b.Fingerprint)
+	case a.ShipID != "" && b.ShipID != "":
+		return a.ShipID == b.ShipID
+	}
+	return false
+}
+
 // LadeKopplung liest eine gespeicherte Kopplung, nil wenn keine vorhanden ist.
 func LadeKopplung(pfad string) (*Kopplung, error) {
 	inhalt, err := os.ReadFile(pfad)

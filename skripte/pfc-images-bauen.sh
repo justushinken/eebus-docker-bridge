@@ -14,7 +14,7 @@ baue() {
 	name=$1
 	programm=$2
 	echo "== $name:$version ($programm)"
-	docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM="$programm" \
+	docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM="$programm" --build-arg VERSION="$version" \
 		-t "$name:$version" --load .
 	docker save "$name:$version" | gzip > "dist/$name-$version.tar.gz"
 }

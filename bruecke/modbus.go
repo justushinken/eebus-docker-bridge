@@ -7,35 +7,95 @@ import (
 	"github.com/simonvetter/modbus"
 )
 
-// Schnittstellenversion. Bei jeder Aenderung des Registerlayouts erhoehen;
-// FbEebusLpc prueft den Wert und faellt bei Abweichung auf die Ersatzgrenze.
-const SchnittstellenVersion = 1
-
-// Input-Register (FC04), Bruecke -> SPS. 32-Bit-Werte: High-Word zuerst.
+// Schnittstellenversion (Input-Register 1). Nur bei inkompatiblen Aenderungen
+// erhoehen; FbEebusLpc prueft den Wert und faellt bei Abweichung auf die
+// Ersatzgrenze. Neue Register werden nur angehaengt, das zeigt die
+// Erweiterungsversion (Input-Register 14).
 const (
-	regLebenszeichen    = 0 // zaehlt jede Sekunde hoch
-	regVersion          = 1 // SchnittstellenVersion
-	regZustand          = 2 // LpcZustand
-	regVerbindung       = 3 // Verbindung
-	regWirksameGrenzeHi = 4 // einzuhaltende Grenze in W (nur gueltig, wenn regBegrenzungAktiv = 1)
-	regWirksameGrenzeLo = 5
-	regBegrenzungAktiv  = 6 // 0/1
-	regGrenzeNetzHi     = 7 // zuletzt empfangene Grenze des Netzbetreibers in W (Diagnose)
-	regGrenzeNetzLo     = 8
-	regRestdauerHi      = 9 // Restlaufzeit der Grenze in s, 0 = unbefristet
-	regRestdauerLo      = 10
-	regFailsafeGrenzeHi = 11 // aktuelle Failsafe-Grenze in W (Diagnose)
-	regFailsafeGrenzeLo = 12
-	regHeartbeatAlter   = 13 // s seit letztem Heartbeat, 65535 = nie
-	anzahlInputRegister = 14
+	SchnittstellenVersion = 1
+	ErweiterungsVersion   = 2 // 2: LPP, MPC, MGCP, Anlagenstatus
 )
 
-// Holding-Register (FC03/FC16), SPS -> Bruecke.
+// Input-Register (FC04), Bruecke -> SPS. 32-Bit-Werte: High-Word zuerst.
+//
+// Je Richtung ein Block mit gleichem Aufbau: Bezug (LPC) ab Register 2,
+// Einspeisung (LPP) ab Register 17. Offsets im Block siehe blk*.
 const (
-	regSpsLebenszeichen   = 0 // zaehlt in der SPS jede Sekunde hoch
-	regNennleistungHi     = 1 // max. Leistungsaufnahme der Anlage in W
-	regNennleistungLo     = 2
-	anzahlHoldingRegister = 3
+	regLebenszeichen = 0 // zaehlt jede Sekunde hoch
+	regVersion       = 1 // SchnittstellenVersion
+
+	blockBezug       = 2
+	blockEinspeisung = 17
+
+	regErweiterung       = 14 // ErweiterungsVersion
+	regUseCasesLokal     = 15 // Bitmaske ucBit*: von der Bruecke angeboten
+	regUseCasesSteuerbox = 16 // Bitmaske ucBit*: von der Steuerbox unterstuetzt
+
+	regMindestdauerHi   = 29 // Failsafe-Mindestdauer in s (gemeinsam fuer LPC und LPP)
+	regMindestdauerLo   = 30
+	anzahlInputRegister = 31
+)
+
+// Offsets in einem Begrenzungsblock
+const (
+	blkZustand          = 0  // LpcZustand
+	blkVerbindung       = 1  // Verbindung (in beiden Bloecken gleich)
+	blkWirksameGrenzeHi = 2  // einzuhaltende Grenze in W (nur gueltig, wenn blkBegrenzungAktiv = 1)
+	blkWirksameGrenzeLo = 3  //
+	blkBegrenzungAktiv  = 4  // 0/1
+	blkGrenzeNetzHi     = 5  // zuletzt empfangene Grenze des Netzbetreibers in W (Diagnose)
+	blkGrenzeNetzLo     = 6  //
+	blkRestdauerHi      = 7  // Restlaufzeit der Grenze in s, 0 = unbefristet
+	blkRestdauerLo      = 8  //
+	blkFailsafeGrenzeHi = 9  // aktuelle Failsafe-Grenze in W (Diagnose)
+	blkFailsafeGrenzeLo = 10 //
+	blkHeartbeatAlter   = 11 // s seit letztem Heartbeat, 65535 = nie (in beiden Bloecken gleich)
+)
+
+// Bits der Use-Case-Masken (Input-Register 15 und 16)
+const (
+	ucBitLpc  = 1 << 0
+	ucBitLpp  = 1 << 1
+	ucBitMpc  = 1 << 2
+	ucBitMgcp = 1 << 3
+)
+
+// Holding-Register (FC03/FC16), SPS -> Bruecke. Alle in einem FC16-Aufruf
+// schreiben, dann sieht die Bruecke immer einen zusammengehoerigen Stand.
+const (
+	regSpsLebenszeichen        = 0 // zaehlt in der SPS jede Sekunde hoch
+	regNennleistungHi          = 1 // max. Leistungsaufnahme der Anlage in W
+	regNennleistungLo          = 2
+	regNennleistungErzeugungHi = 3 // max. Einspeiseleistung in W (LPP), 0 = Vorgabe aus Env
+	regNennleistungErzeugungLo = 4
+	regMpcMaske                = 5 // Gueltigkeit der MPC-Werte, Bits mpcBit*
+	regMgcpMaske               = 6 // Gueltigkeit der MGCP-Werte, Bits mgcpBit*
+	regAnlagenstatus           = 7 // 0 normal, 1 Stoerung, 2 Standby
+
+	regMesswerteAnfang = regMpcMaske
+
+	// MPC: Werte der Anlage. Leistung und Strom vorzeichenbehaftet,
+	// Bezug positiv, Erzeugung negativ.
+	regMpcP          = 8  // DINT W
+	regMpcPL1        = 10 // 3x DINT W (10, 12, 14)
+	regMpcEBezug     = 16 // ULINT Wh (4 Register)
+	regMpcEErzeugung = 20 // ULINT Wh
+	regMpcIL1        = 24 // 3x DINT mA (24, 26, 28)
+	regMpcUL1        = 30 // 3x UINT 0,1 V (30, 31, 32)
+	regMpcF          = 33 // UINT 0,01 Hz
+	// 34 bis 39 frei
+
+	// MGCP: Werte am Netzanschlusspunkt. Bezug aus dem Netz positiv,
+	// Einspeisung negativ.
+	regMgcpP            = 40 // DINT W
+	regMgcpEEinspeisung = 42 // ULINT Wh
+	regMgcpEBezug       = 46 // ULINT Wh
+	regMgcpIL1          = 50 // 3x DINT mA (50, 52, 54)
+	regMgcpUL1          = 56 // 3x UINT 0,1 V (56, 57, 58)
+	regMgcpF            = 59 // UINT 0,01 Hz
+	regMgcpPvFaktor     = 60 // UINT 0,1 % (PV-Einspeisebegrenzungsfaktor)
+
+	anzahlHoldingRegister = 61
 )
 
 func zuUint32(hi, lo uint16) uint32 {
@@ -68,6 +128,20 @@ func starteModbusServer(url string, b *Bruecke) (*modbus.ModbusServer, error) {
 	return server, server.Start()
 }
 
+// useCasesLokal liefert die Bitmaske der angebotenen Use Cases.
+func (b *Bruecke) useCasesLokal() uint16 {
+	var bits uint16
+	for _, uc := range []struct {
+		an  bool
+		bit uint16
+	}{{b.bezug != nil, ucBitLpc}, {b.einspeisung != nil, ucBitLpp}, {b.mpc != nil, ucBitMpc}, {b.mgcp != nil, ucBitMgcp}} {
+		if uc.an {
+			bits |= uc.bit
+		}
+	}
+	return bits
+}
+
 // inputRegister erstellt ein konsistentes Abbild aller Input-Register.
 func (b *Bruecke) inputRegister(jetzt time.Time) [anzahlInputRegister]uint16 {
 	b.mu.Lock()
@@ -76,26 +150,35 @@ func (b *Bruecke) inputRegister(jetzt time.Time) [anzahlInputRegister]uint16 {
 	var r [anzahlInputRegister]uint16
 	r[regLebenszeichen] = b.lebenszeichen
 	r[regVersion] = SchnittstellenVersion
-	r[regZustand] = uint16(b.zustand)
-	r[regVerbindung] = uint16(b.verbindung)
+	r[regErweiterung] = ErweiterungsVersion
+	r[regUseCasesLokal] = b.useCasesLokal()
+	r[regUseCasesSteuerbox] = b.steuerboxUseCases
+	r[regMindestdauerHi], r[regMindestdauerLo] = teileUint32(alsUint32(b.failsafeMindestdauer.Seconds()))
 
-	aktiv, grenzeW := b.wirksameGrenze()
-	r[regWirksameGrenzeHi], r[regWirksameGrenzeLo] = teileUint32(alsUint32(grenzeW))
-	if aktiv {
-		r[regBegrenzungAktiv] = 1
-	}
-	r[regGrenzeNetzHi], r[regGrenzeNetzLo] = teileUint32(alsUint32(b.grenze.Value))
-
-	var restdauer float64
-	if b.zustand == ZustandBegrenzt && !b.grenzeAblauf.IsZero() {
-		restdauer = b.grenzeAblauf.Sub(jetzt).Seconds()
-	}
-	r[regRestdauerHi], r[regRestdauerLo] = teileUint32(alsUint32(restdauer))
-	r[regFailsafeGrenzeHi], r[regFailsafeGrenzeLo] = teileUint32(alsUint32(b.failsafeGrenzeW))
-
-	r[regHeartbeatAlter] = math.MaxUint16
+	heartbeatAlter := uint16(math.MaxUint16)
 	if !b.letzterHeartbeat.IsZero() {
-		r[regHeartbeatAlter] = uint16(min(jetzt.Sub(b.letzterHeartbeat).Seconds(), math.MaxUint16))
+		heartbeatAlter = uint16(min(jetzt.Sub(b.letzterHeartbeat).Seconds(), math.MaxUint16))
+	}
+
+	for _, blk := range []struct {
+		basis int
+		r     *Begrenzung
+	}{{blockBezug, b.bezug}, {blockEinspeisung, b.einspeisung}} {
+		r[blk.basis+blkVerbindung] = uint16(b.verbindung)
+		r[blk.basis+blkHeartbeatAlter] = heartbeatAlter
+		if blk.r == nil {
+			continue
+		}
+		g := blk.r
+		r[blk.basis+blkZustand] = uint16(g.zustand)
+		aktiv, grenzeW := g.wirksameGrenze()
+		r[blk.basis+blkWirksameGrenzeHi], r[blk.basis+blkWirksameGrenzeLo] = teileUint32(alsUint32(grenzeW))
+		if aktiv {
+			r[blk.basis+blkBegrenzungAktiv] = 1
+		}
+		r[blk.basis+blkGrenzeNetzHi], r[blk.basis+blkGrenzeNetzLo] = teileUint32(alsUint32(g.grenze.Value))
+		r[blk.basis+blkRestdauerHi], r[blk.basis+blkRestdauerLo] = teileUint32(alsUint32(g.restdauer(jetzt)))
+		r[blk.basis+blkFailsafeGrenzeHi], r[blk.basis+blkFailsafeGrenzeLo] = teileUint32(alsUint32(g.failsafeGrenzeW))
 	}
 	return r
 }

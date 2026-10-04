@@ -1,15 +1,18 @@
 // Test-Steuerbox
 //
-// Simuliert die FNN-Steuerbox (Energy Guard) fuer Tests der EEBUS-LPC-Bruecke
-// ohne echtes Smart Meter Gateway. Ueber das Web-UI lassen sich Grenzen und
-// Failsafe-Werte senden, der Heartbeat anhalten und Verbindungsabbrueche
-// simulieren. Nur fuer Tests, nicht fuer den Produktivbetrieb.
+// Simuliert die FNN-Steuerbox fuer Tests der EEBUS-Bruecke ohne echtes Smart
+// Meter Gateway: Energy Guard fuer LPC und LPP, Monitoring Appliance fuer MPC
+// und MGCP. Ueber das Web-UI lassen sich Grenzen und Failsafe-Werte senden,
+// der Heartbeat anhalten und Verbindungsabbrueche simulieren, die Messwerte
+// der Bruecke werden angezeigt. Nur fuer Tests, nicht fuer den Produktivbetrieb.
 package main
 
 import (
 	"log"
 	"os"
 	"os/signal"
+	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,6 +21,9 @@ import (
 	"github.com/enbility/eebus-go/api"
 	"github.com/enbility/eebus-go/service"
 	eglpc "github.com/enbility/eebus-go/usecases/eg/lpc"
+	eglpp "github.com/enbility/eebus-go/usecases/eg/lpp"
+	mamgcp "github.com/enbility/eebus-go/usecases/ma/mgcp"
+	mampc "github.com/enbility/eebus-go/usecases/ma/mpc"
 	shipapi "github.com/enbility/ship-go/api"
 	"github.com/enbility/spine-go/model"
 )
@@ -29,6 +35,7 @@ type Konfiguration struct {
 	WebAdresse       string
 	WebBenutzer      string
 	WebPasswort      string
+	UseCases         []string // lpc ist immer dabei
 }
 
 func leseKonfiguration() Konfiguration {
@@ -41,6 +48,8 @@ func leseKonfiguration() Konfiguration {
 		WebAdresse:       gemeinsam.EnvTextLeerErlaubt("WEB_ADRESSE", ":8091"),
 		WebBenutzer:      gemeinsam.EnvText("WEB_BENUTZER", "admin"),
 		WebPasswort:      gemeinsam.EnvText("WEB_PASSWORT", ""),
+		// Zum Nachstellen einer Steuerbox, die nur einen Teil der Use Cases kann
+		UseCases: strings.Split(strings.ToLower(gemeinsam.EnvText("STEUERBOX_USECASES", "lpc,lpp,mpc,mgcp")), ","),
 	}
 }
 
@@ -93,6 +102,25 @@ func main() {
 	if err := dienst.AddUseCase(steuerbox.lpc); err != nil {
 		log.Fatalf("Use Case LPC: %v", err)
 	}
+	if slices.Contains(konf.UseCases, "lpp") {
+		steuerbox.lpp = eglpp.NewLPP(steuerbox.entitaet, steuerbox.LppEreignis)
+		if err := dienst.AddUseCase(steuerbox.lpp); err != nil {
+			log.Fatalf("Use Case LPP: %v", err)
+		}
+	}
+	if slices.Contains(konf.UseCases, "mpc") {
+		steuerbox.mpc = mampc.NewMPC(steuerbox.entitaet, steuerbox.MpcEreignis)
+		if err := dienst.AddUseCase(steuerbox.mpc); err != nil {
+			log.Fatalf("Use Case MPC: %v", err)
+		}
+	}
+	if slices.Contains(konf.UseCases, "mgcp") {
+		steuerbox.mgcp = mamgcp.NewMGCP(steuerbox.entitaet, steuerbox.MgcpEreignis)
+		if err := dienst.AddUseCase(steuerbox.mgcp); err != nil {
+			log.Fatalf("Use Case MGCP: %v", err)
+		}
+	}
+	log.Printf("Use Cases: %s", strings.Join(steuerbox.UseCaseNamen(), ", "))
 	if fingerprint, err := dienst.GetLocalCertificateFingerprint(); err == nil {
 		steuerbox.fingerprint = fingerprint
 	}
@@ -117,5 +145,15 @@ func main() {
 
 	signale := make(chan os.Signal, 1)
 	signal.Notify(signale, syscall.SIGINT, syscall.SIGTERM)
-	log.Printf("Beende nach Signal %v", <-signale)
+	takt := time.NewTicker(2 * time.Second)
+	defer takt.Stop()
+	for {
+		select {
+		case <-takt.C:
+			steuerbox.PflegeMesswerte()
+		case sig := <-signale:
+			log.Printf("Beende nach Signal %v", sig)
+			return
+		}
+	}
 }

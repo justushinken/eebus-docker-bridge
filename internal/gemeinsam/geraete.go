@@ -1,21 +1,46 @@
 package gemeinsam
 
-import shipapi "github.com/enbility/ship-go/api"
+import (
+	"slices"
+
+	shipapi "github.com/enbility/ship-go/api"
+)
 
 // GefundenesGeraet ist ein per mDNS sichtbares EEBUS-Geraet fuer das Web-UI.
 type GefundenesGeraet struct {
-	Marke  string `json:"marke"`
-	Modell string `json:"modell"`
-	Typ    string `json:"typ"`
-	Ski    string `json:"ski"`
-	ShipId string `json:"shipId"`
+	Marke     string `json:"marke"`
+	Modell    string `json:"modell"`
+	Typ       string `json:"typ"`
+	Ski       string `json:"ski"`
+	ShipId    string `json:"shipId"`
+	Steuerbox bool   `json:"steuerbox"` // sieht nach Steuerbox aus (Kategorie bzw. Geraetetyp)
 }
 
+// IstSteuerbox: Steuerboxen melden sich als "Grid Connection Hub" bzw. mit
+// dem Geraetetyp ElectricitySupplySystem.
+func IstSteuerbox(d shipapi.RemoteMdnsService) bool {
+	return slices.Contains(d.Categories, shipapi.DeviceCategoryTypeGridConnectionHub) ||
+		d.Type == "ElectricitySupplySystem"
+}
+
+// GefundeneGeraete liefert die Liste fuer das UI, Steuerboxen zuerst.
 func GefundeneGeraete(dienste []shipapi.RemoteMdnsService) []GefundenesGeraet {
 	geraete := make([]GefundenesGeraet, 0, len(dienste))
 	for _, d := range dienste {
-		geraete = append(geraete, GefundenesGeraet{Marke: d.Brand, Modell: d.Model, Typ: d.Type, Ski: d.Ski, ShipId: d.ShipID})
+		geraete = append(geraete, GefundenesGeraet{
+			Marke: d.Brand, Modell: d.Model, Typ: d.Type, Ski: d.Ski, ShipId: d.ShipID,
+			Steuerbox: IstSteuerbox(d),
+		})
 	}
+	slices.SortStableFunc(geraete, func(a, b GefundenesGeraet) int {
+		switch {
+		case a.Steuerbox && !b.Steuerbox:
+			return -1
+		case !a.Steuerbox && b.Steuerbox:
+			return 1
+		}
+		return 0
+	})
 	return geraete
 }
 

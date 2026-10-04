@@ -9,7 +9,8 @@ import (
 )
 
 // Status-UI: eine eingebettete Seite, die /api/status jede Sekunde abfragt.
-// Nur Anzeige, keine Aktionen.
+// Nur lesend, mit einer Ausnahme: Suchmodus und Kopplung mit der Steuerbox
+// (abschaltbar mit WEB_KOPPLUNG=aus).
 
 //go:embed web/index.html
 var indexHtml []byte
@@ -27,17 +28,49 @@ func webHandler(b *Bruecke, protokoll *gemeinsam.Ereignisprotokoll) http.Handler
 		status.Ereignisse = protokoll.Liste()
 		gemeinsam.SchreibeJson(w, http.StatusOK, status)
 	})
+
+	mux.HandleFunc("POST /api/suchmodus", gemeinsam.Aktion(func(daten struct {
+		An bool `json:"an"`
+	}) (string, error) {
+		if err := b.SetzeSuchmodus(daten.An); err != nil {
+			return "", err
+		}
+		if daten.An {
+			return "Suchmodus laeuft 10 Minuten", nil
+		}
+		return "Suchmodus beendet", nil
+	}))
+
+	mux.HandleFunc("POST /api/kopplung", gemeinsam.Aktion(func(daten struct {
+		Ski string `json:"ski"`
+	}) (string, error) {
+		return "Gekoppelt, die Bruecke verbindet sich, sobald auch die Steuerbox ihr vertraut", b.KoppelnPerSki(daten.Ski)
+	}))
+
+	mux.HandleFunc("POST /api/kopplungsanfrage", gemeinsam.Aktion(func(daten struct {
+		Ski      string `json:"ski"`
+		Annehmen bool   `json:"annehmen"`
+	}) (string, error) {
+		if err := b.BeantworteAnfrage(daten.Ski, daten.Annehmen); err != nil {
+			return "", err
+		}
+		if daten.Annehmen {
+			return "Angenommen, Verbindung wird aufgebaut", nil
+		}
+		return "Abgelehnt", nil
+	}))
+
+	mux.HandleFunc("DELETE /api/kopplung", gemeinsam.Aktion(func(struct{}) (string, error) {
+		return "Kopplung aufgehoben", b.Entkoppeln()
+	}))
 	return mux
 }
 
-// StatusDaten ist ein konsistenter Schnappschuss fuer das UI. Zeitangaben
-// als Alter in Sekunden, damit eine abweichende Uhr des Browsers nicht stoert.
-type StatusDaten struct {
+// BegrenzungStatus ist eine Richtung (Bezug oder Einspeisung) fuer das UI.
+type BegrenzungStatus struct {
 	Zustand         LpcZustand `json:"zustand"`
 	ZustandText     string     `json:"zustandText"`
 	ZustandSeitS    float64    `json:"zustandSeitS"`
-	Verbindung      Verbindung `json:"verbindung"`
-	VerbindungText  string     `json:"verbindungText"`
 	BegrenzungAktiv bool       `json:"begrenzungAktiv"`
 	WirksameGrenzeW float64    `json:"wirksameGrenzeW"`
 	RestdauerS      float64    `json:"restdauerS"` // 0 = unbefristet
@@ -47,30 +80,61 @@ type StatusDaten struct {
 	GrenzeNetzDauerS float64  `json:"grenzeNetzDauerS"`
 	GrenzeNetzAlterS *float64 `json:"grenzeNetzAlterS"` // nil = nie empfangen
 
-	FailsafeGrenzeW       float64  `json:"failsafeGrenzeW"`
-	FailsafeMindestdauerS float64  `json:"failsafeMindestdauerS"`
-	HeartbeatAlterS       *float64 `json:"heartbeatAlterS"` // nil = nie
+	FailsafeGrenzeW float64 `json:"failsafeGrenzeW"`
+	NennleistungW   float64 `json:"nennleistungW"`
+	Ablehnung       string  `json:"ablehnung"` // letzter Grund, aus dem eine Grenze abgelehnt wurde
+}
+
+type UseCaseStatus struct {
+	Name      string `json:"name"`
+	Lokal     bool   `json:"lokal"`
+	Steuerbox bool   `json:"steuerbox"`
+}
+
+// StatusDaten ist ein konsistenter Schnappschuss fuer das UI. Zeitangaben
+// als Alter in Sekunden, damit eine abweichende Uhr des Browsers nicht stoert.
+type StatusDaten struct {
+	// Bezug (LPC) wie bisher flach, fuer bestehende Auswertungen
+	BegrenzungStatus
+	Einspeisung *BegrenzungStatus `json:"einspeisung"` // nil = LPP aus
+	BezugAktiv  bool              `json:"bezugAktiv"`  // LPC an
+
+	Verbindung            Verbindung `json:"verbindung"`
+	VerbindungText        string     `json:"verbindungText"`
+	FailsafeMindestdauerS float64    `json:"failsafeMindestdauerS"`
+	HeartbeatAlterS       *float64   `json:"heartbeatAlterS"` // nil = nie
+
+	UseCases    []UseCaseStatus `json:"useCases"`
+	Mpc         []Messwert      `json:"mpc"`  // nil = MPC aus
+	Mgcp        []Messwert      `json:"mgcp"` // nil = MGCP aus
+	Gegenstelle *Gegenstelle    `json:"gegenstelle"`
 
 	EigenerSki string                       `json:"eigenerSki"`
 	RemoteSki  string                       `json:"remoteSki"`
 	Gefunden   []gemeinsam.GefundenesGeraet `json:"gefunden"`
 
-	// Kopplung: beide Verfahren koennen gleichzeitig aktiv sein
-	Kennung          Kennung `json:"kennung"`
-	SkiVerfahren     bool    `json:"skiVerfahren"`     // EEBUS_REMOTE_SKI gesetzt
-	PairingService   bool    `json:"pairingService"`   // Pairing Service aktiv
-	PairingSteuerbox string  `json:"pairingSteuerbox"` // per Pairing Service gekoppelt, leer = keine
-	Partner          string  `json:"partner"`          // verbundene Steuerbox, leer = keine
+	// Kopplung
+	Kennung           Kennung        `json:"kennung"`
+	SkiVerfahren      bool           `json:"skiVerfahren"`   // EEBUS_REMOTE_SKI gesetzt
+	PairingService    bool           `json:"pairingService"` // Pairing Service aktiv
+	PairingSteuerbox  string         `json:"pairingSteuerbox"`
+	Kopplung          *KopplungDaten `json:"kopplung"` // nil = keine Steuerbox gekoppelt
+	KopplungAenderbar bool           `json:"kopplungAenderbar"`
+	SuchmodusRestS    float64        `json:"suchmodusRestS"` // 0 = aus
+	Anfragen          []AnfrageDaten `json:"anfragen"`
+	Partner           string         `json:"partner"` // verbundene Steuerbox, leer = keine
 
 	SpsOk                  bool     `json:"spsOk"`
 	SpsLebenszeichenAlterS *float64 `json:"spsLebenszeichenAlterS"` // nil = nie
-	NennleistungW          float64  `json:"nennleistungW"`
+	Anlagenstatus          string   `json:"anlagenstatus"`
 
 	Hersteller            string  `json:"hersteller"`
 	Marke                 string  `json:"marke"`
 	Modell                string  `json:"modell"`
 	Seriennummer          string  `json:"seriennummer"`
+	Version               string  `json:"version"`
 	SchnittstellenVersion int     `json:"schnittstellenVersion"`
+	ErweiterungsVersion   int     `json:"erweiterungsVersion"`
 	LaufzeitS             float64 `json:"laufzeitS"`
 
 	Ereignisse []gemeinsam.Ereignis `json:"ereignisse"`
@@ -84,63 +148,85 @@ func alterS(jetzt, zeit time.Time) *float64 {
 	return &s
 }
 
+// begrenzungStatus: Aufruf unter mu.
+func begrenzungStatus(r *Begrenzung, jetzt time.Time) BegrenzungStatus {
+	aktiv, grenzeW := r.wirksameGrenze()
+	return BegrenzungStatus{
+		Zustand:         r.zustand,
+		ZustandText:     r.zustand.String(),
+		ZustandSeitS:    jetzt.Sub(r.zustandSeit).Seconds(),
+		BegrenzungAktiv: aktiv,
+		WirksameGrenzeW: grenzeW,
+		RestdauerS:      r.restdauer(jetzt),
+
+		GrenzeNetzAktiv:  r.grenze.IsActive,
+		GrenzeNetzW:      r.grenze.Value,
+		GrenzeNetzDauerS: r.grenze.Duration.Seconds(),
+		GrenzeNetzAlterS: alterS(jetzt, r.letzteGrenzeEmpfangen),
+
+		FailsafeGrenzeW: r.failsafeGrenzeW,
+		NennleistungW:   r.nennleistungW,
+		Ablehnung:       r.ablehnung,
+	}
+}
+
 // Status erstellt das Abbild fuer das UI. Grenze und Restdauer wie in
 // inputRegister(), damit UI und Modbus dasselbe zeigen.
 func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	aktiv, grenzeW := b.wirksameGrenze()
-	var pairingSteuerbox, partner string
-	if b.pairingKopplung != nil {
-		pairingSteuerbox = gemeinsam.Bezeichnung(b.pairingKopplung.Identitaet)
-	}
-	if !b.partner.IsZero() {
-		partner = gemeinsam.Bezeichnung(b.partner)
-	}
-	var restdauer float64
-	if b.zustand == ZustandBegrenzt && !b.grenzeAblauf.IsZero() {
-		restdauer = max(b.grenzeAblauf.Sub(jetzt).Seconds(), 0)
-	}
-
-	return StatusDaten{
-		Zustand:         b.zustand,
-		ZustandText:     b.zustand.String(),
-		ZustandSeitS:    jetzt.Sub(b.zustandSeit).Seconds(),
-		Verbindung:      b.verbindung,
-		VerbindungText:  b.verbindung.String(),
-		BegrenzungAktiv: aktiv,
-		WirksameGrenzeW: grenzeW,
-		RestdauerS:      restdauer,
-
-		GrenzeNetzAktiv:  b.grenze.IsActive,
-		GrenzeNetzW:      b.grenze.Value,
-		GrenzeNetzDauerS: b.grenze.Duration.Seconds(),
-		GrenzeNetzAlterS: alterS(jetzt, b.letzteGrenzeEmpfangen),
-
-		FailsafeGrenzeW:       b.failsafeGrenzeW,
+	s := StatusDaten{
+		Verbindung:            b.verbindung,
+		VerbindungText:        b.verbindung.String(),
 		FailsafeMindestdauerS: b.failsafeMindestdauer.Seconds(),
 		HeartbeatAlterS:       alterS(jetzt, b.letzterHeartbeat),
+		Gegenstelle:           b.gegenstelle,
 
 		EigenerSki: b.eigenerSki,
 		RemoteSki:  b.konf.RemoteSki,
 		Gefunden:   gemeinsam.GefundeneGeraete(b.gefunden),
 
-		Kennung:          b.kennung,
-		SkiVerfahren:     b.konf.RemoteSki != "",
-		PairingService:   b.konf.PairingService,
-		PairingSteuerbox: pairingSteuerbox,
-		Partner:          partner,
+		Kennung:           b.kennung,
+		SkiVerfahren:      b.konf.RemoteSki != "",
+		PairingService:    b.konf.PairingService,
+		KopplungAenderbar: b.pruefeKopplungAenderbar() == nil,
 
 		SpsOk:                  b.spsOk,
 		SpsLebenszeichenAlterS: alterS(jetzt, b.spsLebenszeichenSeit),
-		NennleistungW:          b.gemeldeteNennleistungW,
+		Anlagenstatus:          zustandTexte[betriebszustand(b.spsOk, b.holding[regAnlagenstatus])],
 
 		Hersteller:            b.konf.Hersteller,
 		Marke:                 b.konf.Marke,
 		Modell:                b.konf.Modell,
 		Seriennummer:          b.konf.Seriennummer,
+		Version:               Version,
 		SchnittstellenVersion: SchnittstellenVersion,
+		ErweiterungsVersion:   ErweiterungsVersion,
 		LaufzeitS:             jetzt.Sub(b.gestartet).Seconds(),
 	}
+	if b.bezug != nil {
+		s.BegrenzungStatus = begrenzungStatus(b.bezug, jetzt)
+		s.BezugAktiv = true
+	}
+	if b.einspeisung != nil {
+		e := begrenzungStatus(b.einspeisung, jetzt)
+		s.Einspeisung = &e
+	}
+	s.Kopplung, s.Anfragen, s.SuchmodusRestS = b.kopplungStatus(jetzt)
+	if b.kopplung != nil && b.kopplung.Verfahren == gemeinsam.VerfahrenPairing {
+		s.PairingSteuerbox = gemeinsam.Bezeichnung(b.kopplung.Identitaet)
+	}
+	if !b.partner.IsZero() {
+		s.Partner = gemeinsam.Bezeichnung(b.partner)
+	}
+
+	lokal := b.useCasesLokal()
+	for _, uc := range steuerboxUseCases {
+		s.UseCases = append(s.UseCases, UseCaseStatus{
+			Name: uc.kurz, Lokal: lokal&uc.bit != 0, Steuerbox: b.steuerboxUseCases&uc.bit != 0,
+		})
+	}
+	s.Mpc, s.Mgcp = b.messwerteUi()
+	return s
 }

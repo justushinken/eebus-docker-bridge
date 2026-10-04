@@ -32,6 +32,7 @@
 	}
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
 	margin: 0;
 	background: var(--hintergrund);
@@ -140,7 +141,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .abschnitt + .abschnitt { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--rand); }
 .hinweis { font-size: 13px; color: var(--text-leise); margin: 8px 0 0; }
 .meldung { font-size: 13px; margin: 10px 0 0; min-height: 1.45em; }
-.meldung.fehler { color: var(--rot); }
+.meldung.fehler, .fehlertext { color: var(--rot); }
+
+/* Messwerte: Wert rechtsbuendig */
+table.werte td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+/* Breite Tabellen scrollen statt die Seite zu verbreitern */
+.ueberlauf { overflow-x: auto; }
+.ueberlauf table { min-width: 560px; }
 
 /* Geraetetabelle schmal als Liste: Geraet und Aktion oben, SKI darunter, ohne Typ */
 @media (max-width: 600px) {

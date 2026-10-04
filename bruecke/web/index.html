@@ -10,7 +10,7 @@
 <main>
 	<header>
 		<div class="kopf">
-			<h1>EEBUS-LPC-Brücke</h1>
+			<h1>EEBUS-Brücke</h1>
 			<nav><a class="aktiv" href="./">Status</a><a href="anleitung">Anleitung</a></nav>
 		</div>
 		<span class="leise" id="geraet"></span>
@@ -25,17 +25,34 @@
 	</section>
 
 	<div class="raster">
-		<section class="karte">
-			<h2>Leistungsgrenze</h2>
+		<section class="karte" id="karteBezug">
+			<h2>Bezug · LPC</h2>
 			<dl>
-				<dt>Begrenzung</dt><dd id="begrenzung"></dd>
-				<dt>Wirksame Grenze</dt><dd id="wirksameGrenze"></dd>
-				<dt>Restlaufzeit</dt><dd id="restdauer"></dd>
-				<dt>Grenze Netzbetreiber</dt><dd id="grenzeNetz"></dd>
-				<dt>Empfangen</dt><dd id="grenzeNetzAlter"></dd>
-				<dt>Failsafe-Grenze</dt><dd id="failsafeGrenze"></dd>
-				<dt>Failsafe-Mindestdauer</dt><dd id="failsafeDauer"></dd>
+				<dt>Zustand</dt><dd id="bZustand"></dd>
+				<dt>Begrenzung</dt><dd id="bBegrenzung"></dd>
+				<dt>Wirksame Grenze</dt><dd id="bWirksam"></dd>
+				<dt>Restlaufzeit</dt><dd id="bRest"></dd>
+				<dt>Grenze Netzbetreiber</dt><dd id="bNetz"></dd>
+				<dt>Empfangen</dt><dd id="bNetzAlter"></dd>
+				<dt>Failsafe-Grenze</dt><dd id="bFailsafe"></dd>
+				<dt>Nennleistung</dt><dd id="bNenn"></dd>
 			</dl>
+			<p class="hinweis fehlertext" id="bAblehnung"></p>
+		</section>
+
+		<section class="karte" id="karteEinspeisung" hidden>
+			<h2>Einspeisung · LPP</h2>
+			<dl>
+				<dt>Zustand</dt><dd id="eZustand"></dd>
+				<dt>Begrenzung</dt><dd id="eBegrenzung"></dd>
+				<dt>Wirksame Grenze</dt><dd id="eWirksam"></dd>
+				<dt>Restlaufzeit</dt><dd id="eRest"></dd>
+				<dt>Grenze Netzbetreiber</dt><dd id="eNetz"></dd>
+				<dt>Empfangen</dt><dd id="eNetzAlter"></dd>
+				<dt>Failsafe-Grenze</dt><dd id="eFailsafe"></dd>
+				<dt>Nennleistung</dt><dd id="eNenn"></dd>
+			</dl>
+			<p class="hinweis fehlertext" id="eAblehnung"></p>
 		</section>
 
 		<section class="karte">
@@ -44,7 +61,9 @@
 				<dt>Steuerbox</dt><dd id="verbindung"></dd>
 				<dt>Verbunden mit</dt><dd class="mono" id="partner"></dd>
 				<dt>Heartbeat</dt><dd id="heartbeat"></dd>
+				<dt>Failsafe-Mindestdauer</dt><dd id="failsafeDauer"></dd>
 			</dl>
+			<p class="hinweis">Die Mindestdauer gilt für Bezug und Einspeisung gemeinsam.</p>
 		</section>
 
 		<section class="karte">
@@ -52,28 +71,80 @@
 			<dl>
 				<dt>Lebenszeichen</dt><dd id="sps"></dd>
 				<dt>Letzte Änderung</dt><dd id="spsAlter"></dd>
-				<dt>Gemeldete Nennleistung</dt><dd id="nennleistung"></dd>
+				<dt>Anlagenstatus</dt><dd id="anlagenstatus"></dd>
 			</dl>
+			<p class="hinweis">Ohne SPS lehnt die Brücke neue Grenzen ab und meldet der Steuerbox eine Störung.</p>
+		</section>
+
+		<section class="karte">
+			<h2>Use Cases</h2>
+			<table>
+				<thead><tr><th>Use Case</th><th>Brücke</th><th>Steuerbox</th></tr></thead>
+				<tbody id="useCases"></tbody>
+			</table>
+			<p class="hinweis">LPC Bezug, LPP Einspeisung, MPC Messwerte der Anlage, MGCP Messwerte am Netzanschlusspunkt.</p>
+		</section>
+
+		<section class="karte" id="karteMpc" hidden>
+			<h2>Messwerte Anlage · MPC</h2>
+			<table class="werte"><tbody id="mpc"></tbody></table>
+		</section>
+
+		<section class="karte" id="karteMgcp" hidden>
+			<h2>Netzanschlusspunkt · MGCP</h2>
+			<table class="werte"><tbody id="mgcp"></tbody></table>
+		</section>
+
+		<section class="karte breit" id="karteGegenstelle" hidden>
+			<h2>Steuerbox: gemeldete Daten</h2>
+			<dl>
+				<dt>Gerät</dt><dd id="gGeraet"></dd>
+				<dt>Gerätetyp</dt><dd id="gTyp"></dd>
+				<dt>Software / Hardware</dt><dd id="gRevision"></dd>
+				<dt>Entitäten</dt><dd class="mono" id="gEntitaeten"></dd>
+			</dl>
+			<div class="ueberlauf">
+				<table style="margin-top:12px">
+					<thead><tr><th>Use Case</th><th>Akteur</th><th>Version</th><th>Szenarien</th><th>Entität</th></tr></thead>
+					<tbody id="gUseCases"></tbody>
+				</table>
+			</div>
 		</section>
 
 		<section class="karte breit">
 			<h2>Kopplung mit der Steuerbox</h2>
-			<div class="zweispaltig">
+			<dl>
+				<dt>Gekoppelt</dt><dd><span class="mono" id="kopplung"></span> <span id="kopplungQuelle"></span>
+					<button class="gefahr kopplung-aktion" id="entkoppeln" type="button" hidden>Kopplung lösen</button></dd>
+			</dl>
+
+			<div class="abschnitt kopplung-aktion" id="suchBereich" style="margin-top:16px">
+				<h3>Suchmodus <span id="suchStatus"></span></h3>
+				<div class="knoepfe">
+					<button class="primaer" id="suchmodus" type="button">Steuerbox suchen</button>
+				</div>
+				<p class="hinweis">Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht sofort abgewiesen, sondern hier zur Entscheidung angezeigt. Vorher muss der Messstellenbetreiber die Brücke in der Steuerbox eingetragen haben (SKI und SHIP-ID unten).</p>
+				<table class="geraete" style="margin-top:12px" id="anfragenTabelle" hidden>
+					<thead><tr><th>Kopplungsanfrage</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
+					<tbody id="anfragen"></tbody>
+				</table>
+				<p class="meldung" id="kopplungMeldung"></p>
+			</div>
+
+			<div class="zweispaltig abschnitt" style="margin-top:16px">
 				<div>
-					<h3>SKI-Verfahren <span id="skiStatus"></span></h3>
+					<h3>SKI-Verfahren</h3>
 					<dl>
 						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
-						<dt>SKI der Steuerbox</dt><dd class="mono" id="remoteSki"></dd>
+						<dt>SHIP-ID</dt><dd><span class="mono" id="shipId"></span><button data-kopieren="shipId" type="button">Kopieren</button></dd>
 					</dl>
-					<p class="hinweis">Beide Seiten tragen den SKI der Gegenseite ein. Bei der Brücke über <code>EEBUS_REMOTE_SKI</code>.</p>
+					<p class="hinweis">Beide Seiten tragen den SKI der Gegenseite ein. Bei der Brücke unten „Vertrauen“ oder im Suchmodus die Anfrage annehmen.</p>
 				</div>
 				<div>
 					<h3>SHIP Pairing Service <span id="pairingStatus"></span></h3>
 					<dl>
-						<dt>SHIP-ID</dt><dd><span class="mono" id="shipId"></span><button data-kopieren="shipId" type="button">Kopieren</button></dd>
 						<dt>Fingerprint</dt><dd><span class="mono" id="fingerprint"></span><button data-kopieren="fingerprint" type="button">Kopieren</button></dd>
 						<dt>Secret</dt><dd><span class="mono" id="secret"></span><button id="secretZeigen" type="button">Anzeigen</button><button data-kopieren="secret" type="button">Kopieren</button></dd>
-						<dt>Gekoppelt</dt><dd class="mono" id="pairingSteuerbox"></dd>
 					</dl>
 					<p class="hinweis">Der Messstellenbetreiber bekommt SKI, SHIP-ID, Fingerprint und Secret, am einfachsten als QR-Code. Die Steuerbox meldet sich dann selbst an.</p>
 				</div>
@@ -113,6 +184,7 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
+let zuletzt = null;
 
 function watt(w) {
 	return Math.round(w).toLocaleString("de-DE") + " W";
@@ -131,14 +203,60 @@ function alter(s) {
 	return s == null ? "nie" : "vor " + dauer(s);
 }
 
+function zahl(wert, stellen) {
+	return wert.toLocaleString("de-DE", { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+}
+
+// Messwert passend zur Einheit, Energie in kWh
+function messwert(m) {
+	switch (m.einheit) {
+		case "W": return watt(m.wert);
+		case "Wh": return zahl(m.wert / 1000, 3) + " kWh";
+		case "A": return zahl(m.wert, 2) + " A";
+		case "V": return zahl(m.wert, 1) + " V";
+		case "Hz": return zahl(m.wert, 2) + " Hz";
+		case "%": return zahl(m.wert, 1) + " %";
+	}
+	return `${m.wert} ${m.einheit}`;
+}
+
 // Text und Farbmarke setzen. Werte immer per textContent, nie per innerHTML:
-// Geraetenamen aus dem mDNS kommen aus dem LAN.
+// Gerätenamen aus dem mDNS und Daten der Steuerbox kommen aus dem LAN.
 function marke(el, text, farbe) {
-	el.replaceChildren();
 	const span = document.createElement("span");
 	span.className = "marke " + (farbe || "");
 	span.textContent = text;
-	el.append(span);
+	el.replaceChildren(span);
+}
+
+function zeile(zellen) {
+	const tr = document.createElement("tr");
+	for (const z of zellen) {
+		const td = document.createElement("td");
+		if (z instanceof Node) td.append(z);
+		else td.textContent = z;
+		tr.append(td);
+	}
+	return tr;
+}
+
+function leereZeile(spalten, text) {
+	const tr = document.createElement("tr");
+	const td = document.createElement("td");
+	td.colSpan = spalten;
+	td.className = "leise";
+	td.textContent = text;
+	tr.append(td);
+	return tr;
+}
+
+function knopf(text, klasse, aktion) {
+	const b = document.createElement("button");
+	b.type = "button";
+	b.textContent = text;
+	if (klasse) b.className = klasse;
+	b.addEventListener("click", aktion);
+	return b;
 }
 
 function zeigeAmpel(farbe, titel, text) {
@@ -147,75 +265,100 @@ function zeigeAmpel(farbe, titel, text) {
 	$("ampelText").textContent = text;
 }
 
-function zeige(s) {
-	$("geraet").textContent = `${s.hersteller} ${s.modell} · SN ${s.seriennummer}`;
+const zustandFarbe = { 0: "rot", 1: "gruen", 2: "orange", 3: "rot", 4: "gruen" };
 
-	const seit = "seit " + dauer(s.zustandSeitS);
-	switch (s.zustand) {
-		case 0: zeigeAmpel("rot", `Failsafe-Grenze ${watt(s.wirksameGrenzeW)}`, `Init: wartet auf Steuerbox · ${seit}`); break;
-		case 1: zeigeAmpel("gruen", "Unbegrenzt", `Von der Steuerbox gesteuert, keine Grenze aktiv · ${seit}`); break;
-		case 2: zeigeAmpel("orange", `Begrenzt auf ${watt(s.wirksameGrenzeW)}`,
-			`Grenze des Netzbetreibers · ${seit}` + (s.restdauerS > 0 ? ` · noch ${dauer(s.restdauerS)}` : " · unbefristet")); break;
-		case 3: zeigeAmpel("rot", `Failsafe: ${watt(s.wirksameGrenzeW)}`, `Heartbeat der Steuerbox ausgefallen · ${seit}`); break;
-		case 4: zeigeAmpel("gruen", "Unbegrenzt", `Autonom: keine Kommunikation mit der Steuerbox · ${seit}`); break;
-		default: zeigeAmpel("", s.zustandText, seit);
+// Ampel: die kritischste der beiden Richtungen
+function ampel(s) {
+	const richtungen = [];
+	if (s.bezugAktiv) richtungen.push({ name: "Bezug", r: s });
+	if (s.einspeisung) richtungen.push({ name: "Einspeisung", r: s.einspeisung });
+	const rang = { 3: 4, 0: 3, 2: 2, 4: 1, 1: 0 };
+	richtungen.sort((a, b) => rang[b.r.zustand] - rang[a.r.zustand]);
+	const w = richtungen[0];
+	if (!w) return zeigeAmpel("", "Kein Use Case aktiv", "");
+	const r = w.r, seit = "seit " + dauer(r.zustandSeitS);
+	const weitere = richtungen.slice(1).map(x => `${x.name}: ${x.r.zustandText}`).join(" · ");
+	const zusatz = weitere ? " · " + weitere : "";
+	const name = richtungen.length > 1 ? w.name + " " : "";
+	switch (r.zustand) {
+		case 0: zeigeAmpel("rot", `${name}Failsafe-Grenze ${watt(r.wirksameGrenzeW)}`, `Init: wartet auf Steuerbox · ${seit}${zusatz}`); break;
+		case 1: zeigeAmpel("gruen", "Unbegrenzt", `Von der Steuerbox gesteuert, keine Grenze aktiv · ${seit}${zusatz}`); break;
+		case 2: zeigeAmpel("orange", `${name}begrenzt auf ${watt(r.wirksameGrenzeW)}`,
+			`Grenze des Netzbetreibers · ${seit}` + (r.restdauerS > 0 ? ` · noch ${dauer(r.restdauerS)}` : " · unbefristet") + zusatz); break;
+		case 3: zeigeAmpel("rot", `${name}Failsafe: ${watt(r.wirksameGrenzeW)}`, `Heartbeat der Steuerbox ausgefallen · ${seit}${zusatz}`); break;
+		case 4: zeigeAmpel("gruen", "Unbegrenzt", `Autonom: keine Kommunikation mit der Steuerbox · ${seit}${zusatz}`); break;
+		default: zeigeAmpel("", r.zustandText, seit);
 	}
+}
 
-	marke($("begrenzung"), s.begrenzungAktiv ? "aktiv" : "keine", s.begrenzungAktiv ? "orange" : "gruen");
-	$("wirksameGrenze").textContent = s.begrenzungAktiv ? watt(s.wirksameGrenzeW) : "–";
-	$("restdauer").textContent = s.zustand === 2 ? (s.restdauerS > 0 ? dauer(s.restdauerS) : "unbefristet") : "–";
-	$("grenzeNetz").textContent = s.grenzeNetzAlterS == null ? "noch keine"
-		: `${watt(s.grenzeNetzW)}, ${s.grenzeNetzAktiv ? "aktiv" : "inaktiv"}` + (s.grenzeNetzDauerS > 0 ? `, für ${dauer(s.grenzeNetzDauerS)}` : "");
-	$("grenzeNetzAlter").textContent = alter(s.grenzeNetzAlterS);
-	$("failsafeGrenze").textContent = watt(s.failsafeGrenzeW);
-	$("failsafeDauer").textContent = dauer(s.failsafeMindestdauerS);
+function zeigeRichtung(p, r) {
+	marke($(p + "Zustand"), r.zustandText, zustandFarbe[r.zustand]);
+	marke($(p + "Begrenzung"), r.begrenzungAktiv ? "aktiv" : "keine", r.begrenzungAktiv ? "orange" : "gruen");
+	$(p + "Wirksam").textContent = r.begrenzungAktiv ? watt(r.wirksameGrenzeW) : "–";
+	$(p + "Rest").textContent = r.zustand === 2 ? (r.restdauerS > 0 ? dauer(r.restdauerS) : "unbefristet") : "–";
+	$(p + "Netz").textContent = r.grenzeNetzAlterS == null ? "noch keine"
+		: `${watt(r.grenzeNetzW)}, ${r.grenzeNetzAktiv ? "aktiv" : "inaktiv"}` + (r.grenzeNetzDauerS > 0 ? `, für ${dauer(r.grenzeNetzDauerS)}` : "");
+	$(p + "NetzAlter").textContent = alter(r.grenzeNetzAlterS);
+	$(p + "Failsafe").textContent = watt(r.failsafeGrenzeW);
+	$(p + "Nenn").textContent = watt(r.nennleistungW);
+	$(p + "Ablehnung").textContent = r.ablehnung ? "Zuletzt abgelehnt: " + r.ablehnung : "";
+}
+
+function zeigeMesswerte(id, liste) {
+	$(id).replaceChildren(...liste.map(m => {
+		const wert = document.createElement("span");
+		if (m.gueltig) wert.textContent = messwert(m);
+		else marke(wert, "ungültig", "");
+		return zeile([m.name, wert]);
+	}));
+}
+
+function zeige(s) {
+	zuletzt = s;
+	$("geraet").textContent = `${s.hersteller} ${s.modell} · SN ${s.seriennummer}`;
+	ampel(s);
+
+	$("karteBezug").hidden = !s.bezugAktiv;
+	if (s.bezugAktiv) zeigeRichtung("b", s);
+	$("karteEinspeisung").hidden = !s.einspeisung;
+	if (s.einspeisung) zeigeRichtung("e", s.einspeisung);
 
 	marke($("verbindung"), s.verbindungText, { 0: "", 1: "rot", 2: "gruen" }[s.verbindung]);
 	$("partner").textContent = s.partner || "–";
 	$("heartbeat").textContent = alter(s.heartbeatAlterS);
-
-	const k = s.kennung;
-	marke($("skiStatus"), s.skiVerfahren ? "aktiv" : "nicht konfiguriert", s.skiVerfahren ? "gruen" : "");
-	$("eigenerSki").textContent = s.eigenerSki;
-	$("remoteSki").textContent = s.remoteSki || "–";
-	marke($("pairingStatus"), s.pairingService ? "aktiv" : "aus", s.pairingService ? "gruen" : "");
-	$("shipId").textContent = k.shipId;
-	$("fingerprint").textContent = k.fingerprint;
-	$("secret").textContent = !k.secret ? "–" : secretSichtbar ? k.secret : "•".repeat(12);
-	$("secret").dataset.wert = k.secret || "";
-	$("secretZeigen").hidden = !k.secret;
-	$("pairingSteuerbox").textContent = s.pairingSteuerbox || (s.pairingService ? "noch keine" : "–");
-	$("qrText").textContent = k.qrText;
-	if (!$("qrBild").src) $("qrBild").src = url("api/qr.png");
+	$("failsafeDauer").textContent = dauer(s.failsafeMindestdauerS);
 
 	marke($("sps"), s.spsOk ? "OK" : "ausgefallen", s.spsOk ? "gruen" : "rot");
 	$("spsAlter").textContent = alter(s.spsLebenszeichenAlterS);
-	$("nennleistung").textContent = watt(s.nennleistungW);
+	marke($("anlagenstatus"), s.anlagenstatus, s.anlagenstatus === "normal" ? "gruen" : s.anlagenstatus === "Standby" ? "" : "rot");
 
-	const zeilen = s.gefunden.map(g => {
-		const tr = document.createElement("tr");
-		for (const text of [`${g.marke} ${g.modell}`, g.shipId || "–", g.ski]) {
-			const td = document.createElement("td");
-			td.textContent = text;
-			tr.append(td);
-		}
-		tr.children[1].className = tr.children[2].className = "mono";
-		const td = document.createElement("td");
-		if (s.partner && (s.partner.includes(g.ski) || (g.shipId && s.partner.includes(g.shipId)))) marke(td, "verbunden", "gruen");
-		else if (g.ski === s.remoteSki) marke(td, "konfiguriert", "gruen");
-		tr.append(td);
-		return tr;
-	});
-	if (zeilen.length === 0) {
-		const tr = document.createElement("tr");
-		const td = document.createElement("td");
-		td.colSpan = 4;
-		td.className = "leise";
-		td.textContent = "Noch keine Geräte gefunden";
-		tr.append(td);
-		zeilen.push(tr);
+	$("useCases").replaceChildren(...s.useCases.map(u => {
+		const lokal = document.createElement("span"), box = document.createElement("span");
+		marke(lokal, u.lokal ? "an" : "aus", u.lokal ? "gruen" : "");
+		if (s.verbindung !== 2) box.textContent = "–";
+		else if (u.steuerbox) marke(box, "unterstützt", "gruen");
+		else marke(box, "nein", u.lokal ? "orange" : "");
+		return zeile([u.name, lokal, box]);
+	}));
+
+	$("karteMpc").hidden = !s.mpc;
+	if (s.mpc) zeigeMesswerte("mpc", s.mpc);
+	$("karteMgcp").hidden = !s.mgcp;
+	if (s.mgcp) zeigeMesswerte("mgcp", s.mgcp);
+
+	const g = s.gegenstelle;
+	$("karteGegenstelle").hidden = !g;
+	if (g) {
+		$("gGeraet").textContent = [g.hersteller, g.marke, g.modell].filter(x => x).join(" · ") + (g.seriennummer ? ` · SN ${g.seriennummer}` : "") || "–";
+		$("gTyp").textContent = g.geraetetyp || "–";
+		$("gRevision").textContent = `${g.software || "–"} / ${g.hardware || "–"}`;
+		$("gEntitaeten").textContent = g.entitaeten.map(e => `${e.adresse} ${e.typ}`).join(", ") || "–";
+		$("gUseCases").replaceChildren(...(g.useCases.length ? g.useCases.map(u =>
+			zeile([u.kurz ? `${u.kurz} (${u.name})` : u.name, u.akteur, u.version + (u.verfuegbar ? "" : " (nicht verfügbar)"),
+				(u.szenarien || []).join(", ") || "–", u.entitaet])) : [leereZeile(5, "Noch keine Use Cases gemeldet")]));
 	}
-	$("gefunden").replaceChildren(...zeilen);
+
+	zeigeKopplung(s);
 
 	const heute = new Date().toDateString();
 	$("ereignisse").replaceChildren(...s.ereignisse.map(e => {
@@ -229,9 +372,66 @@ function zeige(s) {
 		return div;
 	}));
 
-	$("version").textContent = `Schnittstellenversion ${s.schnittstellenVersion}`;
+	$("version").textContent = `Version ${s.version} · Schnittstelle ${s.schnittstellenVersion}.${s.erweiterungsVersion}`;
 	$("laufzeit").textContent = `Laufzeit ${dauer(s.laufzeitS)}`;
 	$("aktualisiert").textContent = `Aktualisiert ${new Date().toLocaleTimeString("de-DE")}`;
+}
+
+const quellen = { env: "fest per EEBUS_REMOTE_SKI", ui: "SKI, im UI gekoppelt", pairing: "Pairing Service" };
+
+function zeigeKopplung(s) {
+	const k = s.kopplung;
+	$("kopplung").textContent = k ? (k.shipId ? `${k.shipId} (SKI ${k.ski})` : `SKI ${k.ski}`) : "keine";
+	if (k) marke($("kopplungQuelle"), quellen[k.quelle] || k.quelle, "");
+	else $("kopplungQuelle").replaceChildren();
+	for (const el of document.querySelectorAll(".kopplung-aktion")) el.hidden = !s.kopplungAenderbar;
+	$("entkoppeln").hidden = !s.kopplungAenderbar || !k || k.quelle === "env";
+
+	const sucht = s.suchmodusRestS > 0;
+	marke($("suchStatus"), sucht ? `läuft, noch ${dauer(s.suchmodusRestS)}` : "aus", sucht ? "orange" : "");
+	$("suchmodus").textContent = sucht ? "Suchmodus beenden" : "Steuerbox suchen";
+	$("suchmodus").className = sucht ? "" : "primaer";
+	$("anfragenTabelle").hidden = !sucht;
+	$("anfragen").replaceChildren(...(s.anfragen.length ? s.anfragen.map(a => {
+		const aktionen = document.createElement("span");
+		aktionen.append(
+			knopf("Annehmen", "primaer", () => senden("POST", "api/kopplungsanfrage", { ski: a.ski, annehmen: true }, "kopplungMeldung")),
+			knopf("Ablehnen", "gefahr", () => senden("POST", "api/kopplungsanfrage", { ski: a.ski, annehmen: false }, "kopplungMeldung")));
+		return zeile([[a.marke, a.modell].filter(x => x).join(" ") || "unbekanntes Gerät", a.shipId || "–", a.ski, aktionen]);
+	}) : [leereZeile(4, "Noch keine Anfrage. Die Steuerbox muss der Brücke bereits vertrauen und sich melden.")]));
+
+	const kk = s.kennung;
+	$("eigenerSki").textContent = s.eigenerSki;
+	$("shipId").textContent = kk.shipId;
+	marke($("pairingStatus"), s.pairingService ? "aktiv" : "aus", s.pairingService ? "gruen" : "");
+	$("fingerprint").textContent = kk.fingerprint;
+	$("secret").textContent = !kk.secret ? "–" : secretSichtbar ? kk.secret : "•".repeat(12);
+	$("secret").dataset.wert = kk.secret || "";
+	$("secretZeigen").hidden = !kk.secret;
+	$("qrText").textContent = kk.qrText;
+	if (!$("qrBild").src) $("qrBild").src = url("api/qr.png");
+
+	const verbunden = ski => s.partner && s.partner.includes(ski);
+	const zeilen = s.gefunden.map(g => {
+		const name = document.createElement("span");
+		name.textContent = `${g.marke} ${g.modell} `;
+		if (g.steuerbox) {
+			const m = document.createElement("span");
+			marke(m, "Steuerbox", "");
+			name.append(m);
+		}
+		const td = document.createElement("span");
+		if (verbunden(g.ski)) marke(td, "verbunden", "gruen");
+		else if (k && k.ski === g.ski) marke(td, "gekoppelt", "gruen");
+		else if (s.kopplungAenderbar) td.append(knopf("Vertrauen", "", () => {
+			const text = k ? `Steuerbox ${g.ski} vertrauen? Die bisherige Kopplung wird ersetzt.` : `Steuerbox ${g.ski} vertrauen?`;
+			if (confirm(text)) senden("POST", "api/kopplung", { ski: g.ski }, "kopplungMeldung");
+		}));
+		const tr = zeile([name, g.shipId || "–", g.ski, td]);
+		tr.children[1].className = tr.children[2].className = "mono";
+		return tr;
+	});
+	$("gefunden").replaceChildren(...(zeilen.length ? zeilen : [leereZeile(4, "Noch keine Geräte gefunden")]));
 }
 
 // Ohne Zugangsdaten in der URL: Bei Aufruf als http://benutzer:pw@ip/ lehnt fetch
@@ -242,6 +442,33 @@ function url(pfad) {
 	return u.href;
 }
 const statusUrl = url("api/status");
+
+async function senden(methode, pfad, daten, meldungId) {
+	const meldung = $(meldungId);
+	meldung.className = "meldung";
+	meldung.textContent = "…";
+	try {
+		const antwort = await fetch(url(pfad), {
+			method: methode,
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(daten),
+		});
+		const inhalt = await antwort.json().catch(() => ({}));
+		meldung.textContent = antwort.ok ? inhalt.text : (inhalt.fehler || `Fehler ${antwort.status}`);
+		if (!antwort.ok) meldung.className = "meldung fehler";
+	} catch (fehler) {
+		meldung.className = "meldung fehler";
+		meldung.textContent = "Brücke nicht erreichbar";
+	}
+}
+
+$("suchmodus").addEventListener("click", () =>
+	senden("POST", "api/suchmodus", { an: !(zuletzt && zuletzt.suchmodusRestS > 0) }, "kopplungMeldung"));
+$("entkoppeln").addEventListener("click", () => {
+	if (confirm("Kopplung mit der Steuerbox lösen? Danach nimmt die Brücke keine Grenzen mehr von ihr an.")) {
+		senden("DELETE", "api/kopplung", {}, "kopplungMeldung");
+	}
+});
 
 // Das Secret erlaubt es, eine Steuerbox zu koppeln: nur auf Wunsch anzeigen.
 let secretSichtbar = false;
@@ -267,11 +494,11 @@ async function abfragen() {
 	setTimeout(abfragen, 1000);
 }
 
-// navigator.clipboard gibt es nur ueber HTTPS oder localhost, auf dem PFC
-// (http://<ip>) daher der Weg ueber ein temporaeres Textfeld.
-for (const knopf of document.querySelectorAll("[data-kopieren]")) {
-	knopf.addEventListener("click", async () => {
-		const quelle = $(knopf.dataset.kopieren);
+// navigator.clipboard gibt es nur über HTTPS oder localhost, auf dem PFC
+// (http://<ip>) daher der Weg über ein temporäres Textfeld.
+for (const k of document.querySelectorAll("[data-kopieren]")) {
+	k.addEventListener("click", async () => {
+		const quelle = $(k.dataset.kopieren);
 		const text = quelle.dataset.wert || quelle.textContent;
 		try {
 			await navigator.clipboard.writeText(text);
@@ -283,9 +510,9 @@ for (const knopf of document.querySelectorAll("[data-kopieren]")) {
 			document.execCommand("copy");
 			feld.remove();
 		}
-		const vorher = knopf.textContent;
-		knopf.textContent = "Kopiert";
-		setTimeout(() => knopf.textContent = vorher, 1500);
+		const vorher = k.textContent;
+		k.textContent = "Kopiert";
+		setTimeout(() => k.textContent = vorher, 1500);
 	});
 }
 

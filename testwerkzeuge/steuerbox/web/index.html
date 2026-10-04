@@ -26,7 +26,7 @@
 
 	<div class="raster">
 		<section class="karte">
-			<h2>Senden</h2>
+			<h2>Bezug senden · LPC</h2>
 			<div class="abschnitt">
 				<div class="vorlagen" id="vorlagen"></div>
 				<div class="felder">
@@ -51,6 +51,33 @@
 			</div>
 		</section>
 
+		<section class="karte" id="karteEinspeisung">
+			<h2>Einspeisung senden · LPP</h2>
+			<div class="abschnitt">
+				<div class="vorlagen" id="vorlagenEinspeisung"></div>
+				<div class="felder">
+					<label>Einspeisegrenze in W<input id="einspeisungW" type="number" min="0" step="100" value="3000"></label>
+					<label>Dauer in min, 0 = unbefristet<input id="einspeisungMin" type="number" min="0" step="1" value="2"></label>
+				</div>
+				<div class="knoepfe">
+					<button class="primaer braucht-lpp" id="einspeisungSenden" type="button">Einspeisegrenze senden</button>
+					<button class="braucht-lpp" id="einspeisungAufheben" type="button">Aufheben</button>
+				</div>
+				<p class="meldung" id="einspeisungMeldung"></p>
+			</div>
+			<div class="abschnitt">
+				<div class="felder">
+					<label>Failsafe-Einspeisegrenze in W<input id="failsafeEinspeisungW" type="number" min="0" step="100" value="0"></label>
+					<label>Mindestdauer in h, 2 bis 24<input id="failsafeEinspeisungH" type="number" min="2" max="24" step="0.5" value="2"></label>
+				</div>
+				<div class="knoepfe">
+					<button class="braucht-lpp" id="failsafeEinspeisungSenden" type="button">Failsafe-Werte senden</button>
+				</div>
+				<p class="hinweis">Die Mindestdauer gilt für Bezug und Einspeisung gemeinsam.</p>
+				<p class="meldung" id="failsafeEinspeisungMeldung"></p>
+			</div>
+		</section>
+
 		<section class="karte">
 			<h2>Störungen simulieren</h2>
 			<div class="abschnitt">
@@ -68,6 +95,12 @@
 				</div>
 				<p class="hinweis">„Kurz unterbrechen“ schließt die Verbindung einmal, sie wird automatisch neu aufgebaut. „Trennen“ hält sie getrennt, bis du sie wiederherstellst.</p>
 			</div>
+			<div class="abschnitt">
+				<div class="knoepfe">
+					<button class="braucht-lpp" id="gemeinsam" type="button">Beide Grenzen in einer Nachricht</button>
+				</div>
+				<p class="hinweis">Schreibt die Werte aus „Bezug senden“ und „Einspeisung senden“ zusammen, wie es andere EEBUS-Stacks tun können. Die Brücke muss beide getrennt freigeben.</p>
+			</div>
 			<p class="meldung" id="stoerungMeldung"></p>
 		</section>
 
@@ -79,8 +112,26 @@
 				<dt>Failsafe-Mindestdauer</dt><dd id="bFailsafeDauer"></dd>
 				<dt>Nennleistung (von SPS)</dt><dd id="bNennleistung"></dd>
 				<dt>LPC-Szenarien</dt><dd id="bSzenarien"></dd>
+				<dt>Einspeisegrenze</dt><dd id="bEinspeisung"></dd>
+				<dt>Failsafe-Einspeisung</dt><dd id="bFailsafeEinspeisung"></dd>
+				<dt>Nennleistung Erzeugung</dt><dd id="bNennErzeugung"></dd>
+				<dt>Anlagenstatus</dt><dd id="bAnlagenstatus"></dd>
 			</dl>
+			<table style="margin-top:12px">
+				<thead><tr><th>Use Case</th><th>Steuerbox</th><th>Brücke</th></tr></thead>
+				<tbody id="bUseCases"></tbody>
+			</table>
 			<p class="hinweis">So wie die Brücke sie über EEBUS meldet.</p>
+		</section>
+
+		<section class="karte" id="karteMpc" hidden>
+			<h2>Messwerte Anlage · MPC</h2>
+			<table class="werte"><tbody id="mpc"></tbody></table>
+		</section>
+
+		<section class="karte" id="karteMgcp" hidden>
+			<h2>Netzanschlusspunkt · MGCP</h2>
+			<table class="werte"><tbody id="mgcp"></tbody></table>
 		</section>
 
 		<section class="karte breit">
@@ -104,7 +155,7 @@
 					<dl>
 						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
 					</dl>
-					<p class="hinweis">Den eigenen SKI bei der Brücke als <code>EEBUS_REMOTE_SKI</code> eintragen, dann unten bei der gefundenen Brücke „Per SKI koppeln“.</p>
+					<p class="hinweis">Unten bei der gefundenen Brücke „Per SKI koppeln“, dann an der Brücke „Steuerbox suchen“ und die Anfrage annehmen. Oder dort fest per <code>EEBUS_REMOTE_SKI</code>.</p>
 				</div>
 			</div>
 			<table class="geraete" style="margin-top:16px">
@@ -174,6 +225,57 @@ for (const v of vorlagen) {
 	b.addEventListener("click", () => { $("grenzeW").value = v.w; $("grenzeMin").value = v.min; });
 	$("vorlagen").append(b);
 }
+const vorlagenEinspeisung = [
+	{ w: 3000, min: 2, text: "3.000 W · 2 min" },
+	{ w: 0, min: 1, text: "0 W · 1 min" },
+	{ w: 6000, min: 0, text: "6.000 W · unbefristet" },
+];
+for (const v of vorlagenEinspeisung) {
+	const b = document.createElement("button");
+	b.type = "button";
+	b.textContent = v.text;
+	b.addEventListener("click", () => { $("einspeisungW").value = v.w; $("einspeisungMin").value = v.min; });
+	$("vorlagenEinspeisung").append(b);
+}
+
+function zahlText(wert, stellen) {
+	return wert.toLocaleString("de-DE", { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+}
+
+function messwert(m) {
+	if (m.wert == null) return "–";
+	switch (m.einheit) {
+		case "W": return watt(m.wert);
+		case "Wh": return zahlText(m.wert / 1000, 3) + " kWh";
+		case "A": return zahlText(m.wert, 2) + " A";
+		case "V": return zahlText(m.wert, 1) + " V";
+		case "Hz": return zahlText(m.wert, 2) + " Hz";
+	}
+	return `${m.wert} ${m.einheit}`;
+}
+
+function zeigeMesswerte(id, liste, zusatz) {
+	const zeilen = liste.map(m => {
+		const tr = document.createElement("tr");
+		const name = document.createElement("td"), wert = document.createElement("td");
+		name.textContent = m.name;
+		if (m.ungueltig) marke(wert, "ungültig", "orange");
+		else wert.textContent = messwert(m);
+		tr.append(name, wert);
+		return tr;
+	});
+	for (const [name, text] of zusatz || []) {
+		const tr = document.createElement("tr");
+		const a = document.createElement("td"), b = document.createElement("td");
+		a.textContent = name;
+		b.textContent = text;
+		tr.append(a, b);
+		zeilen.push(tr);
+	}
+	$(id).replaceChildren(...zeilen);
+}
+
+const zustandTexte = { normalOperation: ["normal", "gruen"], failure: ["Störung", "rot"], standby: ["Standby", ""] };
 
 function zeige(s) {
 	zuletzt = s;
@@ -190,7 +292,8 @@ function zeige(s) {
 	} else if (!s.heartbeatLaeuft) {
 		zeigeAmpel("rot", "Verbunden, Heartbeat gestoppt", "Brücke geht 120 s nach dem letzten Heartbeat in Failsafe");
 	} else {
-		zeigeAmpel("gruen", "Verbunden mit der Brücke", s.bruecke ? "LPC bereit" : "Warte auf LPC-Meldung der Brücke …");
+		const ucs = s.bruecke && s.bruecke.useCases ? s.bruecke.useCases.filter(u => u.steuerbox && u.unterstuetzt).map(u => u.name) : [];
+		zeigeAmpel("gruen", "Verbunden mit der Brücke", s.bruecke ? `Bereit: ${ucs.join(", ")}` : "Warte auf LPC-Meldung der Brücke …");
 	}
 
 	// Aktionen, die eine Verbindung brauchen
@@ -217,6 +320,35 @@ function zeige(s) {
 	$("bFailsafeDauer").textContent = b && b.failsafeMindestdauerS != null ? dauer(b.failsafeMindestdauerS) : unbekannt;
 	$("bNennleistung").textContent = b && b.nennleistungW != null ? watt(b.nennleistungW) : unbekannt;
 	$("bSzenarien").textContent = b && b.szenarien && b.szenarien.length ? b.szenarien.join(", ") : unbekannt;
+
+	const e = b && b.einspeisung;
+	$("bEinspeisung").textContent = e && e.grenze
+		? `${watt(e.grenze.wertW)}, ${e.grenze.aktiv ? "aktiv" : "inaktiv"}` + (e.grenze.dauerS > 0 ? `, noch ${dauer(e.grenze.dauerS)}` : "")
+		: unbekannt;
+	$("bFailsafeEinspeisung").textContent = e && e.failsafeGrenzeW != null ? watt(e.failsafeGrenzeW) : unbekannt;
+	$("bNennErzeugung").textContent = e && e.nennleistungW != null ? watt(e.nennleistungW) : unbekannt;
+	const az = b && zustandTexte[b.anlagenstatus];
+	if (az) marke($("bAnlagenstatus"), az[0], az[1]);
+	else $("bAnlagenstatus").textContent = b && b.anlagenstatus ? b.anlagenstatus : unbekannt;
+
+	$("bUseCases").replaceChildren(...(b && b.useCases ? b.useCases : []).map(u => {
+		const tr = document.createElement("tr");
+		const name = document.createElement("td"), hier = document.createElement("td"), dort = document.createElement("td");
+		name.textContent = u.name;
+		marke(hier, u.steuerbox ? "an" : "aus", u.steuerbox ? "gruen" : "");
+		marke(dort, u.unterstuetzt ? "angeboten" : "nein", u.unterstuetzt ? "gruen" : "");
+		tr.append(name, hier, dort);
+		return tr;
+	}));
+
+	const lppBereit = bereit && !!e;
+	for (const k of document.querySelectorAll(".braucht-lpp")) k.disabled = !lppBereit;
+	$("karteEinspeisung").hidden = !s.useCases.includes("LPP");
+
+	$("karteMpc").hidden = !(b && b.mpc);
+	if (b && b.mpc) zeigeMesswerte("mpc", b.mpc);
+	$("karteMgcp").hidden = !(b && b.mgcp);
+	if (b && b.mgcp) zeigeMesswerte("mgcp", b.mgcp, b.mgcpPvFaktor != null ? [["PV-Begrenzungsfaktor", zahlText(b.mgcpPvFaktor, 1) + " %"]] : []);
 
 	$("eigenerSki").textContent = s.eigenerSki;
 	$("shipId").textContent = s.shipId;
@@ -311,6 +443,14 @@ $("grenzeAufheben").addEventListener("click", () =>
 	senden("POST", "api/grenze", { wertW: 0, dauerS: 0, aktiv: false }, "grenzeMeldung"));
 $("failsafeSenden").addEventListener("click", () =>
 	senden("POST", "api/failsafe", { grenzeW: zahl("failsafeW"), mindestdauerS: zahl("failsafeH") * 3600 }, "failsafeMeldung"));
+$("einspeisungSenden").addEventListener("click", () =>
+	senden("POST", "api/einspeisegrenze", { wertW: zahl("einspeisungW"), dauerS: zahl("einspeisungMin") * 60, aktiv: true }, "einspeisungMeldung"));
+$("einspeisungAufheben").addEventListener("click", () =>
+	senden("POST", "api/einspeisegrenze", { wertW: 0, dauerS: 0, aktiv: false }, "einspeisungMeldung"));
+$("failsafeEinspeisungSenden").addEventListener("click", () =>
+	senden("POST", "api/failsafe-einspeisung", { grenzeW: zahl("failsafeEinspeisungW"), mindestdauerS: zahl("failsafeEinspeisungH") * 3600 }, "failsafeEinspeisungMeldung"));
+$("gemeinsam").addEventListener("click", () =>
+	senden("POST", "api/grenzen-gemeinsam", { bezugW: zahl("grenzeW"), einspeisungW: zahl("einspeisungW"), dauerS: zahl("grenzeMin") * 60 }, "stoerungMeldung"));
 $("heartbeatSchalter").addEventListener("click", () =>
 	senden("POST", "api/heartbeat", { an: !zuletzt.heartbeatLaeuft }, "stoerungMeldung"));
 $("kurz").addEventListener("click", () =>

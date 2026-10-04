@@ -1,4 +1,5 @@
-# Lokale Testumgebung auf dem PC: Bruecke, Test-Steuerbox und SPS-Simulator.
+# Lokale Testumgebung auf dem PC: Bruecke, Test-Steuerbox und SPS-Simulator,
+# mit allen vier Use Cases (LPC, LPP, MPC, MGCP).
 #
 #   docker compose up -d --build
 #
@@ -9,9 +10,9 @@
 # Einmalig koppeln, wahlweise:
 #  - Pairing Service: im Bruecken-UI "QR-Text kopieren", im Steuerbox-UI
 #    einfuegen und "Per Pairing Service koppeln". Keine Einstellung noetig.
-#  - SKI-Verfahren: SKI der Steuerbox (in ihrem UI) in .env als STEUERBOX_SKI
-#    eintragen, "docker compose up -d" wiederholen, im Steuerbox-UI bei der
-#    Bruecke "Per SKI koppeln".
+#  - SKI-Verfahren: im Steuerbox-UI bei der Bruecke "Per SKI koppeln", dann im
+#    Bruecken-UI "Steuerbox suchen" und die Anfrage annehmen (oder bei der
+#    Steuerbox "Vertrauen"). Alternativ fest per .env: STEUERBOX_SKI=...
 # Zertifikate, Secret und Kopplung liegen in Volumes und bleiben erhalten.
 
 services:
@@ -30,6 +31,10 @@ services:
       # Modbus-Master auf dem PC herankommen.
       MODBUS_URL: tcp://0.0.0.0:5502
       NENNLEISTUNG_MAX_W: "11000"
+      EEBUS_USECASES: lpc,lpp,mpc,mgcp
+      FAILSAFE_EINSPEISEGRENZE_W: "4800"
+      NENNLEISTUNG_ERZEUGUNG_MAX_W: "8000"
+      MGCP_MESSWERTE: strom,spannung,frequenz,pv_faktor
       WEB_PASSWORT: test
     volumes:
       - bruecke-daten:/data
@@ -48,14 +53,15 @@ services:
     volumes:
       - steuerbox-daten:/data
 
-  # Spielt die CODESYS-Seite. Ausfall der SPS testen: docker compose stop spssimulator
+  # Spielt die CODESYS-Seite: steuerbare Last 9 kW, PV 8 kW, Grundlast 500 W.
+  # Ausfall der SPS testen: docker compose stop spssimulator
   spssimulator:
     build:
       context: .
       args:
         PROGRAMM: testwerkzeuge/spssimulator
     image: eebus-spssimulator:dev
-    command: ["-url", "tcp://bruecke:5502", "-nennleistung", "22000"]
+    command: ["-url", "tcp://bruecke:5502", "-nennleistung", "22000", "-last", "9000", "-pv", "8000"]
     depends_on:
       - bruecke
 

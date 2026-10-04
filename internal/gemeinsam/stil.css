@@ -57,6 +57,18 @@ h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacin
 .ampel.orange { background: var(--orange-flaeche); } .ampel.orange .punkt { background: var(--orange); }
 .ampel.rot { background: var(--rot-flaeche); } .ampel.rot .punkt { background: var(--rot); }
 
+/* Statusleiste unter der Ampel (Bruecke) */
+.statusleiste { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: -4px 0 16px; }
+.statusfeld { display: flex; gap: 10px; align-items: flex-start; background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; padding: 10px 14px; min-width: 0; }
+.statusfeld .punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--grau); flex: none; margin-top: 5px; }
+.statusfeld.gruen .punkt { background: var(--gruen); }
+.statusfeld.orange .punkt { background: var(--orange); }
+.statusfeld.rot .punkt { background: var(--rot); }
+.statusfeld.rot .statuswert { color: var(--rot); }
+.statusname { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-leise); }
+.statuswert { font-weight: 600; }
+.statustext { font-size: 13px; color: var(--text-leise); overflow-wrap: anywhere; }
+
 .raster { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 .karte { background: var(--flaeche); border: 1px solid var(--rand); border-radius: 10px; padding: 16px; min-width: 0; }
 .breit { grid-column: 1 / -1; }

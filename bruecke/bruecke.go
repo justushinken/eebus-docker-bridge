@@ -97,11 +97,13 @@ type Bruecke struct {
 
 	kopplungMu sync.Mutex // reiht Aenderungen der Kopplung (kopplung.go)
 
-	mu         sync.Mutex
-	gefunden   []shipapi.RemoteMdnsService // per mDNS sichtbare EEBUS-Geraete
-	partner    shipapi.ServiceIdentity     // verbundene Steuerbox, leer = keine
-	kopplung   *gemeinsam.Kopplung         // im UI oder per Pairing Service gekoppelte Steuerbox
-	verbindung Verbindung
+	mu             sync.Mutex
+	gefunden       []shipapi.RemoteMdnsService // per mDNS sichtbare EEBUS-Geraete
+	partner        shipapi.ServiceIdentity     // verbundene Steuerbox, leer = keine
+	kopplung       *gemeinsam.Kopplung         // im UI oder per Pairing Service gekoppelte Steuerbox
+	verbindung     Verbindung
+	verbindungSeit time.Time // seit wann verbindung gilt
+	abgelehnt      bool      // Steuerbox hat die Verbindung abgelehnt, bis zur naechsten Verbindung
 
 	bezug                *Begrenzung // LPC, nil = Use Case aus
 	einspeisung          *Begrenzung // LPP, nil = Use Case aus
@@ -142,10 +144,7 @@ func NeueBruecke(konf Konfiguration, einstellungen map[string]string, eigenerSki
 		anfragen:             make(map[string]*Anfrage),
 		unbekannt:            make(map[string]bool),
 	}
-	b.verbindung = VerbindungGetrennt
-	if !b.hatPartner() {
-		b.verbindung = VerbindungKeinPartner
-	}
+	b.setzeVerbindung(b.ohneVerbindung())
 	return b
 }
 

@@ -391,7 +391,7 @@ function zeige(s) {
 		const td = document.createElement("td");
 		td.colSpan = 4;
 		td.className = "leise";
-		td.textContent = "Noch keine Geräte gefunden. Unter Windows (steuerbox.exe) sieht die Steuerbox keine anderen Geräte, weil Windows den mDNS-Port belegt: SKI oben von Hand eintragen.";
+		td.textContent = "Noch keine Geräte gefunden. Unter Windows (steuerbox.exe): Netzwerkprofil „Privat“ und Firewall prüfen, sonst kommen keine mDNS-Antworten an. Der SKI lässt sich oben auch von Hand eintragen.";
 		tr.append(td);
 		zeilen.push(tr);
 	}

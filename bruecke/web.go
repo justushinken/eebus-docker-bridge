@@ -118,6 +118,8 @@ type StatusDaten struct {
 
 	Verbindung            Verbindung `json:"verbindung"`
 	VerbindungText        string     `json:"verbindungText"`
+	VerbindungSeitS       float64    `json:"verbindungSeitS"`
+	Abgelehnt             bool       `json:"abgelehnt"` // Steuerbox lehnt die Verbindung ab (vertraut der Bruecke nicht)
 	FailsafeMindestdauerS float64    `json:"failsafeMindestdauerS"`
 	HeartbeatAlterS       *float64   `json:"heartbeatAlterS"` // nil = nie
 
@@ -196,6 +198,8 @@ func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
 	s := StatusDaten{
 		Verbindung:            b.verbindung,
 		VerbindungText:        b.verbindung.String(),
+		VerbindungSeitS:       jetzt.Sub(b.verbindungSeit).Seconds(),
+		Abgelehnt:             b.abgelehnt,
 		FailsafeMindestdauerS: b.failsafeMindestdauer.Seconds(),
 		HeartbeatAlterS:       alterS(jetzt, b.letzterHeartbeat),
 		Gegenstelle:           b.gegenstelle,

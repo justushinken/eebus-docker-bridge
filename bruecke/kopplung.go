@@ -49,6 +49,21 @@ func (b *Bruecke) hatPartner() bool {
 	return b.konf.RemoteSki != "" || b.kopplung != nil
 }
 
+// ohneVerbindung: Zustand, wenn keine Steuerbox verbunden ist. Aufruf unter mu.
+func (b *Bruecke) ohneVerbindung() Verbindung {
+	if b.hatPartner() {
+		return VerbindungGetrennt
+	}
+	return VerbindungKeinPartner
+}
+
+// setzeVerbindung merkt sich, seit wann der Zustand gilt. Aufruf unter mu.
+func (b *Bruecke) setzeVerbindung(v Verbindung) {
+	if v != b.verbindung || b.verbindungSeit.IsZero() {
+		b.verbindung, b.verbindungSeit = v, time.Now()
+	}
+}
+
 // vertraut: Dieser Partner ist bereits als Steuerbox eingetragen. Aufruf unter mu.
 func (b *Bruecke) vertraut(partner shipapi.ServiceIdentity) bool {
 	return (b.konf.RemoteSki != "" && strings.EqualFold(partner.SKI, b.konf.RemoteSki)) ||
@@ -61,7 +76,8 @@ func (b *Bruecke) vertraut(partner shipapi.ServiceIdentity) bool {
 func (b *Bruecke) RemoteServiceConnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	b.mu.Lock()
 	neu := b.verbindung != VerbindungVerbunden
-	b.verbindung = VerbindungVerbunden
+	b.setzeVerbindung(VerbindungVerbunden)
+	b.abgelehnt = false
 	b.partner = partner
 	delete(b.anfragen, partner.SKI)
 	b.mu.Unlock()
@@ -79,10 +95,7 @@ func (b *Bruecke) RemoteServiceDisconnected(dienst api.ServiceInterface, partner
 		return
 	}
 	neu := b.verbindung == VerbindungVerbunden
-	b.verbindung = VerbindungGetrennt
-	if !b.hatPartner() {
-		b.verbindung = VerbindungKeinPartner
-	}
+	b.setzeVerbindung(b.ohneVerbindung())
 	b.partner = shipapi.ServiceIdentity{}
 	b.gegenstelle = nil
 	b.steuerboxUseCases = 0
@@ -123,6 +136,9 @@ func (b *Bruecke) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, de
 	b.mu.Lock()
 	var meldung string
 	switch detail.State() {
+	case shipapi.ConnectionStateRemoteDeniedTrust:
+		// Die Bruecke vertraut der Steuerbox, aber nicht umgekehrt
+		b.abgelehnt = b.abgelehnt || b.vertraut(partner)
 	case shipapi.ConnectionStateReceivedPairingRequest:
 		switch {
 		case b.vertraut(partner):
@@ -201,8 +217,8 @@ func (b *Bruecke) entfernePairingKopplung(partner shipapi.ServiceIdentity, grund
 	}
 	b.mu.Lock()
 	b.kopplung = nil
-	if !b.hatPartner() && b.verbindung != VerbindungVerbunden {
-		b.verbindung = VerbindungKeinPartner
+	if b.verbindung != VerbindungVerbunden {
+		b.setzeVerbindung(b.ohneVerbindung())
 	}
 	b.mu.Unlock()
 	log.Printf("Kopplung mit Steuerbox %s aufgehoben: %s", gemeinsam.Bezeichnung(partner), grund)
@@ -235,13 +251,10 @@ func (b *Bruecke) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
 	b.mu.Lock()
 	alt := b.kopplung
 	b.kopplung = neu
-	switch {
-	case b.verbindung == VerbindungVerbunden:
-	case b.hatPartner():
-		b.verbindung = VerbindungGetrennt
-	default:
-		b.verbindung = VerbindungKeinPartner
+	if b.verbindung != VerbindungVerbunden {
+		b.setzeVerbindung(b.ohneVerbindung())
 	}
+	b.abgelehnt = false
 	b.mu.Unlock()
 
 	if alt != nil && (neu == nil || !gemeinsam.GleicheIdentitaet(alt.Identitaet, neu.Identitaet)) {

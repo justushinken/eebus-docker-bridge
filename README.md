@@ -188,7 +188,7 @@ Welche Werte gerade gültig sind, meldet die SPS über die Gültigkeitsmasken (H
 
 ## Status-UI der Brücke
 
-`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Oben steht immer die Ampel mit dem kritischsten Zustand von Bezug und Einspeisung, darunter vier Reiter (direkt aufrufbar, z. B. `…:8090/#kopplung`). Ändern lassen sich die Kopplung mit der Steuerbox und die Einstellungen, mit `WEB_AENDERUNGEN=aus` nichts davon.
+`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Oben steht immer die Ampel mit dem kritischsten Zustand von Bezug und Einspeisung, darunter der Verbindungsstatus von Steuerbox (nicht gekoppelt / getrennt / Verbindung abgelehnt / verbunden mit Heartbeat) und SPS (Lebenszeichen, Anlagenstatus). Darunter folgen vier Reiter (direkt aufrufbar, z. B. `…:8090/#kopplung`). Ändern lassen sich die Kopplung mit der Steuerbox und die Einstellungen, mit `WEB_AENDERUNGEN=aus` nichts davon.
 
 - **Übersicht** (Betrieb): je Richtung (LPC, LPP) Zustand, wirksame Grenze, Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Grenze, Nennleistung und letzter Ablehnungsgrund; Steuerbox-Verbindung, Heartbeat, gemeinsame Failsafe-Mindestdauer; SPS-Lebenszeichen und Anlagenstatus; Messwerte MPC und MGCP, ungültige Werte gekennzeichnet.
 - **Kopplung** (Inbetriebnahme): gekoppelte Steuerbox und „Kopplung lösen“, Suchmodus mit Kopplungsanfragen (offene Anfragen zählt der Reiter), SKI, SHIP-ID, Fingerprint, Secret (verdeckt) und QR-Code für den Messstellenbetreiber, per mDNS gefundene Geräte (Steuerboxen oben, mit „Vertrauen“).
@@ -381,10 +381,8 @@ $env:WEB_PASSWORT = "test"; $env:DATENVERZEICHNIS = "$PWD\dist\steuerbox-daten"
 .\dist\steuerbox.exe
 ```
 
-- Netzwerkprofil des PCs auf „Privat“ stellen und beim Firewall-Dialog den Zugriff erlauben. Im WLAN kann der Access Point Multicast zum Kabelnetz filtern, dann ein LAN-Kabel nehmen.
-- **Die `.exe` sieht selbst keine Geräte** (Liste „Per mDNS gefunden“ bleibt leer), weil Windows den mDNS-Port 5353 belegt. Ankündigen geht, die Brücke findet die Steuerbox also. Deshalb:
-  - Pairing Service: funktioniert wie gewohnt (QR-Text einfügen).
-  - SKI-Verfahren: SKI der Brücke in der Test-Steuerbox von Hand eintragen, dann an der Brücke bei der gefundenen Test-Steuerbox „Vertrauen“. Suchmodus mit Kopplungsanfrage geht hier nicht, weil die Steuerbox die Brücke nicht findet und sich nicht selbst verbindet.
+- **Netzwerkprofil des PCs auf „Privat“ stellen** und beim Firewall-Dialog den Zugriff erlauben. Im Profil „Öffentlich“ blockiert die Windows-Firewall eingehende mDNS-Antworten: Die Brücke findet die Steuerbox dann zwar (Pairing Service geht), die Liste „Per mDNS gefunden“ der Steuerbox bleibt aber leer. Im WLAN kann außerdem der Access Point Multicast zum Kabelnetz filtern, dann ein LAN-Kabel nehmen.
+- Danach funktionieren alle Verfahren wie mit Compose. Den SKI der Brücke kann man in der Test-Steuerbox auch von Hand eintragen.
 
 ### Auf dem PFC
 

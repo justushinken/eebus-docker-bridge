@@ -30,6 +30,18 @@
 		</div>
 	</section>
 
+	<!-- Verbindungen auf einen Blick, in allen Reitern -->
+	<section class="statusleiste">
+		<div class="statusfeld" id="stSteuerbox">
+			<span class="punkt"></span>
+			<div><div class="statusname">Steuerbox</div><div class="statuswert" id="stSteuerboxWert">…</div><div class="statustext" id="stSteuerboxText"></div></div>
+		</div>
+		<div class="statusfeld" id="stSps">
+			<span class="punkt"></span>
+			<div><div class="statusname">SPS (Modbus)</div><div class="statuswert" id="stSpsWert">…</div><div class="statustext" id="stSpsText"></div></div>
+		</div>
+	</section>
+
 	<!-- Übersicht: was im Betrieb zählt -->
 	<div class="raster" data-reiter-inhalt="uebersicht">
 		<section class="karte" id="karteBezug">
@@ -325,7 +337,13 @@ function ampel(s) {
 		case 1: zeigeAmpel("gruen", "Unbegrenzt", `Von der Steuerbox gesteuert, keine Grenze aktiv · ${seit}${zusatz}`); break;
 		case 2: zeigeAmpel("orange", `${name}begrenzt auf ${watt(r.wirksameGrenzeW)}`,
 			`Grenze des Netzbetreibers · ${seit}` + (r.restdauerS > 0 ? ` · noch ${dauer(r.restdauerS)}` : " · unbefristet") + zusatz); break;
-		case 3: zeigeAmpel("rot", `${name}Failsafe: ${watt(r.wirksameGrenzeW)}`, `Heartbeat der Steuerbox ausgefallen · ${seit}${zusatz}`); break;
+		case 3: {
+			const rest = Math.max(0, s.failsafeMindestdauerS - r.zustandSeitS);
+			const grund = heartbeatOk(s)
+				? `Steuerbox wieder da, Failsafe endet mit der nächsten Grenze oder in ${dauer(rest)}`
+				: `Kein Heartbeat der Steuerbox · Failsafe noch mindestens ${dauer(rest)}`;
+			zeigeAmpel("rot", `${name}Failsafe: ${watt(r.wirksameGrenzeW)}`, `${grund} · ${seit}${zusatz}`); break;
+		}
 		case 4: zeigeAmpel("gruen", "Unbegrenzt", `Autonom: keine Kommunikation mit der Steuerbox · ${seit}${zusatz}`); break;
 		default: zeigeAmpel("", r.zustandText, seit);
 	}
@@ -353,10 +371,49 @@ function zeigeMesswerte(id, liste) {
 	}));
 }
 
+// Wie heartbeatTimeout in bruecke.go
+function heartbeatOk(s) {
+	return s.verbindung === 2 && s.heartbeatAlterS != null && s.heartbeatAlterS < 120;
+}
+
+function statusfeld(id, farbe, wert, text) {
+	$(id).className = "statusfeld " + farbe;
+	$(id + "Wert").textContent = wert;
+	$(id + "Text").textContent = text;
+}
+
+// Statusleiste: Steuerbox abgestuft nach nie gekoppelt / getrennt / verbunden
+function statusleiste(s) {
+	const k = s.kopplung;
+	const name = k ? (k.shipId || "SKI " + k.ski) : "";
+	if (s.verbindung === 2) {
+		if (heartbeatOk(s)) statusfeld("stSteuerbox", "gruen", "Verbunden", `Heartbeat ${alter(s.heartbeatAlterS)} · ${s.partner}`);
+		else statusfeld("stSteuerbox", "orange", "Verbunden, kein Heartbeat", `Letzter Heartbeat: ${alter(s.heartbeatAlterS)} · ${s.partner}`);
+	} else if (s.verbindung === 1) {
+		statusfeld("stSteuerbox", "rot", s.abgelehnt ? "Verbindung abgelehnt" : "Getrennt",
+			s.abgelehnt
+				? `Die Steuerbox vertraut der Brücke nicht. SKI und SHIP-ID der Brücke müssen in der Steuerbox eingetragen sein · ${name}`
+				: `Gekoppelt, aber nicht verbunden · seit ${dauer(s.verbindungSeitS)} · ${name}`);
+	} else {
+		statusfeld("stSteuerbox", "", "Nicht gekoppelt",
+			s.suchmodusRestS > 0 ? `Suchmodus läuft noch ${dauer(s.suchmodusRestS)}` : "Im Reiter „Kopplung“ eine Steuerbox koppeln");
+	}
+
+	const anlage = s.anlagenstatus === "Stoerung" ? "Störung" : s.anlagenstatus;
+	if (s.spsOk) {
+		statusfeld("stSps", anlage === "Störung" ? "orange" : "gruen", "Verbunden", `Lebenszeichen ${alter(s.spsLebenszeichenAlterS)} · Anlage: ${anlage}`);
+	} else {
+		statusfeld("stSps", "rot", "Ausgefallen", (s.spsLebenszeichenAlterS == null
+			? "Noch kein Lebenszeichen seit dem Start"
+			: `Kein neues Lebenszeichen seit ${dauer(s.spsLebenszeichenAlterS)}`) + " · neue Grenzen werden abgelehnt");
+	}
+}
+
 function zeige(s) {
 	zuletzt = s;
 	$("geraet").textContent = `${s.hersteller} ${s.modell} · SN ${s.seriennummer}`;
 	ampel(s);
+	statusleiste(s);
 
 	$("karteBezug").hidden = !s.bezug;
 	if (s.bezug) zeigeRichtung("b", s.bezug);

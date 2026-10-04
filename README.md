@@ -132,7 +132,7 @@ docker run -d --name eebus-bruecke \
   -e FAILSAFE_GRENZE_W=4200 \
   -e FAILSAFE_MINDESTDAUER=2h \
   -e WEB_PASSWORT='<Passwort für das Status-UI>' \
-  eebus-bruecke:0.5
+  eebus-bruecke:latest
 ```
 
 Mit Erzeugung (PV, Speicher) zusätzlich `lpp` und die beiden Pflichtwerte dafür, bei einem EMS mit Zähler am Netzanschlusspunkt `mgcp`:
@@ -142,6 +142,8 @@ Mit Erzeugung (PV, Speicher) zusätzlich `lpp` und die beiden Pflichtwerte dafü
   -e NENNLEISTUNG_ERZEUGUNG_MAX_W=8000 \
   -e FAILSAFE_EINSPEISEGRENZE_W=4800 \
 ```
+
+Das Archiv enthält das Image unter zwei Namen, `eebus-bruecke:0.5` und `eebus-bruecke:latest`. `docker load` setzt `latest` also auf die zuletzt geladene Version. Ein laufender Container wechselt dadurch nicht von selbst: Für ein Update `docker rm -f eebus-bruecke` und denselben `docker run` erneut ausführen. Welche Version läuft, zeigt die Fußzeile des UI. Zurück auf eine ältere Version: im `docker run` statt `latest` die Nummer angeben, z. B. `eebus-bruecke:0.4` (muss geladen sein, `docker images eebus-bruecke`).
 
 Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sonst als Umleitung. Das Passwort in einfache Anführungszeichen setzen. Nach dem ersten Start die angezeigte SHIP-ID zusätzlich mit `-e SHIP_ID=…` fest eintragen (siehe „Vor der Übergabe an den Messstellenbetreiber“).
 
@@ -380,7 +382,7 @@ docker run -d --name eebus-steuerbox \
   --memory 64m \
   -v /home/eebus-steuerbox:/data \
   -e WEB_PASSWORT='<Passwort>' \
-  eebus-steuerbox:0.5
+  eebus-steuerbox:latest
 ```
 
 Danach `http://<pfc-ip>:8091` öffnen und die Brücke per Pairing Service koppeln (QR-Text aus dem Brücken-UI). An der Brücke ist dafür nichts einzustellen.

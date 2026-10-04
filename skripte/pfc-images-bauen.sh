@@ -16,8 +16,9 @@ baue() {
 	programm=$2
 	echo "== $name:$version ($programm)"
 	docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM="$programm" --build-arg VERSION="$version" \
-		-t "$name:$version" --load .
-	docker save "$name:$version" | gzip > "dist/$name-$version.tar.gz"
+		-t "$name:$version" -t "$name:latest" --load .
+	# Beide Namen ins Archiv: docker load setzt latest dann auf diese Version
+	docker save "$name:$version" "$name:latest" | gzip > "dist/$name-$version.tar.gz"
 }
 
 baue eebus-bruecke bruecke

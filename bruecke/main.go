@@ -196,12 +196,11 @@ func richteUseCasesEin(b *Bruecke, dienst api.ServiceInterface, konf Konfigurati
 		if konf.MpcEntitaet == "submeter" {
 			entitaet = dienst.LocalDevice().EntityForType(model.EntityTypeTypeSubMeterElectricity)
 		}
-		mpc, err := NeuesMpc(entitaet, konf)
-		if err != nil {
+		var err error
+		if b.mpc, b.mpcGroessen, err = NeuesMpc(entitaet, konf); err != nil {
 			log.Fatalf("Use Case MPC: %v", err)
 		}
-		b.mpc, b.mpcGroessen = mpc, mpcMessgroessen(mpc, konf)
-		melde("MPC", mpc)
+		melde("MPC", b.mpc)
 	}
 	if konf.Lpc {
 		lpc := cslpc.NewLPC(b.cem, b.LpcEreignis)
@@ -215,11 +214,10 @@ func richteUseCasesEin(b *Bruecke, dienst api.ServiceInterface, konf Konfigurati
 	}
 	if konf.Mgcp {
 		entitaet := dienst.LocalDevice().EntityForType(model.EntityTypeTypeGridConnectionPointOfPremises)
-		mgcp, err := NeuesMgcp(entitaet, konf)
-		if err != nil {
+		var err error
+		if b.mgcp, b.mgcpGroessen, err = NeuesMgcp(entitaet, konf); err != nil {
 			log.Fatalf("Use Case MGCP: %v", err)
 		}
-		b.mgcp, b.mgcpGroessen = mgcp, mgcpMessgroessen(mgcp, konf)
-		melde("MGCP", mgcp)
+		melde("MGCP", b.mgcp)
 	}
 }

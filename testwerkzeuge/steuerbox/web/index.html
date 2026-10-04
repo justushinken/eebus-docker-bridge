@@ -247,14 +247,11 @@ function messwert(m) {
 	switch (m.einheit) {
 		case "W": return watt(m.wert);
 		case "Wh": return zahlText(m.wert / 1000, 3) + " kWh";
-		case "A": return zahlText(m.wert, 2) + " A";
-		case "V": return zahlText(m.wert, 1) + " V";
-		case "Hz": return zahlText(m.wert, 2) + " Hz";
 	}
 	return `${m.wert} ${m.einheit}`;
 }
 
-function zeigeMesswerte(id, liste, zusatz) {
+function zeigeMesswerte(id, liste) {
 	const zeilen = liste.map(m => {
 		const tr = document.createElement("tr");
 		const name = document.createElement("td"), wert = document.createElement("td");
@@ -264,14 +261,6 @@ function zeigeMesswerte(id, liste, zusatz) {
 		tr.append(name, wert);
 		return tr;
 	});
-	for (const [name, text] of zusatz || []) {
-		const tr = document.createElement("tr");
-		const a = document.createElement("td"), b = document.createElement("td");
-		a.textContent = name;
-		b.textContent = text;
-		tr.append(a, b);
-		zeilen.push(tr);
-	}
 	$(id).replaceChildren(...zeilen);
 }
 
@@ -348,7 +337,7 @@ function zeige(s) {
 	$("karteMpc").hidden = !(b && b.mpc);
 	if (b && b.mpc) zeigeMesswerte("mpc", b.mpc);
 	$("karteMgcp").hidden = !(b && b.mgcp);
-	if (b && b.mgcp) zeigeMesswerte("mgcp", b.mgcp, b.mgcpPvFaktor != null ? [["PV-Begrenzungsfaktor", zahlText(b.mgcpPvFaktor, 1) + " %"]] : []);
+	if (b && b.mgcp) zeigeMesswerte("mgcp", b.mgcp);
 
 	$("eigenerSki").textContent = s.eigenerSki;
 	$("shipId").textContent = s.shipId;

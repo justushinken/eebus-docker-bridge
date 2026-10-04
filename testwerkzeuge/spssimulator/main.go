@@ -3,7 +3,7 @@
 // Liest jede Sekunde die Input-Register der Bruecke und rechnet eine kleine
 // Anlage durch: eine steuerbare Last, die der Bezugsgrenze folgt, eine
 // PV-Anlage, die bei einer Einspeisegrenze abgeregelt wird, und eine nicht
-// steuerbare Grundlast. Daraus entstehen die Messwerte fuer MPC (Anlage =
+// steuerbare Grundlast. Daraus entstehen Leistung und Energie fuer MPC (Anlage =
 // Last und PV) und MGCP (Netzanschlusspunkt), die zusammen mit Lebenszeichen,
 // Nennleistungen und Anlagenstatus in die Holding-Register gehen.
 //
@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"math/rand/v2"
 	"time"
 
 	"github.com/simonvetter/modbus"
@@ -40,7 +39,7 @@ const (
 	blockBezug       = 2
 	blockEinspeisung = 17
 	anzahlInput      = 31
-	anzahlHolding    = 61
+	anzahlHolding    = 28
 )
 
 type register []uint16
@@ -58,10 +57,6 @@ func (r register) udint(i int, wert float64) {
 func (r register) ulint(i int, wert float64) {
 	v := uint64(max(math.Round(wert), 0))
 	r[i], r[i+1], r[i+2], r[i+3] = uint16(v>>48), uint16(v>>32), uint16(v>>16), uint16(v)
-}
-
-func (r register) uint(i int, wert float64) {
-	r[i] = uint16(min(max(math.Round(wert), 0), math.MaxUint16))
 }
 
 func main() {
@@ -122,35 +117,17 @@ func main() {
 		h[0] = lebenszeichen
 		h.udint(1, float64(*nennleistung))
 		h.udint(3, float64(*nennErzeugung))
-		h[5] = 0x1FFF &^ uint16(*ungueltigMpc)
-		h[6] = 0x07FF &^ uint16(*ungueltigMgcp)
+		h[5] = 0b111 &^ uint16(*ungueltigMpc)
+		h[6] = 0b111 &^ uint16(*ungueltigMgcp)
 		if *stoerung {
 			h[7] = 1
 		}
-		for p := range 3 {
-			u := 230 + rand.Float64()*4 - 2
-			// MPC
-			h.dint(10+2*p, pAnlage/3)
-			h.dint(24+2*p, pAnlage/3/u*1000)
-			h.uint(30+p, u*10)
-			// MGCP
-			h.dint(50+2*p, pNap/3/u*1000)
-			h.uint(56+p, u*10)
-		}
-		f := 50 + rand.Float64()*0.04 - 0.02
 		h.dint(8, pAnlage)
-		h.ulint(16, mpcBezug)
-		h.ulint(20, mpcErzeugung)
-		h.uint(33, f*100)
-		h.dint(40, pNap)
-		h.ulint(42, napEinspeisung)
-		h.ulint(46, napBezug)
-		h.uint(59, f*100)
-		faktor := 100.0
-		if lppAktiv && *pv > 0 {
-			faktor = min(lppGrenze / *pv * 100, 100)
-		}
-		h.uint(60, faktor*10)
+		h.ulint(10, mpcBezug)
+		h.ulint(14, mpcErzeugung)
+		h.dint(18, pNap)
+		h.ulint(20, napEinspeisung)
+		h.ulint(24, napBezug)
 
 		// Wie Auto-Reconnect in CODESYS: Nach einem Neustart der Bruecke ist die
 		// alte TCP-Verbindung tot, also schliessen und neu aufbauen.

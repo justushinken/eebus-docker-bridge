@@ -68,34 +68,24 @@ const (
 	regNennleistungLo          = 2
 	regNennleistungErzeugungHi = 3 // max. Einspeiseleistung in W (LPP), 0 = Vorgabe aus Env
 	regNennleistungErzeugungLo = 4
-	regMpcMaske                = 5 // Gueltigkeit der MPC-Werte, Bits mpcBit*
-	regMgcpMaske               = 6 // Gueltigkeit der MGCP-Werte, Bits mgcpBit*
+	regMpcMaske                = 5 // Gueltigkeit der MPC-Werte: Bit 0 P, 1 E Bezug, 2 E Erzeugung
+	regMgcpMaske               = 6 // Gueltigkeit der MGCP-Werte: Bit 0 P, 1 E Einspeisung, 2 E Bezug
 	regAnlagenstatus           = 7 // 0 normal, 1 Stoerung, 2 Standby
 
 	regMesswerteAnfang = regMpcMaske
 
-	// MPC: Werte der Anlage. Leistung und Strom vorzeichenbehaftet,
-	// Bezug positiv, Erzeugung negativ.
+	// MPC: Werte der Anlage. Leistung Bezug positiv, Erzeugung negativ.
 	regMpcP          = 8  // DINT W
-	regMpcPL1        = 10 // 3x DINT W (10, 12, 14)
-	regMpcEBezug     = 16 // ULINT Wh (4 Register)
-	regMpcEErzeugung = 20 // ULINT Wh
-	regMpcIL1        = 24 // 3x DINT mA (24, 26, 28)
-	regMpcUL1        = 30 // 3x UINT 0,1 V (30, 31, 32)
-	regMpcF          = 33 // UINT 0,01 Hz
-	// 34 bis 39 frei
+	regMpcEBezug     = 10 // ULINT Wh (4 Register), Zaehlerstand
+	regMpcEErzeugung = 14 // ULINT Wh
 
 	// MGCP: Werte am Netzanschlusspunkt. Bezug aus dem Netz positiv,
 	// Einspeisung negativ.
-	regMgcpP            = 40 // DINT W
-	regMgcpEEinspeisung = 42 // ULINT Wh
-	regMgcpEBezug       = 46 // ULINT Wh
-	regMgcpIL1          = 50 // 3x DINT mA (50, 52, 54)
-	regMgcpUL1          = 56 // 3x UINT 0,1 V (56, 57, 58)
-	regMgcpF            = 59 // UINT 0,01 Hz
-	regMgcpPvFaktor     = 60 // UINT 0,1 % (PV-Einspeisebegrenzungsfaktor)
+	regMgcpP            = 18 // DINT W
+	regMgcpEEinspeisung = 20 // ULINT Wh
+	regMgcpEBezug       = 24 // ULINT Wh
 
-	anzahlHoldingRegister = 61
+	anzahlHoldingRegister = 28
 )
 
 func zuUint32(hi, lo uint16) uint32 {

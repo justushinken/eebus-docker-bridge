@@ -212,10 +212,6 @@ function messwert(m) {
 	switch (m.einheit) {
 		case "W": return watt(m.wert);
 		case "Wh": return zahl(m.wert / 1000, 3) + " kWh";
-		case "A": return zahl(m.wert, 2) + " A";
-		case "V": return zahl(m.wert, 1) + " V";
-		case "Hz": return zahl(m.wert, 2) + " Hz";
-		case "%": return zahl(m.wert, 1) + " %";
 	}
 	return `${m.wert} ${m.einheit}`;
 }

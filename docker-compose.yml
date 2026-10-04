@@ -34,7 +34,6 @@ services:
       EEBUS_USECASES: lpc,lpp,mpc,mgcp
       FAILSAFE_EINSPEISEGRENZE_W: "4800"
       NENNLEISTUNG_ERZEUGUNG_MAX_W: "8000"
-      MGCP_MESSWERTE: strom,spannung,frequenz,pv_faktor
       WEB_PASSWORT: test
     volumes:
       - bruecke-daten:/data

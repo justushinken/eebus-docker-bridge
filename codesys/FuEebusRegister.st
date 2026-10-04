@@ -3,7 +3,7 @@
 
 FUNCTION FuEebusSchreibeDint : BOOL
 VAR_IN_OUT
-	aRegister : ARRAY [0..60] OF WORD;
+	aRegister : ARRAY [0..27] OF WORD;
 END_VAR
 VAR_INPUT
 	iIndex : INT;
@@ -20,7 +20,7 @@ END_FUNCTION
 
 FUNCTION FuEebusSchreibeUdint : BOOL
 VAR_IN_OUT
-	aRegister : ARRAY [0..60] OF WORD;
+	aRegister : ARRAY [0..27] OF WORD;
 END_VAR
 VAR_INPUT
 	iIndex  : INT;
@@ -33,7 +33,7 @@ END_FUNCTION
 
 FUNCTION FuEebusSchreibeUlint : BOOL
 VAR_IN_OUT
-	aRegister : ARRAY [0..60] OF WORD;
+	aRegister : ARRAY [0..27] OF WORD;
 END_VAR
 VAR_INPUT
 	iIndex : INT;

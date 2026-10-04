@@ -158,9 +158,8 @@ type BrueckenWerte struct {
 	NennleistungW         *float64          `json:"nennleistungW"`
 	Einspeisung           *EinspeisungWerte `json:"einspeisung"` // nil = Bruecke ohne LPP
 	UseCases              []UseCaseDaten    `json:"useCases"`
-	Mpc                   []MesswertDaten   `json:"mpc"`  // nil = Bruecke ohne MPC
-	Mgcp                  []MesswertDaten   `json:"mgcp"` // nil = Bruecke ohne MGCP
-	MgcpPvFaktor          *float64          `json:"mgcpPvFaktor"`
+	Mpc                   []MesswertDaten   `json:"mpc"`           // nil = Bruecke ohne MPC
+	Mgcp                  []MesswertDaten   `json:"mgcp"`          // nil = Bruecke ohne MGCP
 	Anlagenstatus         string            `json:"anlagenstatus"` // leer = unbekannt
 }
 
@@ -264,7 +263,6 @@ func (s *Steuerbox) Status(jetzt time.Time) StatusDaten {
 		}
 		if zielMgcp, err := s.zielFuer(s.mgcp, "MGCP"); err == nil {
 			werte.Mgcp = s.leseMesswerte(zielMgcp)
-			werte.MgcpPvFaktor = wertOderNil(s.mgcp.PowerLimitationFactor(zielMgcp))
 		}
 		werte.UseCases = s.brueckenUseCases()
 		status.Bruecke = werte

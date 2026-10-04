@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
-	"slices"
-	"strings"
 
 	"github.com/enbility/eebus-go/features/client"
 	spineapi "github.com/enbility/spine-go/api"
 	"github.com/enbility/spine-go/model"
+	"github.com/enbility/spine-go/util"
 )
 
 // Messwerte der Bruecke lesen (MPC und MGCP).
@@ -16,7 +15,7 @@ import (
 // Wallbox, Unterzaehler, ...), nicht die CEM-Entitaet eines Energiemanagers,
 // auf der die Bruecke MPC anbietet. Deshalb liest die Steuerbox die Messwerte
 // hier selbst: Entitaet aus der Use-Case-Liste der Bruecke suchen, Measurement
-// und ElectricalConnection abonnieren und alle Messwerte anzeigen.
+// abonnieren und die Messwerte anzeigen.
 
 type MesswertDaten struct {
 	Name      string   `json:"name"`
@@ -25,19 +24,17 @@ type MesswertDaten struct {
 	Ungueltig bool     `json:"ungueltig"` // ValueState nicht "normal"
 }
 
-var scopeNamen = map[model.ScopeTypeType]string{
-	model.ScopeTypeTypeACPowerTotal:     "Leistung",
-	model.ScopeTypeTypeACPower:          "Leistung",
-	model.ScopeTypeTypeACEnergyConsumed: "Energie Bezug",
-	model.ScopeTypeTypeACEnergyProduced: "Energie Erzeugung",
-	model.ScopeTypeTypeACCurrent:        "Strom",
-	model.ScopeTypeTypeACVoltage:        "Spannung",
-	model.ScopeTypeTypeACFrequency:      "Frequenz",
-	model.ScopeTypeTypeGridFeedIn:       "Energie Einspeisung",
-	model.ScopeTypeTypeGridConsumption:  "Energie Bezug",
+// Anzeigenamen in dieser Reihenfolge
+var scopes = []struct {
+	scope model.ScopeTypeType
+	name  string
+}{
+	{model.ScopeTypeTypeACPowerTotal, "Leistung"},
+	{model.ScopeTypeTypeACEnergyConsumed, "Energie Bezug"},
+	{model.ScopeTypeTypeACEnergyProduced, "Energie Erzeugung"},
+	{model.ScopeTypeTypeGridFeedIn, "Energie Einspeisung"},
+	{model.ScopeTypeTypeGridConsumption, "Energie Bezug"},
 }
-
-var phasenNamen = map[model.ElectricalConnectionPhaseNameType]string{"a": "L1", "b": "L2", "c": "L3"}
 
 // entitaetFuerUseCase sucht die Entitaet der Bruecke, auf der sie den Use Case
 // mit diesem Akteur anbietet.
@@ -86,13 +83,6 @@ func (s *Steuerbox) PflegeMesswerte() {
 	if err != nil {
 		return
 	}
-	if verbindung, err := client.NewElectricalConnection(s.entitaet, entitaet); err == nil && neu {
-		if !verbindung.HasSubscription() {
-			verbindung.Subscribe()
-		}
-		verbindung.RequestDescriptions(nil, nil)
-		verbindung.RequestParameterDescriptions(nil, nil)
-	}
 	if neu {
 		if !messung.HasSubscription() {
 			messung.Subscribe()
@@ -119,30 +109,14 @@ func (s *Steuerbox) leseMesswerte(entitaet spineapi.EntityRemoteInterface) []Mes
 	if err != nil {
 		return nil
 	}
-	beschreibungen, err := messung.GetDescriptionsForFilter(model.MeasurementDescriptionDataType{})
-	if err != nil {
-		return nil
-	}
-	verbindung, _ := client.NewElectricalConnection(s.entitaet, entitaet)
-
 	werte := []MesswertDaten{}
-	reihenfolge := map[string]int{}
-	for _, d := range beschreibungen {
-		if d.MeasurementId == nil || d.ScopeType == nil {
+	for _, sc := range scopes {
+		beschreibungen, err := messung.GetDescriptionsForFilter(model.MeasurementDescriptionDataType{ScopeType: util.Ptr(sc.scope)})
+		if err != nil || len(beschreibungen) == 0 || beschreibungen[0].MeasurementId == nil {
 			continue
 		}
-		name, ok := scopeNamen[*d.ScopeType]
-		if !ok {
-			name = string(*d.ScopeType)
-		}
-		if verbindung != nil && *d.ScopeType != model.ScopeTypeTypeACPowerTotal {
-			if parameter, err := verbindung.GetParameterDescriptionsForFilter(model.ElectricalConnectionParameterDescriptionDataType{MeasurementId: d.MeasurementId}); err == nil && len(parameter) > 0 && parameter[0].AcMeasuredPhases != nil {
-				if phase, ok := phasenNamen[*parameter[0].AcMeasuredPhases]; ok {
-					name += " " + phase
-				}
-			}
-		}
-		w := MesswertDaten{Name: name}
+		d := beschreibungen[0]
+		w := MesswertDaten{Name: sc.name}
 		if d.Unit != nil {
 			w.Einheit = string(*d.Unit)
 		}
@@ -151,24 +125,9 @@ func (s *Steuerbox) leseMesswerte(entitaet spineapi.EntityRemoteInterface) []Mes
 			w.Wert = &wert
 			w.Ungueltig = daten.ValueState != nil && *daten.ValueState != model.MeasurementValueStateTypeNormal
 		}
-		reihenfolge[name] = slices.Index(scopeReihenfolge, *d.ScopeType)
 		werte = append(werte, w)
 	}
-	// eebus-go vergibt die IDs der Phasen in zufaelliger Reihenfolge
-	slices.SortStableFunc(werte, func(a, b MesswertDaten) int {
-		if d := reihenfolge[a.Name] - reihenfolge[b.Name]; d != 0 {
-			return d
-		}
-		return strings.Compare(a.Name, b.Name)
-	})
 	return werte
-}
-
-var scopeReihenfolge = []model.ScopeTypeType{
-	model.ScopeTypeTypeACPowerTotal, model.ScopeTypeTypeACPower,
-	model.ScopeTypeTypeACEnergyConsumed, model.ScopeTypeTypeACEnergyProduced,
-	model.ScopeTypeTypeGridFeedIn, model.ScopeTypeTypeGridConsumption,
-	model.ScopeTypeTypeACCurrent, model.ScopeTypeTypeACVoltage, model.ScopeTypeTypeACFrequency,
 }
 
 // leseAnlagenstatus liefert den Betriebszustand der Bruecke (DeviceDiagnosis).

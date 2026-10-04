@@ -42,10 +42,6 @@ type Konfiguration struct {
 
 	// MPC und MGCP
 	MpcEntitaet    string // cem oder submeter
-	MpcPhasenText  string // z. B. "abc"
-	MpcPhasen      []model.ElectricalConnectionPhaseNameType
-	MpcMesswerte   map[string]bool
-	MgcpMesswerte  map[string]bool
 	MesswertQuelle model.MeasurementValueSourceType
 }
 
@@ -86,7 +82,6 @@ func leseKonfiguration() (Konfiguration, error) {
 		WebKopplung:          gemeinsam.EnvText("WEB_KOPPLUNG", "an") != "aus",
 		EebusDebug:           gemeinsam.EnvText("EEBUS_DEBUG", "aus") == "an",
 		MpcEntitaet:          gemeinsam.EnvText("MPC_ENTITAET", "cem"),
-		MpcPhasenText:        strings.ToLower(gemeinsam.EnvText("MPC_PHASEN", "abc")),
 		MesswertQuelle:       model.MeasurementValueSourceType(gemeinsam.EnvText("MESSWERT_QUELLE", "measuredValue")),
 	}
 
@@ -134,24 +129,8 @@ func leseKonfiguration() (Konfiguration, error) {
 		konf.NennleistungErzeugungMaxW = gemeinsam.EnvKommazahl("NENNLEISTUNG_ERZEUGUNG_MAX_W", 0)
 	}
 
-	if konf.Mpc {
-		if konf.MpcEntitaet != "cem" && konf.MpcEntitaet != "submeter" {
-			return konf, fmt.Errorf("MPC_ENTITAET: cem oder submeter erwartet, nicht %q", konf.MpcEntitaet)
-		}
-		if !slices.Contains([]string{"a", "b", "c", "ab", "bc", "ac", "abc"}, konf.MpcPhasenText) {
-			return konf, fmt.Errorf("MPC_PHASEN: z. B. abc oder a erwartet, nicht %q", konf.MpcPhasenText)
-		}
-		for _, p := range konf.MpcPhasenText {
-			konf.MpcPhasen = append(konf.MpcPhasen, model.ElectricalConnectionPhaseNameType(string(p)))
-		}
-		if konf.MpcMesswerte, err = auswahl("MPC_MESSWERTE", strings.Join(mpcMesswerteErlaubt, ","), mpcMesswerteErlaubt); err != nil {
-			return konf, err
-		}
-	}
-	if konf.Mgcp {
-		if konf.MgcpMesswerte, err = auswahl("MGCP_MESSWERTE", "strom,spannung,frequenz", mgcpMesswerteErlaubt); err != nil {
-			return konf, err
-		}
+	if konf.Mpc && konf.MpcEntitaet != "cem" && konf.MpcEntitaet != "submeter" {
+		return konf, fmt.Errorf("MPC_ENTITAET: cem oder submeter erwartet, nicht %q", konf.MpcEntitaet)
 	}
 	switch konf.MesswertQuelle {
 	case model.MeasurementValueSourceTypeMeasuredValue, model.MeasurementValueSourceTypeCalculatedValue, model.MeasurementValueSourceTypeEmpiricalValue:

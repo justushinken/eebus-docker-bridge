@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"math"
 	"slices"
@@ -16,30 +15,14 @@ import (
 	"github.com/enbility/spine-go/util"
 )
 
-// Messwerte fuer MPC (Anlage) und MGCP (Netzanschlusspunkt). Die SPS schreibt
-// sie in die Holding-Register, die Bruecke gibt sie nur weiter. Welche Werte
-// angekuendigt werden (Szenarien), steht in MPC_MESSWERTE und MGCP_MESSWERTE;
-// ob ein Wert gerade gueltig ist, in den Gueltigkeitsmasken der SPS.
-
-// Namen in MPC_MESSWERTE / MGCP_MESSWERTE
-const (
-	mwPhasenleistung   = "phasenleistung"
-	mwEnergieBezug     = "energie_bezug"
-	mwEnergieErzeugung = "energie_erzeugung"
-	mwStrom            = "strom"
-	mwSpannung         = "spannung"
-	mwFrequenz         = "frequenz"
-	mwPvFaktor         = "pv_faktor"
-)
-
-var (
-	mpcMesswerteErlaubt  = []string{mwPhasenleistung, mwEnergieBezug, mwEnergieErzeugung, mwStrom, mwSpannung, mwFrequenz}
-	mgcpMesswerteErlaubt = []string{mwStrom, mwSpannung, mwFrequenz, mwPvFaktor}
-)
+// Messwerte fuer MPC (Anlage) und MGCP (Netzanschlusspunkt): je Leistung und
+// Energie. Mehr verlangen weder der FNN-Hinweis (4.1.2.3: aktuelle
+// Wirkleistung) noch die Pflicht-Szenarien der Use Cases. Die SPS schreibt die
+// Werte in die Holding-Register und meldet per Gueltigkeitsmaske, welche
+// gerade stimmen. Die Bruecke gibt sie nur weiter.
 
 // messgroesse ist ein angebotener Messwert: woher er kommt (Holding-Register,
-// Gueltigkeitsbit) und wie er an eebus-go geht. Die Liste je Use Case entsteht
-// einmal beim Start aus der Konfiguration (mpcMessgroessen, mgcpMessgroessen).
+// Gueltigkeitsbit) und wie er an eebus-go geht.
 type messgroesse struct {
 	name    string
 	einheit string
@@ -47,16 +30,13 @@ type messgroesse struct {
 	bit     int
 	lies    func(r *[anzahlHoldingRegister]uint16) float64
 	update  func(wert float64, zustand *model.MeasurementValueStateType) ucapi.UpdateData
-	// Konfigurationswert ohne ValueState (PV-Faktor): ungueltig heisst, ihn
-	// nicht zu aendern.
-	ohneZustand bool
 }
 
 // --- Register lesen ---
 
-func dint(reg int, teiler float64) func(r *[anzahlHoldingRegister]uint16) float64 {
+func dint(reg int) func(r *[anzahlHoldingRegister]uint16) float64 {
 	return func(r *[anzahlHoldingRegister]uint16) float64 {
-		return float64(int32(zuUint32(r[reg], r[reg+1]))) / teiler
+		return float64(int32(zuUint32(r[reg], r[reg+1])))
 	}
 }
 
@@ -66,185 +46,58 @@ func ulint(reg int) func(r *[anzahlHoldingRegister]uint16) float64 {
 	}
 }
 
-func uint16Wert(reg int, teiler float64) func(r *[anzahlHoldingRegister]uint16) float64 {
-	return func(r *[anzahlHoldingRegister]uint16) float64 { return float64(r[reg]) / teiler }
-}
-
 // mitZustand passt die Update-Funktionen von eebus-go an (ohne Zeitstempel).
 func mitZustand[T ucapi.UpdateData](f func(float64, *time.Time, *model.MeasurementValueStateType) T) func(float64, *model.MeasurementValueStateType) ucapi.UpdateData {
 	return func(w float64, z *model.MeasurementValueStateType) ucapi.UpdateData { return f(w, nil, z) }
 }
 
-func phasenIndex(p model.ElectricalConnectionPhaseNameType) int {
-	return strings.Index("abc", string(p))
+// mitZeitraum ebenso fuer die Energie-Funktionen (ohne Auswertezeitraum).
+func mitZeitraum[T ucapi.UpdateData](f func(float64, *time.Time, *model.MeasurementValueStateType, *time.Time, *time.Time) T) func(float64, *model.MeasurementValueStateType) ucapi.UpdateData {
+	return func(w float64, z *model.MeasurementValueStateType) ucapi.UpdateData { return f(w, nil, z, nil, nil) }
 }
 
 // --- MPC ---
 
-func NeuesMpc(entitaet spineapi.EntityLocalInterface, konf Konfiguration) (*mumpc.MPC, error) {
+func NeuesMpc(entitaet spineapi.EntityLocalInterface, konf Konfiguration) (*mumpc.MPC, []messgroesse, error) {
 	quelle := util.Ptr(konf.MesswertQuelle)
-	jePhase := func() mumpc.PhaseMeasurementSourceMap {
-		m := mumpc.PhaseMeasurementSourceMap{}
-		for _, p := range konf.MpcPhasen {
-			m[p] = quelle
-		}
-		return m
+	mpc, err := mumpc.NewMPC(entitaet, nil,
+		&mumpc.MonitorPowerConfig{ConnectedPhases: model.ElectricalConnectionPhaseNameTypeAbc, ValueSourceTotal: quelle},
+		&mumpc.MonitorEnergyConfig{ValueSourceConsumption: quelle, ValueSourceProduction: quelle},
+		nil, nil, nil)
+	if err != nil {
+		return nil, nil, err
 	}
-	auswahl := konf.MpcMesswerte
-
-	leistung := &mumpc.MonitorPowerConfig{
-		ConnectedPhases:  model.ElectricalConnectionPhaseNameType(konf.MpcPhasenText),
-		ValueSourceTotal: quelle,
+	groessen := []messgroesse{
+		{"Leistung", "W", regMpcMaske, 0, dint(regMpcP), mitZustand(mpc.UpdateDataPowerTotal)},
+		{"Energie Bezug", "Wh", regMpcMaske, 1, ulint(regMpcEBezug), mitZeitraum(mpc.UpdateDataEnergyConsumed)},
+		{"Energie Erzeugung", "Wh", regMpcMaske, 2, ulint(regMpcEErzeugung), mitZeitraum(mpc.UpdateDataEnergyProduced)},
 	}
-	if auswahl[mwPhasenleistung] {
-		leistung.ValueSourcePerPhase = jePhase()
-	}
-	var energie *mumpc.MonitorEnergyConfig
-	if auswahl[mwEnergieBezug] || auswahl[mwEnergieErzeugung] {
-		energie = &mumpc.MonitorEnergyConfig{}
-		if auswahl[mwEnergieBezug] {
-			energie.ValueSourceConsumption = quelle
-		}
-		if auswahl[mwEnergieErzeugung] {
-			energie.ValueSourceProduction = quelle
-		}
-	}
-	var strom *mumpc.MonitorCurrentConfig
-	if auswahl[mwStrom] {
-		strom = &mumpc.MonitorCurrentConfig{ValueSourcePerPhase: jePhase()}
-	}
-	var spannung *mumpc.MonitorVoltageConfig
-	if auswahl[mwSpannung] {
-		spannung = &mumpc.MonitorVoltageConfig{ValueSourcePerPhase: jePhase()}
-	}
-	var frequenz *mumpc.MonitorFrequencyConfig
-	if auswahl[mwFrequenz] {
-		frequenz = &mumpc.MonitorFrequencyConfig{ValueSource: quelle}
-	}
-	return mumpc.NewMPC(entitaet, nil, leistung, energie, strom, spannung, frequenz)
-}
-
-// mpcMessgroessen: Bits der Maske siehe README (Holding-Register 5).
-func mpcMessgroessen(mpc *mumpc.MPC, konf Konfiguration) []messgroesse {
-	auswahl := konf.MpcMesswerte
-	liste := []messgroesse{
-		{name: "Leistung", einheit: "W", bit: 0, lies: dint(regMpcP, 1), update: mitZustand(mpc.UpdateDataPowerTotal)},
-	}
-	type phasenwert = func(float64, *time.Time, *model.MeasurementValueStateType) ucapi.UpdateMeasurementData
-	jePhase := func(name, einheit string, bit int, lies func(phase int) func(*[anzahlHoldingRegister]uint16) float64, f [3]phasenwert) {
-		for _, p := range konf.MpcPhasen {
-			i := phasenIndex(p)
-			liste = append(liste, messgroesse{name: fmt.Sprintf("%s L%d", name, i+1), einheit: einheit, bit: bit + i, lies: lies(i), update: mitZustand(f[i])})
-		}
-	}
-	if auswahl[mwPhasenleistung] {
-		jePhase("Leistung", "W", 1, func(i int) func(*[anzahlHoldingRegister]uint16) float64 { return dint(regMpcPL1+2*i, 1) },
-			[3]phasenwert{mpc.UpdateDataPowerPhaseA, mpc.UpdateDataPowerPhaseB, mpc.UpdateDataPowerPhaseC})
-	}
-	if auswahl[mwEnergieBezug] {
-		liste = append(liste, messgroesse{name: "Energie Bezug", einheit: "Wh", bit: 4, lies: ulint(regMpcEBezug),
-			update: func(w float64, z *model.MeasurementValueStateType) ucapi.UpdateData {
-				return mpc.UpdateDataEnergyConsumed(w, nil, z, nil, nil)
-			}})
-	}
-	if auswahl[mwEnergieErzeugung] {
-		liste = append(liste, messgroesse{name: "Energie Erzeugung", einheit: "Wh", bit: 5, lies: ulint(regMpcEErzeugung),
-			update: func(w float64, z *model.MeasurementValueStateType) ucapi.UpdateData {
-				return mpc.UpdateDataEnergyProduced(w, nil, z, nil, nil)
-			}})
-	}
-	if auswahl[mwStrom] {
-		jePhase("Strom", "A", 6, func(i int) func(*[anzahlHoldingRegister]uint16) float64 { return dint(regMpcIL1+2*i, 1000) },
-			[3]phasenwert{mpc.UpdateDataCurrentPhaseA, mpc.UpdateDataCurrentPhaseB, mpc.UpdateDataCurrentPhaseC})
-	}
-	if auswahl[mwSpannung] {
-		jePhase("Spannung", "V", 9, func(i int) func(*[anzahlHoldingRegister]uint16) float64 { return uint16Wert(regMpcUL1+i, 10) },
-			[3]phasenwert{mpc.UpdateDataVoltagePhaseA, mpc.UpdateDataVoltagePhaseB, mpc.UpdateDataVoltagePhaseC})
-	}
-	if auswahl[mwFrequenz] {
-		liste = append(liste, messgroesse{name: "Frequenz", einheit: "Hz", bit: 12, lies: uint16Wert(regMpcF, 100), update: mitZustand(mpc.UpdateDataFrequency)})
-	}
-	for i := range liste {
-		liste[i].maske = regMpcMaske
-	}
-	return liste
+	return mpc, groessen, nil
 }
 
 // --- MGCP ---
 
-func NeuesMgcp(entitaet spineapi.EntityLocalInterface, konf Konfiguration) (*gcpmgcp.MGCP, error) {
+func NeuesMgcp(entitaet spineapi.EntityLocalInterface, konf Konfiguration) (*gcpmgcp.MGCP, []messgroesse, error) {
 	quelle := util.Ptr(konf.MesswertQuelle)
-	auswahl := konf.MgcpMesswerte
-
-	var pv *gcpmgcp.MonitorPvFeedInPowerLimitationFactorConfig
-	if auswahl[mwPvFaktor] {
-		pv = &gcpmgcp.MonitorPvFeedInPowerLimitationFactorConfig{}
-	}
-	var strom *gcpmgcp.MonitorCurrentConfig
-	if auswahl[mwStrom] {
-		strom = &gcpmgcp.MonitorCurrentConfig{ValueSourcePhaseA: quelle, ValueSourcePhaseB: quelle, ValueSourcePhaseC: quelle}
-	}
-	var spannung *gcpmgcp.MonitorVoltageConfig
-	if auswahl[mwSpannung] {
-		spannung = &gcpmgcp.MonitorVoltageConfig{ValueSourcePhaseA: quelle, ValueSourcePhaseB: quelle, ValueSourcePhaseC: quelle}
-	}
-	var frequenz *gcpmgcp.MonitorFrequencyConfig
-	if auswahl[mwFrequenz] {
-		frequenz = &gcpmgcp.MonitorFrequencyConfig{ValueSource: quelle}
-	}
-	mgcp, err := gcpmgcp.NewMGCP(entitaet, nil, pv,
+	mgcp, err := gcpmgcp.NewMGCP(entitaet, nil, nil,
 		&gcpmgcp.MonitorPowerConfig{ValueSource: quelle},
 		&gcpmgcp.MonitorEnergyConfig{ValueSourceProduction: quelle, ValueSourceConsumption: quelle},
-		strom, spannung, frequenz)
+		nil, nil, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// Workaround fuer eebus-go (Stand 30.09.2026): gcp/mgcp kuendigt den Use
 	// Case mit dem Akteur der Gegenseite (MonitoringAppliance) an. Richtig ist
 	// GridConnectionPoint, sonst erkennt die Steuerbox MGCP nicht. Entfernen,
 	// sobald eebus-go das behebt.
 	mgcp.UseCaseActor = model.UseCaseActorTypeGridConnectionPoint
-	return mgcp, nil
-}
 
-// mgcpMessgroessen: Bits der Maske siehe README (Holding-Register 6).
-func mgcpMessgroessen(mgcp *gcpmgcp.MGCP, konf Konfiguration) []messgroesse {
-	auswahl := konf.MgcpMesswerte
-	liste := []messgroesse{
-		{name: "Leistung", einheit: "W", bit: 0, lies: dint(regMgcpP, 1), update: mitZustand(mgcp.UpdateDataPowerTotal)},
-		{name: "Energie Einspeisung", einheit: "Wh", bit: 1, lies: ulint(regMgcpEEinspeisung),
-			update: func(w float64, z *model.MeasurementValueStateType) ucapi.UpdateData {
-				return mgcp.UpdateDataEnergyFeedIn(w, nil, z, nil, nil)
-			}},
-		{name: "Energie Bezug", einheit: "Wh", bit: 2, lies: ulint(regMgcpEBezug),
-			update: func(w float64, z *model.MeasurementValueStateType) ucapi.UpdateData {
-				return mgcp.UpdateDataEnergyConsumed(w, nil, z, nil, nil)
-			}},
+	groessen := []messgroesse{
+		{"Leistung", "W", regMgcpMaske, 0, dint(regMgcpP), mitZustand(mgcp.UpdateDataPowerTotal)},
+		{"Energie Einspeisung", "Wh", regMgcpMaske, 1, ulint(regMgcpEEinspeisung), mitZeitraum(mgcp.UpdateDataEnergyFeedIn)},
+		{"Energie Bezug", "Wh", regMgcpMaske, 2, ulint(regMgcpEBezug), mitZeitraum(mgcp.UpdateDataEnergyConsumed)},
 	}
-	type phasenwert = func(float64, *time.Time, *model.MeasurementValueStateType) ucapi.UpdateData
-	if auswahl[mwStrom] {
-		for i, f := range [3]phasenwert{mgcp.UpdateDataCurrentPhaseA, mgcp.UpdateDataCurrentPhaseB, mgcp.UpdateDataCurrentPhaseC} {
-			liste = append(liste, messgroesse{name: fmt.Sprintf("Strom L%d", i+1), einheit: "A", bit: 3 + i, lies: dint(regMgcpIL1+2*i, 1000), update: mitZustand(f)})
-		}
-	}
-	if auswahl[mwSpannung] {
-		for i, f := range [3]phasenwert{mgcp.UpdateDataVoltagePhaseA, mgcp.UpdateDataVoltagePhaseB, mgcp.UpdateDataVoltagePhaseC} {
-			liste = append(liste, messgroesse{name: fmt.Sprintf("Spannung L%d", i+1), einheit: "V", bit: 6 + i, lies: uint16Wert(regMgcpUL1+i, 10), update: mitZustand(f)})
-		}
-	}
-	if auswahl[mwFrequenz] {
-		liste = append(liste, messgroesse{name: "Frequenz", einheit: "Hz", bit: 9, lies: uint16Wert(regMgcpF, 100), update: mitZustand(mgcp.UpdateDataFrequency)})
-	}
-	if auswahl[mwPvFaktor] {
-		liste = append(liste, messgroesse{name: "PV-Begrenzungsfaktor", einheit: "%", bit: 10, lies: uint16Wert(regMgcpPvFaktor, 10), ohneZustand: true,
-			update: func(w float64, _ *model.MeasurementValueStateType) ucapi.UpdateData {
-				return mgcp.UpdateDataPowerLimitationFactor(w)
-			}})
-	}
-	for i := range liste {
-		liste[i].maske = regMgcpMaske
-	}
-	return liste
+	return mgcp, groessen, nil
 }
 
 // --- Weitergeben ---
@@ -270,8 +123,6 @@ func updates(groessen []messgroesse, r *[anzahlHoldingRegister]uint16, spsOk boo
 		zustand := model.MeasurementValueStateTypeError
 		if gueltig(r, spsOk, g) {
 			zustand = model.MeasurementValueStateTypeNormal
-		} else if g.ohneZustand {
-			continue
 		}
 		liste = append(liste, g.update(g.lies(r), &zustand))
 	}
@@ -347,7 +198,7 @@ func (b *Bruecke) messwerteUi(groessen []messgroesse) []Messwert {
 	for _, g := range groessen {
 		liste = append(liste, Messwert{
 			Name:    g.name,
-			Wert:    math.Round(g.lies(&b.holding)*1000) / 1000,
+			Wert:    math.Round(g.lies(&b.holding)),
 			Einheit: g.einheit,
 			Gueltig: gueltig(&b.holding, b.spsOk, g),
 		})

@@ -83,25 +83,17 @@ Holding-Register (FC03/FC16), SPS → Brücke. Alle in **einem** FC16-Aufruf sch
 | 0 | Lebenszeichen SPS (+1 pro Sekunde) | UINT |
 | 1–2 | Nennleistung Bezug (an die Steuerbox), 0 = `NENNLEISTUNG_MAX_W` | UDINT W |
 | 3–4 | Nennleistung Erzeugung (LPP), 0 = `NENNLEISTUNG_ERZEUGUNG_MAX_W` | UDINT W |
-| 5 | Gültigkeit MPC: Bit 0 P, 1–3 P L1–L3, 4 E Bezug, 5 E Erzeugung, 6–8 I, 9–11 U, 12 f | WORD |
-| 6 | Gültigkeit MGCP: Bit 0 P, 1 E Einspeisung, 2 E Bezug, 3–5 I, 6–8 U, 9 f, 10 PV-Faktor | WORD |
+| 5 | Gültigkeit MPC: Bit 0 Leistung, 1 Energie Bezug, 2 Energie Erzeugung | WORD |
+| 6 | Gültigkeit MGCP: Bit 0 Leistung, 1 Energie Einspeisung, 2 Energie Bezug | WORD |
 | 7 | Anlagenstatus: 0 normal, 1 Störung, 2 Standby | UINT |
 | 8–9 | MPC Leistung (Bezug +, Erzeugung −) | DINT W |
-| 10–15 | MPC Leistung L1, L2, L3 | 3× DINT W |
-| 16–19 | MPC Energie Bezug (Zählerstand) | ULINT Wh |
-| 20–23 | MPC Energie Erzeugung (Zählerstand) | ULINT Wh |
-| 24–29 | MPC Strom L1, L2, L3 | 3× DINT mA |
-| 30–32 | MPC Spannung L1, L2, L3 | 3× UINT 0,1 V |
-| 33 | MPC Frequenz | UINT 0,01 Hz |
-| 40–41 | MGCP Leistung (Bezug aus dem Netz +, Einspeisung −) | DINT W |
-| 42–45 | MGCP Energie Einspeisung | ULINT Wh |
-| 46–49 | MGCP Energie Bezug | ULINT Wh |
-| 50–55 | MGCP Strom L1, L2, L3 | 3× DINT mA |
-| 56–58 | MGCP Spannung L1, L2, L3 | 3× UINT 0,1 V |
-| 59 | MGCP Frequenz | UINT 0,01 Hz |
-| 60 | MGCP PV-Einspeisebegrenzungsfaktor | UINT 0,1 % |
+| 10–13 | MPC Energie Bezug (Zählerstand) | ULINT Wh |
+| 14–17 | MPC Energie Erzeugung (Zählerstand) | ULINT Wh |
+| 18–19 | MGCP Leistung (Bezug aus dem Netz +, Einspeisung −) | DINT W |
+| 20–23 | MGCP Energie Einspeisung | ULINT Wh |
+| 24–27 | MGCP Energie Bezug | ULINT Wh |
 
-Ein Messwert ohne Gültigkeitsbit, oder alle Werte bei ausgefallener SPS, gehen als „ungültig“ (ValueState `error`) an die Steuerbox. Energie in 64 Bit, weil 32 Bit Wh an einem größeren Netzanschluss nach wenigen Jahren überlaufen. Strom in mA, weil 0,01 A in 16 Bit nur bis 327 A reicht.
+Als Messwerte gibt die Brücke je Use Case Leistung und Energie weiter. Mehr verlangen weder der FNN-Hinweis (4.1.2.3: aktuelle Wirkleistung) noch die Pflicht-Szenarien von MPC und MGCP. Strom, Spannung, Frequenz oder Werte je Phase ließen sich bei Bedarf hinten anhängen (neue Erweiterungsversion). Ein Wert ohne Gültigkeitsbit, oder alle Werte bei ausgefallener SPS, gehen als „ungültig“ (ValueState `error`) an die Steuerbox. Energie in 64 Bit, weil 32 Bit Wh an einem größeren Netzanschluss nach wenigen Jahren überlaufen.
 
 ## Bauen und Verteilen
 
@@ -168,10 +160,7 @@ Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sons
 | `FAILSAFE_GRENZE_W` | 4200 | Failsafe-Grenze Bezug (Startwert) |
 | `FAILSAFE_EINSPEISEGRENZE_W` | – | Failsafe-Grenze Einspeisung (Startwert), **Pflicht mit `lpp`** |
 | `FAILSAFE_MINDESTDAUER` | `2h` | Failsafe-Mindestdauer, gilt für Bezug und Einspeisung gemeinsam |
-| `MPC_MESSWERTE` | alle | Angekündigte MPC-Werte: `phasenleistung`, `energie_bezug`, `energie_erzeugung`, `strom`, `spannung`, `frequenz`. Die Gesamtleistung ist immer dabei |
-| `MPC_PHASEN` | `abc` | Angeschlossene Phasen, z. B. `a` bei einphasigen Anlagen |
 | `MPC_ENTITAET` | `cem` | `cem`: MPC auf der Entität des Energiemanagers (wie LPC). `submeter`: eigene Entität „Unterzähler“, falls eine Steuerbox MPC auf CEM nicht liest |
-| `MGCP_MESSWERTE` | `strom,spannung,frequenz` | Zusätzliche MGCP-Werte, dazu `pv_faktor`. Leistung und beide Energien sind immer dabei |
 | `MESSWERT_QUELLE` | `measuredValue` | Herkunft der Messwerte: `measuredValue`, `calculatedValue` oder `empiricalValue` |
 
 Welche Werte gerade gültig sind, meldet die SPS über die Gültigkeitsmasken (Holding-Register 5 und 6).
@@ -304,7 +293,7 @@ Gerätebaum:
 1. *Ethernet-Adapter → Ethernet* anhängen, Schnittstelle mit der IP des PFC wählen (X1 meist `br0`). Für die Verbindung zu `127.0.0.1` ist die Wahl egal, CODESYS verlangt aber einen Adapter.
 2. Darunter *ModbusTCP Master*, **Auto-Reconnect aktivieren**. Sonst gibt CODESYS nach einem Neustart der Brücke auf, und die Brücke zeigt „SPS ausgefallen“.
 3. Darunter *ModbusTCP Slave* mit IP `127.0.0.1`, Port `5502`, Unit-ID beliebig.
-4. Kanäle wie in `codesys/GvlEebus.st`: FC04 Offset 0 Länge 31 (200 ms) und FC16 Offset 0 Länge 61 (1 s).
+4. Kanäle wie in `codesys/GvlEebus.st`: FC04 Offset 0 Länge 31 (200 ms) und FC16 Offset 0 Länge 28 (1 s).
 5. Im E/A-Abbild die Kanäle als Ganzes auf `GvlEebus.aInputRegister` bzw. `GvlEebus.aHoldingRegister` legen, Buszyklus-Task = Task von `PrgEnergiemanagement`.
 
 Bausteine (Beispiel in `PrgEnergiemanagement.st`):

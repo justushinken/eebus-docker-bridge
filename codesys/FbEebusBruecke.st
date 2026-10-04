@@ -18,7 +18,7 @@ VAR_INPUT
 END_VAR
 VAR_IN_OUT
 	aInputRegister   : ARRAY [0..30] OF WORD;    // Abbild der Input-Register der Brücke
-	aHoldingRegister : ARRAY [0..60] OF WORD;    // an die Brücke zu schreibende Register
+	aHoldingRegister : ARRAY [0..27] OF WORD;    // an die Brücke zu schreibende Register
 END_VAR
 VAR_OUTPUT
 	xBrueckeOk          : BOOL;                  // Brücke lebt und Version passt

@@ -8,6 +8,10 @@ toolchain go1.24.13
 // Vor einem Update die Aufrufe in main.go/bruecke.go mit cmd/hems bzw.
 // cmd/controlbox der neuen Version abgleichen.
 
+// spine-go mit Fix fuer die Freigabe gleichzeitiger Schreibanfragen, siehe
+// third_party/spine-go/PATCH.md. Entfernen, sobald upstream behoben.
+replace github.com/enbility/spine-go => ./third_party/spine-go
+
 require (
 	github.com/enbility/eebus-go v0.7.1-0.20260930170458-8583642861c3
 	github.com/enbility/ship-go v0.6.1-0.20260928110648-a84426bc3810

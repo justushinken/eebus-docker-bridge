@@ -1,5 +1,10 @@
 // Auswertung der EEBUS-LPC-Brücke (Docker-Container auf derselben Steuerung).
 //
+// VERALTET: Für neue Projekte FbEebusBruecke, FbEebusBegrenzung und
+// FbEebusMesswerte verwenden (LPP, Messwerte, Anlagenstatus). Dieser Baustein
+// läuft mit neueren Brücken unverändert weiter, weil die Register 0 bis 13
+// und 0 bis 2 gleich geblieben sind (Schnittstellenversion 1).
+//
 // Die Brücke liefert die vom Netzbetreiber vorgegebene Leistungsgrenze
 // (Use Case LPC, Paragraf 14a EnWG) als Modbus-Input-Register. Der Baustein
 // - überwacht das Lebenszeichen und die Schnittstellenversion der Brücke,

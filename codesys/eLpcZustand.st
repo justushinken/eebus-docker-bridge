@@ -1,4 +1,5 @@
-// Zustand des Use Case LPC, wie ihn die EEBUS-Brücke meldet.
+// Zustand der Use Cases LPC (Bezug) und LPP (Einspeisung), wie ihn die
+// EEBUS-Brücke meldet. Beide haben denselben Zustandsautomaten.
 // Zahlenwerte identisch mit LpcZustand in bruecke.go.
 {attribute 'qualified_only'}
 {attribute 'strict'}

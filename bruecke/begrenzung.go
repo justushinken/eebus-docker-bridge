@@ -56,11 +56,14 @@ func (r *Begrenzung) takt(jetzt time.Time, heartbeatOk bool, mindestdauer time.D
 
 	switch r.zustand {
 	case ZustandInit:
-		// Bis zur ersten Kommunikation gilt die Failsafe-Grenze.
+		// Bis zur ersten Kommunikation gilt die Failsafe-Grenze. Meldet sich
+		// die Steuerbox nicht, geht es in Failsafe: Die Grenze gilt dann noch
+		// mindestens die Failsafe-Mindestdauer lang (z. B. nach einem Neustart
+		// waehrend eines Netzausfalls).
 		if heartbeatOk {
 			r.wechsle(gesteuert, jetzt)
 		} else if jetzt.Sub(r.zustandSeit) >= heartbeatTimeout {
-			r.wechsle(ZustandUnbegrenztAutonom, jetzt)
+			r.wechsle(ZustandFailsafe, jetzt)
 		}
 
 	case ZustandUnbegrenztGesteuert, ZustandBegrenzt:
@@ -249,20 +252,20 @@ const (
 	artMindestdauer
 )
 
-var lpcArten = map[string]ereignisArt{
-	string(cslpc.LimitWriteApprovalRequired):                    artGrenzeFreigeben,
-	string(cslpc.ConfigurationWriteApprovalRequired):            artKonfigurationFreigeben,
-	string(cslpc.DataUpdateLimit):                               artGrenze,
-	string(cslpc.DataUpdateHeartbeat):                           artHeartbeat,
-	string(cslpc.DataUpdateFailsafeConsumptionActivePowerLimit): artFailsafeGrenze,
-	string(cslpc.DataUpdateFailsafeDurationMinimum):             artMindestdauer,
+var lpcArten = map[api.EventType]ereignisArt{
+	cslpc.LimitWriteApprovalRequired:                    artGrenzeFreigeben,
+	cslpc.ConfigurationWriteApprovalRequired:            artKonfigurationFreigeben,
+	cslpc.DataUpdateLimit:                               artGrenze,
+	cslpc.DataUpdateHeartbeat:                           artHeartbeat,
+	cslpc.DataUpdateFailsafeConsumptionActivePowerLimit: artFailsafeGrenze,
+	cslpc.DataUpdateFailsafeDurationMinimum:             artMindestdauer,
 }
 
-var lppArten = map[string]ereignisArt{
-	string(cslpp.LimitWriteApprovalRequired):                   artGrenzeFreigeben,
-	string(cslpp.ConfigurationWriteApprovalRequired):           artKonfigurationFreigeben,
-	string(cslpp.DataUpdateLimit):                              artGrenze,
-	string(cslpp.DataUpdateHeartbeat):                          artHeartbeat,
-	string(cslpp.DataUpdateFailsafeProductionActivePowerLimit): artFailsafeGrenze,
-	string(cslpp.DataUpdateFailsafeDurationMinimum):            artMindestdauer,
+var lppArten = map[api.EventType]ereignisArt{
+	cslpp.LimitWriteApprovalRequired:                   artGrenzeFreigeben,
+	cslpp.ConfigurationWriteApprovalRequired:           artKonfigurationFreigeben,
+	cslpp.DataUpdateLimit:                              artGrenze,
+	cslpp.DataUpdateHeartbeat:                          artHeartbeat,
+	cslpp.DataUpdateFailsafeProductionActivePowerLimit: artFailsafeGrenze,
+	cslpp.DataUpdateFailsafeDurationMinimum:            artMindestdauer,
 }

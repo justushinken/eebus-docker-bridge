@@ -109,7 +109,7 @@ func main() {
 		}
 	}
 	if slices.Contains(konf.UseCases, "mpc") {
-		steuerbox.mpc = mampc.NewMPC(steuerbox.entitaet, steuerbox.MpcEreignis)
+		steuerbox.mpc = mampc.NewMPC(steuerbox.entitaet, nil)
 		if err := dienst.AddUseCase(steuerbox.mpc); err != nil {
 			log.Fatalf("Use Case MPC: %v", err)
 		}

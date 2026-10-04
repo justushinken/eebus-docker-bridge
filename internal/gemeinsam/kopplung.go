@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	shipapi "github.com/enbility/ship-go/api"
@@ -36,6 +37,18 @@ func Bezeichnung(id shipapi.ServiceIdentity) string {
 		return "SKI " + id.SKI
 	}
 	return id.String()
+}
+
+var skiMuster = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+// NormalisiereSki entfernt Leerzeichen (QR-Codes zeigen den SKI in
+// Vierergruppen), schreibt klein und prueft auf 40 Hex-Zeichen.
+func NormalisiereSki(ski string) (string, error) {
+	ski = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(ski), " ", ""))
+	if !skiMuster.MatchString(ski) {
+		return "", errors.New("ungueltiger SKI, erwartet 40 Hex-Zeichen")
+	}
+	return ski, nil
 }
 
 // GleicheIdentitaet: a und b bezeichnen dasselbe Geraet. Verglichen wird, was
@@ -81,7 +94,7 @@ func SpeichereKopplung(pfad string, k *Kopplung) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(pfad, inhalt, 0o600)
+	return SchreibeDatei(pfad, inhalt)
 }
 
 // --- Secret fuer den SHIP Pairing Service ---
@@ -108,7 +121,7 @@ func LadeOderErzeugeSecret(verzeichnis string) (shipapi.PairingSecret, error) {
 	if err := os.MkdirAll(verzeichnis, 0o700); err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(pfad, []byte(strings.ToUpper(hex.EncodeToString(secret))+"\n"), 0o600); err != nil {
+	if err := SchreibeDatei(pfad, []byte(strings.ToUpper(hex.EncodeToString(secret))+"\n")); err != nil {
 		return nil, err
 	}
 	return secret, nil
@@ -153,7 +166,7 @@ func (r RingpufferDatei) SaveRingBuffer(eintraege []shipapi.DigestEntry, naechst
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(r.Pfad, inhalt, 0o600)
+	return SchreibeDatei(r.Pfad, inhalt)
 }
 
 // --- QR-Text des SHIP Pairing Service ---

@@ -129,14 +129,14 @@
 			<line class="linie" x1="600" y1="248" x2="477" y2="248" marker-end="url(#pfeil2)"/>
 			<text x="537" y="240" text-anchor="middle" class="leise-text">Heartbeat</text>
 
-			<path class="linie" d="M85,186 V300 H675 V278" marker-end="url(#pfeil2)"/>
-			<text x="380" y="320" text-anchor="middle" class="leise-text">120 s nach dem Start keine Kommunikation</text>
+			<path class="linie" d="M85,186 V300 H756 V68 H752" marker-end="url(#pfeil2)"/>
+			<text x="380" y="320" text-anchor="middle" class="leise-text">120 s nach dem Start ohne Heartbeat</text>
 		</svg>
 
 		<table style="margin-top:8px">
 			<thead><tr><th>Zustand</th><th>Was die SPS tun muss</th></tr></thead>
 			<tbody>
-				<tr><td><span class="marke rot">Init</span></td><td>Failsafe-Grenze einhalten, bis die Steuerbox sich meldet.</td></tr>
+				<tr><td><span class="marke rot">Init</span></td><td>Failsafe-Grenze einhalten, bis die Steuerbox sich meldet. Meldet sie sich 120 s lang nicht, geht es in Failsafe.</td></tr>
 				<tr><td><span class="marke orange">Begrenzt</span></td><td>Grenze des Netzbetreibers einhalten.</td></tr>
 				<tr><td><span class="marke gruen">Unbegrenzt</span></td><td>Keine Einschränkung, gesteuert oder autonom.</td></tr>
 				<tr><td><span class="marke rot">Failsafe</span></td><td>Failsafe-Grenze einhalten, bis Heartbeat <em>und</em> eine neue Grenze kommen oder die Mindestdauer abläuft.</td></tr>
@@ -192,13 +192,13 @@
 		<p class="hinweis">Ohne Suchmodus lehnt die Brücke unbekannte Geräte ab und meldet das einmal unter „Ereignisse“. Taucht dort eine Steuerbox auf, hat der Messstellenbetreiber die Brücke schon eingetragen, es fehlt nur noch die Brückenseite. Eine automatische Annahme gibt es bewusst nicht: Sonst könnte jedes Gerät im Netz Grenzen setzen.</p>
 
 		<h3 style="margin-top:20px">C · SKI fest per Einstellung</h3>
-		<p>Den Container mit <code>-e EEBUS_REMOTE_SKI=&lt;SKI der Steuerbox&gt;</code> anlegen. Die Kopplung lässt sich dann auf der Statusseite nicht ändern.</p>
+		<p>Den Container mit <code>-e EEBUS_REMOTE_SKI=&lt;SKI der Steuerbox&gt;</code> anlegen. Dann gilt nur diese Steuerbox: Pairing Service, Suchmodus und Kopplung auf der Statusseite sind aus.</p>
 
 		<h3 style="margin-top:20px">Einstellungen</h3>
 		<table>
 			<thead><tr><th>Variable</th><th>Bedeutung</th></tr></thead>
 			<tbody>
-				<tr><td><code>EEBUS_REMOTE_SKI</code></td><td>SKI der Steuerbox, fest eingestellt (Verfahren C)</td></tr>
+				<tr><td><code>EEBUS_REMOTE_SKI</code></td><td>SKI der Steuerbox, fest eingestellt (Verfahren C). Schaltet Pairing Service und Kopplung im UI ab.</td></tr>
 				<tr><td><code>EEBUS_PAIRING_SERVICE</code></td><td><code>an</code> (Vorgabe) oder <code>aus</code></td></tr>
 				<tr><td><code>WEB_KOPPLUNG</code></td><td><code>an</code> (Vorgabe). Mit <code>aus</code> ist die Statusseite rein lesend, Suchmodus und Kopplung sind dann gesperrt.</td></tr>
 				<tr><td><code>SHIP_ID</code></td><td>Kennung der Brücke im Netz. Vorgabe: Marke-Modell-MAC-Adresse. Nach der Kopplung nicht mehr ändern.</td></tr>

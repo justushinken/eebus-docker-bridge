@@ -270,7 +270,7 @@ const zustandFarbe = { 0: "rot", 1: "gruen", 2: "orange", 3: "rot", 4: "gruen" }
 // Ampel: die kritischste der beiden Richtungen
 function ampel(s) {
 	const richtungen = [];
-	if (s.bezugAktiv) richtungen.push({ name: "Bezug", r: s });
+	if (s.bezug) richtungen.push({ name: "Bezug", r: s.bezug });
 	if (s.einspeisung) richtungen.push({ name: "Einspeisung", r: s.einspeisung });
 	const rang = { 3: 4, 0: 3, 2: 2, 4: 1, 1: 0 };
 	richtungen.sort((a, b) => rang[b.r.zustand] - rang[a.r.zustand]);
@@ -318,8 +318,8 @@ function zeige(s) {
 	$("geraet").textContent = `${s.hersteller} ${s.modell} · SN ${s.seriennummer}`;
 	ampel(s);
 
-	$("karteBezug").hidden = !s.bezugAktiv;
-	if (s.bezugAktiv) zeigeRichtung("b", s);
+	$("karteBezug").hidden = !s.bezug;
+	if (s.bezug) zeigeRichtung("b", s.bezug);
 	$("karteEinspeisung").hidden = !s.einspeisung;
 	if (s.einspeisung) zeigeRichtung("e", s.einspeisung);
 

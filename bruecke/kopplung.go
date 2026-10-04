@@ -24,9 +24,8 @@ const (
 )
 
 const (
-	suchmodusDauer   = 10 * time.Minute
-	anfrageGueltig   = 2 * time.Minute // ship-go wartet bis zu 60 s plus Verlaengerungen
-	kopplungsquelleE = "env"
+	suchmodusDauer = 10 * time.Minute
+	anfrageGueltig = 2 * time.Minute // ship-go wartet bis zu 60 s plus Verlaengerungen
 )
 
 // Anfrage ist ein Verbindungsversuch einer Steuerbox, der die Bruecke noch
@@ -158,11 +157,14 @@ func (b *Bruecke) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, de
 // Start wieder angemeldet (siehe main.go).
 
 func (b *Bruecke) ServiceAutoTrusted(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
-	kopplung := &gemeinsam.Kopplung{Verfahren: gemeinsam.VerfahrenPairing, Identitaet: partner}
-	if err := b.ersetzeKopplung(kopplung); err != nil {
-		log.Printf("Kopplung speichern: %v", err)
-	}
-	log.Printf("Steuerbox per Pairing Service gekoppelt: %s", gemeinsam.Bezeichnung(partner))
+	// Eigene Goroutine: Aus diesem Callback heraus nicht in ship-go zurueckrufen.
+	go func() {
+		kopplung := &gemeinsam.Kopplung{Verfahren: gemeinsam.VerfahrenPairing, Identitaet: partner}
+		if err := b.ersetzeKopplung(kopplung); err != nil {
+			log.Printf("Kopplung speichern: %v", err)
+		}
+		log.Printf("Steuerbox per Pairing Service gekoppelt: %s", gemeinsam.Bezeichnung(partner))
+	}()
 }
 
 func (b *Bruecke) ServiceAutoTrustFailed(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund error) {
@@ -181,6 +183,12 @@ func (b *Bruecke) ServiceAutoTrustFailed(dienst api.ServiceInterface, partner sh
 // Kommt z. B., wenn eine neue Steuerbox die alte ersetzt. Die neue meldet
 // sich danach ueber ServiceAutoTrusted.
 func (b *Bruecke) ServiceAutoTrustRemoved(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund string) {
+	go b.entfernePairingKopplung(partner, grund)
+}
+
+func (b *Bruecke) entfernePairingKopplung(partner shipapi.ServiceIdentity, grund string) {
+	b.kopplungMu.Lock()
+	defer b.kopplungMu.Unlock()
 	b.mu.Lock()
 	betroffen := b.kopplung != nil && b.kopplung.Verfahren == gemeinsam.VerfahrenPairing &&
 		gemeinsam.GleicheIdentitaet(b.kopplung.Identitaet, partner)
@@ -216,7 +224,11 @@ func (b *Bruecke) speichereKopplung(k *gemeinsam.Kopplung) error {
 
 // ersetzeKopplung speichert die neue Kopplung und meldet eine andere, bisher
 // gekoppelte Steuerbox beim EEBUS-Stack ab. Es gibt nur eine Steuerbox.
+// kopplungMu haelt Datei, Zustand und EEBUS-Stack in derselben Reihenfolge.
+// Nicht aus Callbacks von ship-go heraus aufrufen (dort per Goroutine).
 func (b *Bruecke) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
+	b.kopplungMu.Lock()
+	defer b.kopplungMu.Unlock()
 	if err := b.speichereKopplung(neu); err != nil {
 		return err
 	}
@@ -232,17 +244,12 @@ func (b *Bruecke) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
 	}
 	b.mu.Unlock()
 
-	// Eigene Goroutine: ersetzeKopplung wird auch aus Callbacks von ship-go
-	// heraus aufgerufen (ServiceAutoTrusted), ein direkter Rueckruf in den
-	// Stack koennte sich dort verklemmen.
-	go func() {
-		if alt != nil && (neu == nil || !gemeinsam.GleicheIdentitaet(alt.Identitaet, neu.Identitaet)) {
-			b.dienst.UnregisterRemoteService(alt.Identitaet)
-		}
-		if neu != nil && neu.Verfahren == gemeinsam.VerfahrenSki {
-			b.dienst.RegisterRemoteService(neu.Identitaet)
-		}
-	}()
+	if alt != nil && (neu == nil || !gemeinsam.GleicheIdentitaet(alt.Identitaet, neu.Identitaet)) {
+		b.dienst.UnregisterRemoteService(alt.Identitaet)
+	}
+	if neu != nil && neu.Verfahren == gemeinsam.VerfahrenSki {
+		b.dienst.RegisterRemoteService(neu.Identitaet)
+	}
 	return nil
 }
 
@@ -269,34 +276,48 @@ func (b *Bruecke) SetzeSuchmodus(an bool) error {
 	if !b.konf.WebKopplung {
 		return errUiNurLesend
 	}
+	if !an {
+		b.beendeSuchmodus("Suchmodus beendet")
+		return nil
+	}
 	b.mu.Lock()
 	war := time.Now().Before(b.suchmodusBis)
-	if an {
-		b.suchmodusBis = time.Now().Add(suchmodusDauer)
-		clear(b.unbekannt)
-	} else {
-		b.suchmodusBis = time.Time{}
-		clear(b.anfragen)
-	}
+	b.suchmodusBis = time.Now().Add(suchmodusDauer)
+	clear(b.unbekannt)
 	b.mu.Unlock()
 
-	b.dienst.UserIsAbleToApproveOrCancelPairingRequests(an)
-	switch {
-	case an && !war:
+	b.dienst.UserIsAbleToApproveOrCancelPairingRequests(true)
+	if !war {
 		log.Printf("Suchmodus gestartet fuer %v", suchmodusDauer)
-	case !an && war:
-		log.Printf("Suchmodus beendet")
 	}
 	return nil
+}
+
+// beendeSuchmodus lehnt noch wartende Anfragen ab, damit ship-go sie nicht
+// bis zum Timeout offen haelt.
+func (b *Bruecke) beendeSuchmodus(meldung string) {
+	b.mu.Lock()
+	war := !b.suchmodusBis.IsZero()
+	b.suchmodusBis = time.Time{}
+	var offen []shipapi.ServiceIdentity
+	for _, a := range b.anfragen {
+		offen = append(offen, a.Identitaet)
+	}
+	clear(b.anfragen)
+	b.mu.Unlock()
+
+	b.dienst.UserIsAbleToApproveOrCancelPairingRequests(false)
+	for _, id := range offen {
+		b.dienst.CancelPairing(id)
+	}
+	if war {
+		log.Print(meldung)
+	}
 }
 
 func (b *Bruecke) pruefeSuchmodus(jetzt time.Time) {
 	b.mu.Lock()
 	abgelaufen := !b.suchmodusBis.IsZero() && jetzt.After(b.suchmodusBis)
-	if abgelaufen {
-		b.suchmodusBis = time.Time{}
-		clear(b.anfragen)
-	}
 	for ski, a := range b.anfragen {
 		if jetzt.Sub(a.Seit) > anfrageGueltig {
 			delete(b.anfragen, ski)
@@ -305,13 +326,8 @@ func (b *Bruecke) pruefeSuchmodus(jetzt time.Time) {
 	b.mu.Unlock()
 
 	if abgelaufen {
-		b.dienst.UserIsAbleToApproveOrCancelPairingRequests(false)
-		log.Printf("Suchmodus abgelaufen")
+		b.beendeSuchmodus("Suchmodus abgelaufen")
 	}
-}
-
-func normalisiereSki(ski string) string {
-	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(ski), " ", ""))
 }
 
 // KoppelnPerSki vertraut einer gefundenen Steuerbox. Die Bruecke baut die
@@ -320,9 +336,9 @@ func (b *Bruecke) KoppelnPerSki(ski string) error {
 	if err := b.pruefeKopplungAenderbar(); err != nil {
 		return err
 	}
-	ski = normalisiereSki(ski)
-	if len(ski) != 40 {
-		return errors.New("ungueltiger SKI, erwartet 40 Hex-Zeichen")
+	ski, err := gemeinsam.NormalisiereSki(ski)
+	if err != nil {
+		return err
 	}
 	if ski == b.eigenerSki {
 		return errors.New("das ist der eigene SKI")
@@ -340,7 +356,10 @@ func (b *Bruecke) BeantworteAnfrage(ski string, annehmen bool) error {
 	if err := b.pruefeKopplungAenderbar(); err != nil {
 		return err
 	}
-	ski = normalisiereSki(ski)
+	ski, err := gemeinsam.NormalisiereSki(ski)
+	if err != nil {
+		return err
+	}
 	b.mu.Lock()
 	anfrage := b.anfragen[ski]
 	delete(b.anfragen, ski)
@@ -400,7 +419,7 @@ type AnfrageDaten struct {
 func (b *Bruecke) kopplungStatus(jetzt time.Time) (kopplung *KopplungDaten, anfragen []AnfrageDaten, suchmodusRestS float64) {
 	switch {
 	case b.konf.RemoteSki != "":
-		kopplung = &KopplungDaten{Verfahren: gemeinsam.VerfahrenSki, Quelle: kopplungsquelleE, Ski: b.konf.RemoteSki}
+		kopplung = &KopplungDaten{Verfahren: gemeinsam.VerfahrenSki, Quelle: "env", Ski: b.konf.RemoteSki}
 	case b.kopplung != nil:
 		quelle := "ui"
 		if b.kopplung.Verfahren == gemeinsam.VerfahrenPairing {

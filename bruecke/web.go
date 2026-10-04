@@ -94,10 +94,8 @@ type UseCaseStatus struct {
 // StatusDaten ist ein konsistenter Schnappschuss fuer das UI. Zeitangaben
 // als Alter in Sekunden, damit eine abweichende Uhr des Browsers nicht stoert.
 type StatusDaten struct {
-	// Bezug (LPC) wie bisher flach, fuer bestehende Auswertungen
-	BegrenzungStatus
+	Bezug       *BegrenzungStatus `json:"bezug"`       // nil = LPC aus
 	Einspeisung *BegrenzungStatus `json:"einspeisung"` // nil = LPP aus
-	BezugAktiv  bool              `json:"bezugAktiv"`  // LPC an
 
 	Verbindung            Verbindung `json:"verbindung"`
 	VerbindungText        string     `json:"verbindungText"`
@@ -110,15 +108,12 @@ type StatusDaten struct {
 	Gegenstelle *Gegenstelle    `json:"gegenstelle"`
 
 	EigenerSki string                       `json:"eigenerSki"`
-	RemoteSki  string                       `json:"remoteSki"`
 	Gefunden   []gemeinsam.GefundenesGeraet `json:"gefunden"`
 
 	// Kopplung
 	Kennung           Kennung        `json:"kennung"`
-	SkiVerfahren      bool           `json:"skiVerfahren"`   // EEBUS_REMOTE_SKI gesetzt
 	PairingService    bool           `json:"pairingService"` // Pairing Service aktiv
-	PairingSteuerbox  string         `json:"pairingSteuerbox"`
-	Kopplung          *KopplungDaten `json:"kopplung"` // nil = keine Steuerbox gekoppelt
+	Kopplung          *KopplungDaten `json:"kopplung"`       // nil = keine Steuerbox gekoppelt
 	KopplungAenderbar bool           `json:"kopplungAenderbar"`
 	SuchmodusRestS    float64        `json:"suchmodusRestS"` // 0 = aus
 	Anfragen          []AnfrageDaten `json:"anfragen"`
@@ -148,10 +143,13 @@ func alterS(jetzt, zeit time.Time) *float64 {
 	return &s
 }
 
-// begrenzungStatus: Aufruf unter mu.
-func begrenzungStatus(r *Begrenzung, jetzt time.Time) BegrenzungStatus {
+// begrenzungStatus: Aufruf unter mu. nil, wenn die Richtung aus ist.
+func begrenzungStatus(r *Begrenzung, jetzt time.Time) *BegrenzungStatus {
+	if r == nil {
+		return nil
+	}
 	aktiv, grenzeW := r.wirksameGrenze()
-	return BegrenzungStatus{
+	return &BegrenzungStatus{
 		Zustand:         r.zustand,
 		ZustandText:     r.zustand.String(),
 		ZustandSeitS:    jetzt.Sub(r.zustandSeit).Seconds(),
@@ -184,11 +182,9 @@ func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
 		Gegenstelle:           b.gegenstelle,
 
 		EigenerSki: b.eigenerSki,
-		RemoteSki:  b.konf.RemoteSki,
 		Gefunden:   gemeinsam.GefundeneGeraete(b.gefunden),
 
 		Kennung:           b.kennung,
-		SkiVerfahren:      b.konf.RemoteSki != "",
 		PairingService:    b.konf.PairingService,
 		KopplungAenderbar: b.pruefeKopplungAenderbar() == nil,
 
@@ -205,18 +201,9 @@ func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
 		ErweiterungsVersion:   ErweiterungsVersion,
 		LaufzeitS:             jetzt.Sub(b.gestartet).Seconds(),
 	}
-	if b.bezug != nil {
-		s.BegrenzungStatus = begrenzungStatus(b.bezug, jetzt)
-		s.BezugAktiv = true
-	}
-	if b.einspeisung != nil {
-		e := begrenzungStatus(b.einspeisung, jetzt)
-		s.Einspeisung = &e
-	}
+	s.Bezug = begrenzungStatus(b.bezug, jetzt)
+	s.Einspeisung = begrenzungStatus(b.einspeisung, jetzt)
 	s.Kopplung, s.Anfragen, s.SuchmodusRestS = b.kopplungStatus(jetzt)
-	if b.kopplung != nil && b.kopplung.Verfahren == gemeinsam.VerfahrenPairing {
-		s.PairingSteuerbox = gemeinsam.Bezeichnung(b.kopplung.Identitaet)
-	}
 	if !b.partner.IsZero() {
 		s.Partner = gemeinsam.Bezeichnung(b.partner)
 	}
@@ -227,6 +214,6 @@ func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
 			Name: uc.kurz, Lokal: lokal&uc.bit != 0, Steuerbox: b.steuerboxUseCases&uc.bit != 0,
 		})
 	}
-	s.Mpc, s.Mgcp = b.messwerteUi()
+	s.Mpc, s.Mgcp = b.messwerteUi(b.mpcGroessen), b.messwerteUi(b.mgcpGroessen)
 	return s
 }

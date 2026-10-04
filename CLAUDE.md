@@ -21,7 +21,7 @@ Docker-Container auf dem WAGO PFC200: tritt als EEBUS „Controllable System“ 
 4. Beim ersten Kontakt mit der PROLAN-Box: Karte „Steuerbox: gemeldete Daten“ auswerten (Use-Case-Versionen, Entitäten), ggf. `EEBUS_DEBUG=an`. Prüfen, ob sie MPC auf der CEM-Entität liest, sonst `MPC_ENTITAET=submeter`.
 5. Vor Übergabe: `GERAET_MARKE` auf Firmenkürzel, SHIP-ID mit `SHIP_ID=…` festschreiben (README, „Vor der Übergabe“).
 6. Zustandsautomat (`bruecke/begrenzung.go`, `takt`) gegen die Spezifikationen LPC/LPP und FNN-Lastenheft 1.4 prüfen. Update-Rate der Messwerte klären (sendet bei jeder Änderung).
-7. Fehler upstream melden: spine-go `ApproveOrDenyWrite` (third_party/spine-go/PATCH.md), eebus-go `gcp/mgcp` Akteur, `cs/lpc`/`cs/lpp` `Set*NominalMax` mit festen IDs 0/0.
+7. Fehler upstream melden: spine-go `ApproveOrDenyWrite` (third_party/spine-go/PATCH.md, Issue-Text vorbereitet 04.10.2026), eebus-go `gcp/mgcp` Akteur, `cs/lpc`/`cs/lpp` `Set*NominalMax` mit festen IDs 0/0.
 8. `dev` nach `main` übernehmen, wenn der PFC-Test passt.
 
 ## Umgebung und Werkzeuge
@@ -63,20 +63,21 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 ## Aufbau
 
 - `bruecke/`:
-  - `main.go`: Konfiguration aus Env, Entitäten, Use Cases in fester Reihenfolge.
+  - `main.go`: Start, Entitäten, Use Cases in fester Reihenfolge. `konfiguration.go`: Env lesen und prüfen.
   - `bruecke.go`: Zustand, LPC/LPP-Ereignisse, Freigaben, Takt, Failsafe-Speicherung.
   - `begrenzung.go`: Zustandsautomat je Richtung, Adapter für cs/lpc und cs/lpp, Nennleistungs-Workaround.
-  - `kopplung.go`: ship-go-Callbacks, Suchmodus, Kopplungsanfragen, eine Steuerbox.
-  - `messwerte.go`: MPC/MGCP einrichten und aus Holding-Registern füttern, MGCP-Akteur-Workaround.
+  - `kopplung.go`: ship-go-Callbacks, Suchmodus, Kopplungsanfragen, eine Steuerbox (Änderungen seriell über `kopplungMu`).
+  - `messwerte.go`: MPC/MGCP einrichten, MGCP-Akteur-Workaround. Jeder Messwert ist eine Zeile der Tabelle `messgroesse` (Register, Gültigkeitsbit, Update-Funktion); Senden und UI laufen nur darüber.
   - `gegenstelle.go`: Diagnose der verbundenen Steuerbox.
   - `anlage.go`: Revisionen, Anlagenstatus.
   - `modbus.go`: Registerlayout.
   - `web.go` + `web/`: Status-UI, Aktionen, Anleitung.
-- `testwerkzeuge/steuerbox/`: Steuerbox-Simulator (eg/lpc, eg/lpp, ma/mpc, ma/mgcp) mit UI. `messwerte.go` liest MPC selbst, weil ma/mpc keine CEM-Entität akzeptiert. `testwerkzeuge/spssimulator/`: Modbus-Client mit Anlagenmodell.
+- `testwerkzeuge/steuerbox/`: Steuerbox-Simulator (eg/lpc, eg/lpp, ma/mpc, ma/mgcp) mit UI. `senden.go`: Grenzen und Failsafe-Werte senden. `messwerte.go` liest MPC selbst, weil ma/mpc keine CEM-Entität akzeptiert. `testwerkzeuge/spssimulator/`: Modbus-Client mit Anlagenmodell.
 - `internal/gemeinsam/`:
   - Zertifikat, Env, Ereignisprotokoll (hängt am Standard-Log), Web-UI mit Basic Auth und `Aktion[T]`.
   - Gemeinsames CSS (`stil.css`, wird per `<!--STIL-->` inline eingesetzt).
-  - Kopplung/Secret/QR-Parser, `GleicheIdentitaet`, MAC-Kennung, `EebusLog` (Debug nach stdout).
+  - Kopplung/Secret/QR-Parser, `NormalisiereSki`, `GleicheIdentitaet`, MAC-Kennung, `EebusLog` (Debug nach stdout).
+  - `SchreibeDatei`: alle Dateien im Datenverzeichnis atomar schreiben (temporäre Datei + umbenennen).
 - `third_party/spine-go/`: gepatchte Kopie, per `replace` in `go.mod` (siehe `PATCH.md`).
 - `codesys/`: `FbEebusBruecke`, `FbEebusBegrenzung` (je Richtung), `FbEebusMesswerte`, `ST_EebusMpc/Mgcp`, `eAnlagenstatus`, `FuEebusRegister`, `FbEebusLpc` (veraltet). Nicht ins Repo-Build eingebunden.
 - Ein `Dockerfile` für alle Programme (`--build-arg PROGRAMM=…`, `VERSION=…`), Laufzeit-Image `scratch`.
@@ -94,6 +95,7 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 - Zugriff auf Zustand nur unter `mu`. Aufrufe in den EEBUS-Stack immer außerhalb von `mu` (Verklemmungsgefahr mit Callbacks). Aus ship-go-Callbacks heraus nicht direkt in den Stack zurückrufen (`ersetzeKopplung` nutzt dafür eine Goroutine).
 - Log nur bei echten Änderungen (Verbindung, Pairing-Endzustände, Failsafe-Werte, neu gefundene Geräte, Ablehnungsgründe), damit das Ereignisprotokoll (100 Zeilen) lesbar bleibt.
 - Werte aus dem LAN (mDNS-Gerätenamen, Daten der Steuerbox) im UI nur per `textContent`, nie `innerHTML`.
+- **Genau eine Steuerbox:** `EEBUS_REMOTE_SKI` schaltet Pairing Service und UI-Kopplung ab, sonst ersetzt jede neue Kopplung die alte. Deshalb müssen LPC/LPP-Ereignisse nicht nach Absender gefiltert werden.
 - Brücken-UI ist nur lesend **bis auf Kopplung und Suchmodus** (Entscheidung des Nutzers 10/2026), abschaltbar mit `WEB_KOPPLUNG=aus`. Basic Auth (`WEB_PASSWORT` Pflicht, sonst UI aus), Aktionen nur mit JSON-Content-Type. Kein `SetAutoAccept`.
 - Commits mit `Co-Authored-By`-Zeile. Gearbeitet wird auf `dev`.
 
@@ -112,6 +114,7 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 - **Messwerte:** Updates sind partiell, deshalb den ValueState immer mitschicken (`normal`/`error`). Sonst bleibt ein früheres `error` bei der Steuerbox stehen. eebus-go vergibt die Phasen-IDs in Map-Reihenfolge.
 - Pairing Service: Brücke = Listener (`PairingModeListener` + 16-Byte-Secret), Steuerbox = Announcer. Der Announcer muss die Gegenseite vorher per `RegisterRemoteService` vertrauen. ship-go hält Auto-Trust nur im Speicher, die Brücke speichert ihn in `steuerbox-pairing.json`, UI-Kopplungen in `steuerbox-ski.json`. Eine Pairing-Kopplung kennt oft keinen SKI, nur Fingerprint und SHIP-ID.
 - Nach Neustart lehnt ship-go die weiterlaufende Ankündigung einer schon gekoppelten Steuerbox als „replay attack“ ab: harmlos, Meldung wird unterdrückt. Ändert die Steuerbox ihre SHIP-ID, kommt „SHIP ID mismatch“: Kopplung lösen und neu koppeln.
+- **Zustandsautomat (seit 10/2026):** Init geht nach 120 s ohne Heartbeat in **Failsafe** (vorher Unbegrenzt/autonom), damit die gespeicherte Failsafe-Grenze nach einem Neustart ohne Steuerbox mindestens die Mindestdauer gilt. Gegen die Spezifikation noch prüfen (Schritt 6).
 - Failsafe-Werte der Steuerbox müssen einen Neustart überstehen (gelten im Zustand Init): `failsafe.json` (mit `einspeisegrenzeW` für LPP), haben Vorrang vor `FAILSAFE_*`.
 
 ## Partner-Info

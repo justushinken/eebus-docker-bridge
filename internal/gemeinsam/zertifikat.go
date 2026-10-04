@@ -59,10 +59,10 @@ func erzeugeZertifikat(zertPfad, schluesselPfad, einheit, name string) (tls.Cert
 	}
 	zertPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: neu.Certificate[0]})
 	schluesselPem := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: schluesselDer})
-	if err := os.WriteFile(zertPfad, zertPem, 0o600); err != nil {
+	if err := SchreibeDatei(zertPfad, zertPem); err != nil {
 		return tls.Certificate{}, err
 	}
-	if err := os.WriteFile(schluesselPfad, schluesselPem, 0o600); err != nil {
+	if err := SchreibeDatei(schluesselPfad, schluesselPem); err != nil {
 		return tls.Certificate{}, err
 	}
 	return neu, nil

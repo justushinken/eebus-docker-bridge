@@ -17,9 +17,8 @@ import (
 // Version der Bruecke, beim Bauen per -ldflags "-X main.Version=..." gesetzt.
 var Version = "dev"
 
-// Werte von Holding-Register regAnlagenstatus
+// Werte von Holding-Register regAnlagenstatus, 0 = normal
 const (
-	anlagenstatusNormal   = 0
 	anlagenstatusStoerung = 1
 	anlagenstatusStandby  = 2
 )
@@ -101,6 +100,9 @@ func (b *Bruecke) meldeAnlagenstatus() {
 	diagnose, err := server.NewDeviceDiagnosis(b.cem)
 	if err != nil {
 		log.Printf("Anlagenstatus melden: %v", err)
+		b.mu.Lock()
+		b.gemeldeterStatus = vorher // im naechsten Takt erneut versuchen
+		b.mu.Unlock()
 		return
 	}
 	diagnose.SetLocalOperatingState(zustand)

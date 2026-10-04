@@ -140,6 +140,12 @@ func (b *Bruecke) PruefeGegenstelle() {
 	}
 
 	b.mu.Lock()
+	// Inzwischen getrennt oder eine andere Steuerbox: nichts uebernehmen,
+	// sonst blieben veraltete Angaben nach der Trennung stehen.
+	if b.verbindung != VerbindungVerbunden || b.partner.SKI != ski {
+		b.mu.Unlock()
+		return
+	}
 	alt := b.gegenstelle
 	b.gegenstelle = g
 	b.steuerboxUseCases = bits
@@ -154,7 +160,7 @@ func (b *Bruecke) PruefeGegenstelle() {
 func (b *Bruecke) herstellerAnfordern(ski string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if b.herstellerAngefordert == ski {
+	if b.herstellerAngefordert == ski || b.partner.SKI != ski {
 		return false
 	}
 	b.herstellerAngefordert = ski

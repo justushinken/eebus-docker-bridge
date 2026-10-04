@@ -81,15 +81,19 @@ const (
 // damit es keine Verklemmung mit dessen Callbacks gibt.
 type Bruecke struct {
 	// beim Start gesetzt, danach unveraenderlich
-	konf       Konfiguration
-	pairing    gemeinsam.Pairingprotokoll
-	eigenerSki string
-	gestartet  time.Time
-	kennung    Kennung
-	dienst     api.ServiceInterface
-	cem        spineapi.EntityLocalInterface
-	mpc        *mumpc.MPC
-	mgcp       *gcpmgcp.MGCP
+	konf         Konfiguration
+	pairing      gemeinsam.Pairingprotokoll
+	eigenerSki   string
+	gestartet    time.Time
+	kennung      Kennung
+	dienst       api.ServiceInterface
+	cem          spineapi.EntityLocalInterface
+	mpc          *mumpc.MPC
+	mgcp         *gcpmgcp.MGCP
+	mpcGroessen  []messgroesse // angebotene Messwerte (messwerte.go), nil = Use Case aus
+	mgcpGroessen []messgroesse
+
+	kopplungMu sync.Mutex // reiht Aenderungen der Kopplung (kopplung.go)
 
 	mu         sync.Mutex
 	gefunden   []shipapi.RemoteMdnsService // per mDNS sichtbare EEBUS-Geraete
@@ -174,16 +178,11 @@ func (b *Bruecke) SetzeStartwerte() {
 // --- Ereignisse der Use Cases LPC und LPP ---
 
 func (b *Bruecke) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
-	b.begrenzungsEreignis(b.bezug, lpcArten[string(ereignis)])
+	b.begrenzungsEreignis(b.bezug, lpcArten[ereignis])
 }
 
 func (b *Bruecke) LppEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
-	b.begrenzungsEreignis(b.einspeisung, lppArten[string(ereignis)])
-}
-
-// Fuer MPC und MGCP gibt es nur Meldungen zur Unterstuetzung durch die
-// Gegenseite, die gegenstelle.go zyklisch abfragt.
-func (b *Bruecke) MonitoringEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
+	b.begrenzungsEreignis(b.einspeisung, lppArten[ereignis])
 }
 
 func (b *Bruecke) begrenzungsEreignis(r *Begrenzung, art ereignisArt) {
@@ -413,8 +412,13 @@ type FailsafeWerte struct {
 }
 
 func (b *Bruecke) speichereFailsafe() {
+	// Werte einer gerade abgeschalteten Richtung aus der Datei behalten
+	werte := LadeFailsafe(b.konf.Datenverzeichnis)
+	if werte == nil {
+		werte = &FailsafeWerte{GrenzeW: b.konf.FailsafeGrenzeW}
+	}
 	b.mu.Lock()
-	werte := FailsafeWerte{GrenzeW: b.konf.FailsafeGrenzeW, Mindestdauer: b.failsafeMindestdauer}
+	werte.Mindestdauer = b.failsafeMindestdauer
 	if b.bezug != nil {
 		werte.GrenzeW = b.bezug.failsafeGrenzeW
 	}
@@ -425,7 +429,7 @@ func (b *Bruecke) speichereFailsafe() {
 	b.mu.Unlock()
 	inhalt, err := json.Marshal(werte)
 	if err == nil {
-		err = os.WriteFile(filepath.Join(b.konf.Datenverzeichnis, FailsafeDatei), inhalt, 0o600)
+		err = gemeinsam.SchreibeDatei(filepath.Join(b.konf.Datenverzeichnis, FailsafeDatei), inhalt)
 	}
 	if err != nil {
 		log.Printf("Failsafe-Werte speichern: %v", err)
@@ -441,6 +445,12 @@ func LadeFailsafe(verzeichnis string) *FailsafeWerte {
 	var werte FailsafeWerte
 	if err := json.Unmarshal(inhalt, &werte); err != nil {
 		log.Printf("%s nicht lesbar: %v", FailsafeDatei, err)
+		return nil
+	}
+	// Gleiche Grenzen wie fuer Werte der Steuerbox (pruefeKonfiguration)
+	if werte.Mindestdauer < 2*time.Hour || werte.Mindestdauer > 24*time.Hour || werte.GrenzeW < 0 ||
+		(werte.EinspeisegrenzeW != nil && *werte.EinspeisegrenzeW < 0) {
+		log.Printf("%s enthaelt ungueltige Werte, es gelten die FAILSAFE_*-Vorgaben", FailsafeDatei)
 		return nil
 	}
 	return &werte

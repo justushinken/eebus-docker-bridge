@@ -222,14 +222,14 @@ Beide Seiten müssen einander vertrauen. Auf Seiten der Steuerbox trägt der Mes
 
 **B · SKI-Verfahren mit Suchmodus.** SKI und SHIP-ID der Brücke an den Messstellenbetreiber geben. Auf der Statusseite „Steuerbox suchen“ drücken: Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht abgewiesen, sondern als Kopplungsanfrage angezeigt. Meldet sich die Steuerbox, „Annehmen“. Alternativ bei der gefundenen Steuerbox „Vertrauen“, dann verbindet sich die Brücke selbst. Die Kopplung landet in `steuerbox-ski.json`. Eine automatische Annahme gibt es bewusst nicht (`SetAutoAccept` bleibt aus), sonst könnte jedes Gerät im LAN Grenzen setzen. Ohne Suchmodus meldet die Brücke abgelehnte Versuche unbekannter Geräte einmal im Ereignisprotokoll.
 
-**C · SKI fest per Einstellung.** Den SKI der Steuerbox als `EEBUS_REMOTE_SKI` setzen und den Container neu anlegen. Im UI lässt sich die Kopplung dann nicht ändern.
+**C · SKI fest per Einstellung.** Den SKI der Steuerbox als `EEBUS_REMOTE_SKI` setzen und den Container neu anlegen. Dann gilt nur diese Steuerbox: Pairing Service, Suchmodus und Kopplung im UI sind aus, eine gespeicherte Kopplung wird ignoriert.
 
 Den Pairing Service mit vertauschten Rollen (Brücke kündigt sich an) gibt es nicht: Das ginge nur, wenn die Steuerbox selbst einen QR-Code mit Secret zeigt.
 
 | Variable | Vorgabe | Bedeutung |
 |---|---|---|
 | `EEBUS_PAIRING_SERVICE` | `an` | `aus` schaltet den Pairing Service ab |
-| `EEBUS_REMOTE_SKI` | – | SKI der Steuerbox, fest eingestellt (Verfahren C) |
+| `EEBUS_REMOTE_SKI` | – | SKI der Steuerbox, fest eingestellt (Verfahren C), schaltet den Pairing Service ab |
 | `SHIP_ID` | `<Marke>-<Modell>-<MAC>` | Kennung der Brücke im Netz, z. B. `Demo-PFC200-LPC-Bruecke-0030DE683ADC` |
 
 ### SHIP-ID
@@ -397,7 +397,7 @@ Das ist auf dem PFC noch nicht ausprobiert. Lokal laufen beide Container im selb
 - **Workarounds für eebus-go/spine-go** (bei einem Update prüfen, ob noch nötig): MGCP kündigt den falschen Akteur an (`bruecke/messwerte.go`), `Set*NominalMax` findet die Kennlinie nicht, wenn MPC auf derselben Entität liegt (`bruecke/begrenzung.go`), Freigabe gleichzeitiger Schreibanfragen (`third_party/spine-go`).
 - **MPC auf der CEM-Entität:** Ob die PROLAN-Steuerbox MPC dort liest, ist offen. Sonst `MPC_ENTITAET=submeter`.
 - **Verbindungsstatus:** Beim allerersten Test mit dem eebus-go-Beispiel kam nach dem Stoppen der Gegenseite keine Trennungsmeldung. In allen späteren Tests wurde die Trennung sofort gemeldet. Bei der echten Steuerbox beobachten. Für die Grenze ist das unkritisch, dort entscheidet der Heartbeat.
-- **Zustandsautomat:** Die Übergänge in `bruecke/begrenzung.go` (insbesondere Init und Verlassen von Failsafe) gegen die Spezifikationen „Limitation of Power Consumption/Production“ und das FNN-Lastenheft Steuerbox 1.4 prüfen. Der FNN-Hinweis nennt keine Update-Raten für Messwerte. Die Brücke sendet bei jeder Änderung, gegebenenfalls ein Totband ergänzen.
+- **Zustandsautomat:** Die Übergänge in `bruecke/begrenzung.go` (Init geht nach 120 s ohne Heartbeat in Failsafe; Failsafe wird nur mit Heartbeat und neuer Grenze oder nach der Mindestdauer verlassen) gegen die Spezifikationen „Limitation of Power Consumption/Production“ und das FNN-Lastenheft Steuerbox 1.4 prüfen. Der FNN-Hinweis nennt keine Update-Raten für Messwerte. Die Brücke sendet bei jeder Änderung, gegebenenfalls ein Totband ergänzen.
 - **Zertifizierung:** Diese Brücke ist nicht EEBUS-zertifiziert. Für Pilot- und Eigenanlagen ausreichend, für Serienanlagen vorher mit Netzbetreiber bzw. MSB klären.
 - **Docker auf dem PFC200:** Nur ab neueren Firmware-Ständen verfügbar, bei gemischtem Gerätepark vorab je Steuerung prüfen. Docker-Datenverzeichnis wegen begrenztem internem Speicher möglichst auf die SD-Karte legen.
 - **mDNS:** Läuft auf dem PFC bereits ein Avahi-Dienst, auf Port-Konflikte an 5353 achten. Netzwerk vorab mit dem Installateur abstimmen (siehe „Netzwerk“).

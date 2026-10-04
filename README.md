@@ -147,6 +147,7 @@ Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sons
 | `steuerbox-ski.json` | im UI per SKI gekoppelte Steuerbox (Suchmodus oder „Vertrauen“) |
 | `pairing-verlauf.json` | Schutz gegen wiederholte Ankündigungen |
 | `failsafe.json` | zuletzt von der Steuerbox vorgegebene Failsafe-Werte |
+| `einstellungen.json` | im UI geänderte Einstellungen (Vorrang vor der Env) |
 
 `--network host` ist nötig, weil mDNS (Multicast) über das Docker-Bridge-Netz nicht zuverlässig funktioniert. Der Modbus-Server bindet trotzdem nur auf 127.0.0.1, ist also aus dem LAN nicht erreichbar. Zum Testen mit einem Modbus-Master auf dem PC `-e MODBUS_URL=tcp://0.0.0.0:5502` setzen. Dann ist der Port ohne Schutz im ganzen LAN offen, danach wieder entfernen.
 
@@ -177,12 +178,25 @@ Welche Werte gerade gültig sind, meldet die SPS über die Gültigkeitsmasken (H
 
 ## Status-UI der Brücke
 
-`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Oben steht immer die Ampel mit dem kritischsten Zustand von Bezug und Einspeisung, darunter vier Reiter (direkt aufrufbar, z. B. `…:8090/#kopplung`). Ändern lässt sich nur die Kopplung mit der Steuerbox, mit `WEB_KOPPLUNG=aus` auch das nicht.
+`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Oben steht immer die Ampel mit dem kritischsten Zustand von Bezug und Einspeisung, darunter vier Reiter (direkt aufrufbar, z. B. `…:8090/#kopplung`). Ändern lassen sich die Kopplung mit der Steuerbox und die Einstellungen, mit `WEB_AENDERUNGEN=aus` nichts davon.
 
 - **Übersicht** (Betrieb): je Richtung (LPC, LPP) Zustand, wirksame Grenze, Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Grenze, Nennleistung und letzter Ablehnungsgrund; Steuerbox-Verbindung, Heartbeat, gemeinsame Failsafe-Mindestdauer; SPS-Lebenszeichen und Anlagenstatus; Messwerte MPC und MGCP, ungültige Werte gekennzeichnet.
 - **Kopplung** (Inbetriebnahme): gekoppelte Steuerbox und „Kopplung lösen“, Suchmodus mit Kopplungsanfragen (offene Anfragen zählt der Reiter), SKI, SHIP-ID, Fingerprint, Secret (verdeckt) und QR-Code für den Messstellenbetreiber, per mDNS gefundene Geräte (Steuerboxen oben, mit „Vertrauen“).
 - **Diagnose:** Use Cases der Brücke und der Steuerbox, von der Steuerbox gemeldete Daten (Gerät, Software, Entitäten, Use Cases mit Version und Szenarien), die letzten 100 Log-Meldungen.
-- **Konfiguration:** alle Einstellungen aus den Umgebungsvariablen mit Variablenname, gruppiert nach Use Cases, Startwerten, Kopplung, Gerät und Schnittstellen. Nur lesend, das Passwort wird nicht angezeigt.
+- **Konfiguration:** alle Einstellungen mit Variablenname, gruppiert nach Use Cases, Startwerten, Kopplung, Gerät und Schnittstellen. Das Passwort wird nicht angezeigt. Siehe nächster Abschnitt.
+
+### Einstellungen im UI ändern
+
+Use Cases, Nennleistungen, Failsafe-Startwerte, MPC-Entität, Messwert-Herkunft, Pairing Service, SHIP-ID, Gerätedaten und `EEBUS_DEBUG` lassen sich im Reiter „Konfiguration“ ändern. Ablauf:
+
+1. Werte ändern und „Speichern“. Die Brücke prüft die ganze Konfiguration wie beim Start (z. B. braucht `lpp` beide Pflichtwerte) und schreibt die Änderungen nach `einstellungen.json` im Datenverzeichnis.
+2. „Jetzt neu starten“: Die Brücke trennt die Steuerbox sauber und startet sich im laufenden Container neu (etwa 10 s). Docker, PFC und CODESYS laufen weiter, die Restart-Policy spielt dabei keine Rolle.
+
+**Vorrang:** im UI geändert > Env (`docker run -e`) > Vorgabe. Jede Zeile zeigt, woher ihr Wert kommt. „Zurücksetzen“ löscht die Änderung aus dem UI, dann gilt wieder die Env. `einstellungen.json` bleibt bei einem Update erhalten, wenn der Container mit demselben Datenverzeichnis neu angelegt wird. Passen die gespeicherten Werte nicht mehr zur Env, startet die Brücke mit der Env allein und meldet das im Ereignisprotokoll.
+
+Nur per Env änderbar: Ports und Adressen, `DATENVERZEICHNIS`, Web-Zugang (`WEB_*`, sonst sperrt man sich aus), `GERAET_SERIENNUMMER` und `EEBUS_REMOTE_SKI` (Kopplung im Reiter „Kopplung“).
+
+**Achtung beim Neustart während einer Begrenzung:** Die Brücke vergisst die Grenze des Netzbetreibers. Bis zum ersten Heartbeat gilt die Failsafe-Grenze, danach ist der Bezug unbegrenzt, bis die Steuerbox erneut eine Grenze schreibt. Die Test-Steuerbox tut das nicht. Wie sich eine echte Steuerbox verhält, ist offen (siehe „Offene Punkte“). Gleiches gilt nach einem Stromausfall.
 
 Unter **„Anleitung“** erklärt eine eigene Seite mit Schaubildern den Aufbau, die Use Cases, die Zustände, die Kopplungsverfahren, die PROLAN-Steuerbox und die Fehlersuche.
 
@@ -191,7 +205,7 @@ Unter **„Anleitung“** erklärt eine eigene Seite mit Schaubildern den Aufbau
 | `WEB_PASSWORT` | – | **Ohne Passwort startet das UI nicht**, die Brücke selbst läuft normal weiter. |
 | `WEB_BENUTZER` | `admin` | Benutzername |
 | `WEB_ADRESSE` | `:8090` | Adresse und Port, leer (`WEB_ADRESSE=`) schaltet das UI ab |
-| `WEB_KOPPLUNG` | `an` | `aus` macht das UI rein lesend (z. B. nach der Inbetriebnahme) |
+| `WEB_AENDERUNGEN` | `an` | `aus` macht das UI rein lesend: keine Kopplung, keine Einstellungen, kein Neustart (z. B. nach der Inbetriebnahme) |
 
 Port 8090 statt 8080, weil auf dem PFC die CODESYS-WebVisu oft 8080 belegt. Bei aktiver PFC-Firewall Port 8090 freigeben.
 
@@ -378,6 +392,7 @@ Das ist auf dem PFC noch nicht ausprobiert. Lokal laufen beide Container im selb
 ## Offene Punkte vor dem Produktiveinsatz
 
 - **Unveröffentlichte eebus-go-Version:** Der Pairing Service stammt aus dem Entwicklungsstand von eebus-go/ship-go (siehe oben). Lokal mit der Test-Steuerbox getestet: Kopplung per Pairing Service, per SKI und per Suchmodus, falsches Secret wird abgelehnt, Neustart, Grenzen für Bezug und Einspeisung (auch beide in einer Nachricht), Ablauf, Failsafe-Werte inklusive Speicherung, Heartbeat-Ausfall beider Richtungen, Verbindungsabbrüche, Nennleistungen, Messwerte MPC und MGCP, Ablehnung ohne SPS, Anlagenstatus. **Noch nicht gegen eine echte Steuerbox.**
+- **Begrenzung nach Neustart oder Stromausfall:** Die Brücke speichert die aktive Grenze des Netzbetreibers nicht. Nach dem Start gilt die Failsafe-Grenze, nach dem ersten Heartbeat ist der Bezug unbegrenzt, bis die Steuerbox erneut eine Grenze schreibt. Mit dem Messstellenbetreiber klären, ob die PROLAN-Box das nach dem Wiederverbinden tut.
 - **Workarounds für eebus-go/spine-go** (bei einem Update prüfen, ob noch nötig): MGCP kündigt den falschen Akteur an (`bruecke/messwerte.go`), `Set*NominalMax` findet die Kennlinie nicht, wenn MPC auf derselben Entität liegt (`bruecke/begrenzung.go`), Freigabe gleichzeitiger Schreibanfragen (`third_party/spine-go`).
 - **MPC auf der CEM-Entität:** Ob die PROLAN-Steuerbox MPC dort liest, ist offen. Sonst `MPC_ENTITAET=submeter`.
 - **Verbindungsstatus:** Beim allerersten Test mit dem eebus-go-Beispiel kam nach dem Stoppen der Gegenseite keine Trennungsmeldung. In allen späteren Tests wurde die Trennung sofort gemeldet. Bei der echten Steuerbox beobachten. Für die Grenze ist das unkritisch, dort entscheidet der Heartbeat.

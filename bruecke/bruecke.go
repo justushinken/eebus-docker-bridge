@@ -81,17 +81,19 @@ const (
 // damit es keine Verklemmung mit dessen Callbacks gibt.
 type Bruecke struct {
 	// beim Start gesetzt, danach unveraenderlich
-	konf         Konfiguration
-	pairing      gemeinsam.Pairingprotokoll
-	eigenerSki   string
-	gestartet    time.Time
-	kennung      Kennung
-	dienst       api.ServiceInterface
-	cem          spineapi.EntityLocalInterface
-	mpc          *mumpc.MPC
-	mgcp         *gcpmgcp.MGCP
-	mpcGroessen  []messgroesse // angebotene Messwerte (messwerte.go), nil = Use Case aus
-	mgcpGroessen []messgroesse
+	konf          Konfiguration
+	pairing       gemeinsam.Pairingprotokoll
+	eigenerSki    string
+	gestartet     time.Time
+	kennung       Kennung
+	dienst        api.ServiceInterface
+	cem           spineapi.EntityLocalInterface
+	mpc           *mumpc.MPC
+	mgcp          *gcpmgcp.MGCP
+	mpcGroessen   []messgroesse // angebotene Messwerte (messwerte.go), nil = Use Case aus
+	mgcpGroessen  []messgroesse
+	einstellungen map[string]string // beim Start wirksame Werte aus dem UI (einstellungen.go)
+	neustart      chan struct{}     // aus dem UI angefordert
 
 	kopplungMu sync.Mutex // reiht Aenderungen der Kopplung (kopplung.go)
 
@@ -127,10 +129,12 @@ type Bruecke struct {
 	herstellerAngefordert string // SKI, fuer die die Herstellerdaten angefordert wurden
 }
 
-func NeueBruecke(konf Konfiguration, eigenerSki string, kopplung *gemeinsam.Kopplung) *Bruecke {
+func NeueBruecke(konf Konfiguration, einstellungen map[string]string, eigenerSki string, kopplung *gemeinsam.Kopplung) *Bruecke {
 	jetzt := time.Now()
 	b := &Bruecke{
 		konf:                 konf,
+		einstellungen:        einstellungen,
+		neustart:             make(chan struct{}, 1),
 		eigenerSki:           eigenerSki,
 		kopplung:             kopplung,
 		gestartet:            jetzt,

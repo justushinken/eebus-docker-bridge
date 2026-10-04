@@ -21,8 +21,9 @@ Docker-Container auf dem WAGO PFC200: tritt als EEBUS „Controllable System“ 
 4. Beim ersten Kontakt mit der PROLAN-Box: Karte „Steuerbox: gemeldete Daten“ auswerten (Use-Case-Versionen, Entitäten), ggf. `EEBUS_DEBUG=an`. Prüfen, ob sie MPC auf der CEM-Entität liest, sonst `MPC_ENTITAET=submeter`.
 5. Vor Übergabe: `GERAET_MARKE` auf Firmenkürzel, SHIP-ID mit `SHIP_ID=…` festschreiben (README, „Vor der Übergabe“).
 6. Zustandsautomat (`bruecke/begrenzung.go`, `takt`) gegen die Spezifikationen LPC/LPP und FNN-Lastenheft 1.4 prüfen. Update-Rate der Messwerte klären (sendet bei jeder Änderung).
-7. Fehler upstream melden: spine-go `ApproveOrDenyWrite` (third_party/spine-go/PATCH.md, Issue-Text vorbereitet 04.10.2026), eebus-go `gcp/mgcp` Akteur, `cs/lpc`/`cs/lpp` `Set*NominalMax` mit festen IDs 0/0.
-8. `dev` nach `main` übernehmen, wenn der PFC-Test passt.
+7. **Neustart/Stromausfall während einer Begrenzung:** Die aktive Grenze geht verloren (Init → Failsafe-Grenze, nach Heartbeat Unbegrenzt). Die Test-Steuerbox schreibt sie nicht neu (getestet 04.10.2026). Klären: Schreibt eine echte Steuerbox nach dem Wiederverbinden erneut? Sonst Grenze mit Ablaufzeit in einer Datei sichern und im Init wieder einsetzen (Uhr des PFC beachten).
+8. Fehler upstream melden: spine-go `ApproveOrDenyWrite` (third_party/spine-go/PATCH.md, Issue-Text vorbereitet 04.10.2026), eebus-go `gcp/mgcp` Akteur, `cs/lpc`/`cs/lpp` `Set*NominalMax` mit festen IDs 0/0.
+9. `dev` nach `main` übernehmen, wenn der PFC-Test passt.
 
 ## Umgebung und Werkzeuge
 
@@ -63,7 +64,8 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 ## Aufbau
 
 - `bruecke/`:
-  - `main.go`: Start, Entitäten, Use Cases in fester Reihenfolge. `konfiguration.go`: Env lesen und prüfen.
+  - `main.go`: Start, Entitäten, Use Cases in fester Reihenfolge. `konfiguration.go`: Env lesen und prüfen (`leseKonfiguration(gemeinsam.Umgebung)`), Anzeige für das UI.
+  - `einstellungen.go`: im UI änderbare Variablen (`einstellbar`), `einstellungen.json` hat Vorrang vor der Env (`mitEinstellungen`). Neustart aus dem UI per `syscall.Exec` auf sich selbst, unabhängig von der Docker-Restart-Policy.
   - `bruecke.go`: Zustand, LPC/LPP-Ereignisse, Freigaben, Takt, Failsafe-Speicherung.
   - `begrenzung.go`: Zustandsautomat je Richtung, Adapter für cs/lpc und cs/lpp, Nennleistungs-Workaround.
   - `kopplung.go`: ship-go-Callbacks, Suchmodus, Kopplungsanfragen, eine Steuerbox (Änderungen seriell über `kopplungMu`).
@@ -98,7 +100,7 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 - Log nur bei echten Änderungen (Verbindung, Pairing-Endzustände, Failsafe-Werte, neu gefundene Geräte, Ablehnungsgründe), damit das Ereignisprotokoll (100 Zeilen) lesbar bleibt.
 - Werte aus dem LAN (mDNS-Gerätenamen, Daten der Steuerbox) im UI nur per `textContent`, nie `innerHTML`.
 - **Genau eine Steuerbox:** `EEBUS_REMOTE_SKI` schaltet Pairing Service und UI-Kopplung ab, sonst ersetzt jede neue Kopplung die alte. Deshalb müssen LPC/LPP-Ereignisse nicht nach Absender gefiltert werden.
-- Brücken-UI ist nur lesend **bis auf Kopplung und Suchmodus** (Entscheidung des Nutzers 10/2026), abschaltbar mit `WEB_KOPPLUNG=aus`. Basic Auth (`WEB_PASSWORT` Pflicht, sonst UI aus), Aktionen nur mit JSON-Content-Type. Kein `SetAutoAccept`.
+- Brücken-UI ändert nur **Kopplung, Suchmodus und Einstellungen samt Neustart** (Entscheidungen des Nutzers 10/2026), alles abschaltbar mit `WEB_AENDERUNGEN=aus`. Basic Auth (`WEB_PASSWORT` Pflicht, sonst UI aus), Aktionen nur mit JSON-Content-Type. Kein `SetAutoAccept`.
 - Commits mit `Co-Authored-By`-Zeile. Gearbeitet wird auf `dev`.
 
 ## eebus-go: wichtige Details

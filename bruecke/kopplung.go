@@ -256,11 +256,11 @@ func (b *Bruecke) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
 // --- Aktionen aus dem Web-UI ---
 
 var errKopplungEnv = fmt.Errorf("%w: Kopplung ist per EEBUS_REMOTE_SKI fest eingestellt", gemeinsam.ErrVerboten)
-var errUiNurLesend = fmt.Errorf("%w: Kopplung im UI abgeschaltet (WEB_KOPPLUNG=aus)", gemeinsam.ErrVerboten)
+var errUiNurLesend = fmt.Errorf("%w: Aenderungen im UI abgeschaltet (WEB_AENDERUNGEN=aus)", gemeinsam.ErrVerboten)
 
 func (b *Bruecke) pruefeKopplungAenderbar() error {
 	switch {
-	case !b.konf.WebKopplung:
+	case !b.konf.WebAenderungen:
 		return errUiNurLesend
 	case b.konf.RemoteSki != "":
 		return errKopplungEnv
@@ -273,7 +273,7 @@ func (b *Bruecke) pruefeKopplungAenderbar() error {
 // wird bewusst nicht verwendet: Sonst koennte jedes Geraet im LAN, das sich in
 // dieser Zeit meldet, Leistungsgrenzen setzen.
 func (b *Bruecke) SetzeSuchmodus(an bool) error {
-	if !b.konf.WebKopplung {
+	if !b.konf.WebAenderungen {
 		return errUiNurLesend
 	}
 	if !an {

@@ -196,10 +196,25 @@
 		</section>
 	</div>
 
-	<!-- Konfiguration: nur lesend, geändert wird per Env-Variable -->
+	<!-- Konfiguration: Startwerte aus der Env, im UI änderbar (einstellungen.json) -->
 	<div data-reiter-inhalt="konfiguration" hidden>
-		<p class="hinweis" style="margin:0 0 16px">Die Einstellungen kommen aus den Umgebungsvariablen des Containers. Ändern: Container mit <code>-e VARIABLE=wert</code> neu anlegen. Von der Steuerbox vorgegebene Failsafe-Werte haben Vorrang vor den Startwerten, aktuelle Werte unter „Übersicht“.</p>
+		<section class="ampel orange" id="neustartHinweis" style="flex-wrap:wrap" hidden>
+			<div class="punkt"></div>
+			<div style="flex:1;min-width:220px">
+				<div class="titel" style="font-size:18px">Neustart nötig</div>
+				<div class="leise">Gespeicherte Änderungen werden erst nach einem Neustart der Brücke wirksam. Container und PFC laufen dabei weiter.</div>
+				<p class="meldung" id="neustartMeldung"></p>
+			</div>
+			<button class="gross primaer" id="neustartKnopf" type="button">Jetzt neu starten</button>
+		</section>
+		<p class="hinweis" style="margin:0 0 16px">Die Startwerte kommen aus den Umgebungsvariablen des Containers. Hier geänderte Werte haben Vorrang und bleiben auch bei einem Update erhalten (<code>einstellungen.json</code> im Datenverzeichnis). „Zurücksetzen“ nimmt wieder den Wert aus der Env. Ports, Web-Zugang und der feste SKI lassen sich nur per Env ändern.</p>
+		<p class="hinweis" id="konfigNurLesend" style="margin:0 0 16px" hidden>Änderungen im UI sind abgeschaltet (<code>WEB_AENDERUNGEN=aus</code>).</p>
 		<div class="raster" id="konfigListe"><p class="leise">Lade …</p></div>
+		<div class="knoepfe" style="margin-top:16px" id="konfigKnoepfe" hidden>
+			<button class="primaer" id="konfigSpeichern" type="button" disabled>Speichern</button>
+			<button id="konfigVerwerfen" type="button" disabled>Verwerfen</button>
+		</div>
+		<p class="meldung" id="konfigMeldung"></p>
 	</div>
 
 	<footer>
@@ -486,9 +501,11 @@ async function senden(methode, pfad, daten, meldungId) {
 		const inhalt = await antwort.json().catch(() => ({}));
 		meldung.textContent = antwort.ok ? inhalt.text : (inhalt.fehler || `Fehler ${antwort.status}`);
 		if (!antwort.ok) meldung.className = "meldung fehler";
+		return antwort.ok;
 	} catch (fehler) {
 		meldung.className = "meldung fehler";
 		meldung.textContent = "Brücke nicht erreichbar";
+		return false;
 	}
 }
 
@@ -559,41 +576,196 @@ function zeigeReiter() {
 }
 window.addEventListener("hashchange", () => { zeigeReiter(); window.scrollTo(0, 0); });
 
-// Die Konfiguration ändert sich nur mit einem Neustart: einmal laden genügt.
+// --- Konfiguration ---
+// Werte für den nächsten Start. Änderungen speichert die Brücke in
+// einstellungen.json, wirksam werden sie mit „Jetzt neu starten“.
 let konfigurationGeladen = false;
+let eingaben = []; // { variable, roh, lies, el }
+
+const gruppenHinweise = {
+	"Grenzen beim Start": "Startwerte. Hat die Steuerbox Failsafe-Werte vorgegeben, gelten deren Werte (siehe „Übersicht“).",
+	"Gerät": "Marke und Modell bilden die SHIP-ID, solange sie nicht fest eingetragen ist. Nach der Übergabe an den Messstellenbetreiber nicht mehr ändern, sonst muss die Steuerbox neu gekoppelt werden.",
+};
+
+function feld(typ, wert, attribute) {
+	const el = document.createElement("input");
+	el.type = typ;
+	el.value = wert;
+	Object.assign(el, attribute);
+	return el;
+}
+
+function mitEinheit(el, einheit) {
+	const span = document.createElement("span");
+	span.className = "einheit";
+	span.append(el, " " + einheit);
+	return span;
+}
+
+// Eingabe je Art. lies() liefert den Wert im Format der Env-Variable.
+function eingabeFuer(e) {
+	const art = e.eingabe.art;
+	if (art === "liste") {
+		const gewaehlt = e.roh ? e.roh.split(",") : [];
+		const kaesten = e.eingabe.optionen.map(o => feld("checkbox", o, { checked: gewaehlt.includes(o) }));
+		const el = document.createElement("span");
+		el.className = "wahl";
+		el.append(...kaesten.map(k => {
+			const label = document.createElement("label");
+			label.append(k, k.value.toUpperCase());
+			return label;
+		}));
+		return { el, lies: () => kaesten.filter(k => k.checked).map(k => k.value).join(",") };
+	}
+	if (art === "auswahl" || art === "anAus") {
+		const el = document.createElement("select");
+		for (const o of art === "anAus" ? ["an", "aus"] : e.eingabe.optionen) el.add(new Option(o, o));
+		el.value = e.roh;
+		return { el, lies: () => el.value };
+	}
+	if (art === "zahl") {
+		const el = feld("number", e.roh, { min: 0, step: 1 });
+		return { el: mitEinheit(el, "W"), lies: () => el.value };
+	}
+	if (art === "stunden") {
+		const el = feld("number", parseFloat(e.roh), { min: 2, max: 24, step: 0.25 });
+		return { el: mitEinheit(el, "h"), lies: () => el.value === "" ? "" : el.value + "h" };
+	}
+	const el = feld("text", e.roh, { maxLength: 63 });
+	return { el, lies: () => el.value.trim() };
+}
+
+function geaenderte() {
+	const werte = {};
+	for (const e of eingaben) {
+		if (e.lies() !== e.roh) werte[e.variable] = e.lies();
+	}
+	return werte;
+}
+
+function aktualisiereKnoepfe() {
+	const anzahl = Object.keys(geaenderte()).length;
+	for (const e of eingaben) e.el.classList.toggle("geaendert", e.lies() !== e.roh);
+	$("konfigSpeichern").disabled = $("konfigVerwerfen").disabled = anzahl === 0;
+	$("konfigSpeichern").textContent = anzahl ? `${anzahl} Änderung${anzahl > 1 ? "en" : ""} speichern` : "Speichern";
+}
+
+function konfigZeile(e, aenderbar) {
+	// Name, darunter klein die Variable und woher der Wert kommt
+	const name = document.createElement("div");
+	const titel = document.createElement("div");
+	titel.textContent = e.name;
+	const variable = document.createElement("code");
+	variable.textContent = e.variable;
+	name.append(titel, variable);
+	if (e.quelle === "ui" || e.quelle === "env") {
+		const quelle = document.createElement("span");
+		quelle.className = "marke quelle " + (e.quelle === "ui" ? "orange" : "");
+		quelle.textContent = e.quelle === "ui" ? "im UI geändert" : "Env";
+		name.append(" ", quelle);
+	}
+
+	if (!e.eingabe || !aenderbar) {
+		const tr = zeile([name, e.wert]);
+		tr.children[1].className = "mono";
+		return tr;
+	}
+	const eingabe = eingabeFuer(e);
+	// Vergleich mit dem, was die Eingabe anfangs liefert: Eine andere
+	// Schreibweise (z. B. 2.50h) zählt so nicht als Änderung.
+	eingaben.push({ variable: e.variable, roh: eingabe.lies(), lies: eingabe.lies, el: eingabe.el });
+	eingabe.el.addEventListener("input", aktualisiereKnoepfe);
+	eingabe.el.addEventListener("change", aktualisiereKnoepfe);
+
+	const rechts = document.createElement("div");
+	rechts.append(eingabe.el);
+	if (e.quelle === "ui") {
+		const zurueck = document.createElement("button");
+		zurueck.type = "button";
+		zurueck.textContent = "Zurücksetzen";
+		zurueck.title = "Änderung aus dem UI löschen, dann gilt wieder die Env bzw. die Vorgabe";
+		zurueck.addEventListener("click", () => speichern({ [e.variable]: null }));
+		rechts.append(zurueck);
+	}
+	return zeile([name, rechts]);
+}
+
 async function ladeKonfiguration() {
 	if (konfigurationGeladen) return;
 	try {
 		const antwort = await fetch(url("api/konfiguration"), { cache: "no-store" });
-		if (!antwort.ok) throw new Error(antwort.status);
-		const gruppen = await antwort.json();
-		$("konfigListe").replaceChildren(...gruppen.map(g => {
+		const k = await antwort.json();
+		if (!antwort.ok) throw new Error(k.fehler || antwort.status);
+		eingaben = [];
+		$("konfigListe").replaceChildren(...k.gruppen.map(g => {
 			const karte = document.createElement("section");
 			karte.className = "karte";
 			const titel = document.createElement("h2");
 			titel.textContent = g.name;
 			const tabelle = document.createElement("table");
 			tabelle.className = "konfig";
-			tabelle.append(...g.eintraege.map(e => {
-				// Name, darunter klein die Variable, über die man ihn ändert
-				const name = document.createElement("div");
-				const titel = document.createElement("div");
-				titel.textContent = e.name;
-				const variable = document.createElement("code");
-				variable.textContent = e.variable;
-				name.append(titel, variable);
-				const tr = zeile([name, e.wert]);
-				tr.children[1].className = "mono";
-				return tr;
-			}));
+			tabelle.append(...g.eintraege.map(e => konfigZeile(e, k.aenderbar)));
 			karte.append(titel, tabelle);
+			if (gruppenHinweise[g.name] && k.aenderbar) {
+				const hinweis = document.createElement("p");
+				hinweis.className = "hinweis";
+				hinweis.textContent = gruppenHinweise[g.name];
+				karte.append(hinweis);
+			}
 			return karte;
 		}));
+		$("konfigKnoepfe").hidden = !k.aenderbar || eingaben.length === 0;
+		$("konfigNurLesend").hidden = k.aenderbar;
+		$("neustartHinweis").hidden = !k.neustartNoetig;
+		aktualisiereKnoepfe();
 		konfigurationGeladen = true;
 	} catch (fehler) {
-		$("konfigListe").textContent = "Konfiguration nicht ladbar";
+		$("konfigListe").textContent = "Konfiguration nicht ladbar: " + fehler.message;
 	}
 }
+
+async function speichern(werte) {
+	if (await senden("POST", "api/konfiguration", { werte }, "konfigMeldung")) {
+		konfigurationGeladen = false;
+		await ladeKonfiguration();
+	}
+}
+
+$("konfigSpeichern").addEventListener("click", () => speichern(geaenderte()));
+$("konfigVerwerfen").addEventListener("click", () => {
+	konfigurationGeladen = false;
+	ladeKonfiguration();
+	$("konfigMeldung").textContent = "";
+});
+
+$("neustartKnopf").addEventListener("click", async () => {
+	let frage = "Brücke jetzt neu starten? Die Verbindung zur Steuerbox ist für einige Sekunden getrennt.";
+	if (zuletzt && [zuletzt.bezug, zuletzt.einspeisung].some(r => r && r.begrenzungAktiv)) {
+		frage += "\n\nAchtung: Gerade ist eine Begrenzung aktiv. Bis sich die Steuerbox wieder meldet, gilt die Failsafe-Grenze.";
+	}
+	if (!confirm(frage)) return;
+	const vorher = zuletzt ? zuletzt.laufzeitS : Infinity;
+	if (!await senden("POST", "api/neustart", {}, "neustartMeldung")) return;
+	$("neustartKnopf").disabled = true;
+	// Neu gestartet, sobald die Laufzeit wieder von vorn beginnt
+	const start = Date.now();
+	const warten = setInterval(() => {
+		if (zuletzt && zuletzt.laufzeitS < vorher) {
+			clearInterval(warten);
+			$("neustartKnopf").disabled = false;
+			$("neustartMeldung").textContent = "";
+			$("konfigMeldung").className = "meldung";
+			$("konfigMeldung").textContent = "Neu gestartet, die Einstellungen sind wirksam.";
+			konfigurationGeladen = false;
+			ladeKonfiguration();
+		} else if (Date.now() - start > 60000) {
+			clearInterval(warten);
+			$("neustartKnopf").disabled = false;
+			$("neustartMeldung").className = "meldung fehler";
+			$("neustartMeldung").textContent = "Die Brücke meldet sich nicht. Auf dem PFC prüfen: docker logs eebus-bruecke";
+		}
+	}, 1000);
+});
 
 zeigeReiter();
 abfragen();

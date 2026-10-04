@@ -97,6 +97,17 @@ nav { display: flex; gap: 4px; flex-wrap: wrap; }
 /* Konfiguration: Name mit Variable darunter, Wert rechts */
 table.konfig code { font-size: 11px; color: var(--text-leise); background: none; padding: 0; }
 table.konfig td:last-child { text-align: right; overflow-wrap: anywhere; }
+table.konfig .quelle { font-size: 11px; padding: 0 6px; font-weight: 500; }
+table.konfig td:first-child { width: 45%; }
+table.konfig input, table.konfig select { width: 100%; max-width: 14em; padding: 4px 6px; }
+table.konfig input[type=number] { width: 6.5em; text-align: right; }
+table.konfig input[type=checkbox] { width: auto; margin: 0; }
+table.konfig .einheit { white-space: nowrap; }
+table.konfig .wahl { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; justify-content: flex-end; }
+table.konfig .wahl label { flex-direction: row; align-items: center; gap: 4px; color: var(--text); font-size: 14px; }
+table.konfig td:last-child button { margin: 4px 0 0 6px; }
+table.konfig input.geaendert, table.konfig select.geaendert, table.konfig .geaendert input { border-color: var(--orange); outline: 1px solid var(--orange); }
+select { font: inherit; padding: 6px 8px; border: 1px solid var(--rand); border-radius: 6px; background: var(--hintergrund); color: var(--text); }
 nav a { color: var(--text-leise); text-decoration: none; padding: 3px 10px; border-radius: 999px; font-size: 14px; }
 nav a:hover { color: var(--text); }
 nav a.aktiv { background: var(--flaeche); border: 1px solid var(--rand); color: var(--text); }

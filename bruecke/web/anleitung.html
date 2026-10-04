@@ -200,10 +200,11 @@
 			<tbody>
 				<tr><td><code>EEBUS_REMOTE_SKI</code></td><td>SKI der Steuerbox, fest eingestellt (Verfahren C). Schaltet Pairing Service und Kopplung im UI ab.</td></tr>
 				<tr><td><code>EEBUS_PAIRING_SERVICE</code></td><td><code>an</code> (Vorgabe) oder <code>aus</code></td></tr>
-				<tr><td><code>WEB_KOPPLUNG</code></td><td><code>an</code> (Vorgabe). Mit <code>aus</code> ist die Statusseite rein lesend, Suchmodus und Kopplung sind dann gesperrt.</td></tr>
+				<tr><td><code>WEB_AENDERUNGEN</code></td><td><code>an</code> (Vorgabe). Mit <code>aus</code> ist die Statusseite rein lesend: Suchmodus, Kopplung, Einstellungen und Neustart sind dann gesperrt.</td></tr>
 				<tr><td><code>SHIP_ID</code></td><td>Kennung der Brücke im Netz. Vorgabe: Marke-Modell-MAC-Adresse. Nach der Kopplung nicht mehr ändern.</td></tr>
 			</tbody>
 		</table>
+		<p class="hinweis">Use Cases, Startwerte und Gerätedaten lassen sich auch im Reiter „Konfiguration“ ändern. Die Werte dort haben Vorrang vor der Env und werden mit „Jetzt neu starten“ wirksam. Die Brücke startet dabei im laufenden Container neu, PFC und CODESYS laufen weiter.</p>
 		<p class="hinweis">Zertifikat (SKI, Fingerprint), Secret und Kopplung liegen im Datenverzeichnis (<code>/home/eebus-bruecke</code>). Geht es verloren, muss neu gekoppelt werden, also sichern.</p>
 	</section>
 

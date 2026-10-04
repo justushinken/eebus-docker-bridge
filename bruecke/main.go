@@ -39,7 +39,7 @@ func main() {
 	// Alle Log-Meldungen zusaetzlich fuer das Status-UI vorhalten.
 	protokoll := gemeinsam.ProtokolliereLog(100)
 
-	konf, err := leseKonfiguration()
+	konf, einstellungen, err := startKonfiguration()
 	if err != nil {
 		log.Fatalf("Konfiguration: %v", err)
 	}
@@ -103,7 +103,7 @@ func main() {
 		}
 	}
 
-	bruecke := NeueBruecke(konf, eigenerSki, kopplung)
+	bruecke := NeueBruecke(konf, einstellungen, eigenerSki, kopplung)
 	dienst := service.NewService(konfiguration, bruecke)
 	if konf.EebusDebug {
 		dienst.SetLogging(gemeinsam.NeuesEebusLog())
@@ -162,6 +162,14 @@ func main() {
 		case sig := <-signale:
 			log.Printf("Beende nach Signal %v", sig)
 			return
+		case <-bruecke.neustart:
+			// Geaenderte Einstellungen uebernehmen. Erst das UI (beantwortet
+			// laufende Anfragen noch), dann EEBUS sauber trennen.
+			log.Printf("Neustart aus dem UI")
+			webBeenden()
+			dienst.Shutdown()
+			modbusServer.Stop()
+			starteNeu()
 		}
 	}
 }

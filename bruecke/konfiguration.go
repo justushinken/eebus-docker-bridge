@@ -11,7 +11,8 @@ import (
 	"github.com/enbility/spine-go/model"
 )
 
-// Konfiguration kommt vollstaendig aus Umgebungsvariablen (docker run -e ...).
+// Konfiguration kommt aus Umgebungsvariablen (docker run -e ...). Im UI
+// geaenderte Werte (einstellungen.json) haben Vorrang, siehe einstellungen.go.
 type Konfiguration struct {
 	EebusPort            int
 	ModbusUrl            string
@@ -30,7 +31,7 @@ type Konfiguration struct {
 	WebAdresse           string
 	WebBenutzer          string
 	WebPasswort          string
-	WebKopplung          bool // Kopplung und Suchmodus im UI erlaubt
+	WebAenderungen       bool // Kopplung, Einstellungen und Neustart im UI erlaubt
 	EebusDebug           bool
 
 	// Use Cases (EEBUS_USECASES)
@@ -46,9 +47,9 @@ type Konfiguration struct {
 }
 
 // auswahl liest eine kommagetrennte Liste aus erlaubten Namen.
-func auswahl(name, vorgabe string, erlaubt []string) (map[string]bool, error) {
+func auswahl(u gemeinsam.Umgebung, name, vorgabe string, erlaubt []string) (map[string]bool, error) {
 	ergebnis := map[string]bool{}
-	for _, teil := range strings.Split(gemeinsam.EnvTextLeerErlaubt(name, vorgabe), ",") {
+	for _, teil := range strings.Split(u.TextLeerErlaubt(name, vorgabe), ",") {
 		teil = strings.ToLower(strings.TrimSpace(teil))
 		if teil == "" {
 			continue
@@ -61,28 +62,28 @@ func auswahl(name, vorgabe string, erlaubt []string) (map[string]bool, error) {
 	return ergebnis, nil
 }
 
-func leseKonfiguration() (Konfiguration, error) {
+func leseKonfiguration(u gemeinsam.Umgebung) (Konfiguration, error) {
 	konf := Konfiguration{
-		EebusPort:            gemeinsam.EnvGanzzahl("EEBUS_PORT", 4712),
-		ModbusUrl:            gemeinsam.EnvText("MODBUS_URL", "tcp://127.0.0.1:5502"),
-		Datenverzeichnis:     gemeinsam.EnvText("DATENVERZEICHNIS", "/data"),
-		RemoteSki:            gemeinsam.EnvText("EEBUS_REMOTE_SKI", ""),
-		PairingService:       gemeinsam.EnvText("EEBUS_PAIRING_SERVICE", "an") != "aus",
-		Hersteller:           gemeinsam.EnvText("GERAET_HERSTELLER", "Demo"),
-		Marke:                gemeinsam.EnvText("GERAET_MARKE", "Demo"),
-		Modell:               gemeinsam.EnvText("GERAET_MODELL", "PFC200-LPC-Bruecke"),
-		Seriennummer:         gemeinsam.EnvText("GERAET_SERIENNUMMER", ""),
-		HwRevision:           gemeinsam.EnvText("GERAET_HW_REVISION", ""),
-		FailsafeGrenzeW:      gemeinsam.EnvKommazahl("FAILSAFE_GRENZE_W", 4200),
-		FailsafeMindestdauer: gemeinsam.EnvDauer("FAILSAFE_MINDESTDAUER", 2*time.Hour),
-		NennleistungMaxW:     gemeinsam.EnvKommazahl("NENNLEISTUNG_MAX_W", 11000),
-		WebAdresse:           gemeinsam.EnvTextLeerErlaubt("WEB_ADRESSE", ":8090"),
-		WebBenutzer:          gemeinsam.EnvText("WEB_BENUTZER", "admin"),
-		WebPasswort:          gemeinsam.EnvText("WEB_PASSWORT", ""),
-		WebKopplung:          gemeinsam.EnvText("WEB_KOPPLUNG", "an") != "aus",
-		EebusDebug:           gemeinsam.EnvText("EEBUS_DEBUG", "aus") == "an",
-		MpcEntitaet:          gemeinsam.EnvText("MPC_ENTITAET", "cem"),
-		MesswertQuelle:       model.MeasurementValueSourceType(gemeinsam.EnvText("MESSWERT_QUELLE", "measuredValue")),
+		EebusPort:            u.Ganzzahl("EEBUS_PORT", 4712),
+		ModbusUrl:            u.Text("MODBUS_URL", "tcp://127.0.0.1:5502"),
+		Datenverzeichnis:     u.Text("DATENVERZEICHNIS", "/data"),
+		RemoteSki:            u.Text("EEBUS_REMOTE_SKI", ""),
+		PairingService:       u.Text("EEBUS_PAIRING_SERVICE", "an") != "aus",
+		Hersteller:           u.Text("GERAET_HERSTELLER", "Demo"),
+		Marke:                u.Text("GERAET_MARKE", "Demo"),
+		Modell:               u.Text("GERAET_MODELL", "PFC200-LPC-Bruecke"),
+		Seriennummer:         u.Text("GERAET_SERIENNUMMER", ""),
+		HwRevision:           u.Text("GERAET_HW_REVISION", ""),
+		FailsafeGrenzeW:      u.Kommazahl("FAILSAFE_GRENZE_W", 4200),
+		FailsafeMindestdauer: u.Dauer("FAILSAFE_MINDESTDAUER", 2*time.Hour),
+		NennleistungMaxW:     u.Kommazahl("NENNLEISTUNG_MAX_W", 11000),
+		WebAdresse:           u.TextLeerErlaubt("WEB_ADRESSE", ":8090"),
+		WebBenutzer:          u.Text("WEB_BENUTZER", "admin"),
+		WebPasswort:          u.Text("WEB_PASSWORT", ""),
+		WebAenderungen:       u.Text("WEB_AENDERUNGEN", "an") != "aus",
+		EebusDebug:           u.Text("EEBUS_DEBUG", "aus") == "an",
+		MpcEntitaet:          u.Text("MPC_ENTITAET", "cem"),
+		MesswertQuelle:       model.MeasurementValueSourceType(u.Text("MESSWERT_QUELLE", "measuredValue")),
 	}
 
 	// Fester SKI: genau diese Steuerbox, kein Pairing Service und keine
@@ -102,12 +103,12 @@ func leseKonfiguration() (Konfiguration, error) {
 			return konf, fmt.Errorf("keine MAC-Adresse gefunden: GERAET_SERIENNUMMER setzen")
 		}
 	}
-	konf.ShipId = gemeinsam.EnvText("SHIP_ID", fmt.Sprintf("%s-%s-%s", konf.Marke, konf.Modell, konf.Seriennummer))
+	konf.ShipId = u.Text("SHIP_ID", fmt.Sprintf("%s-%s-%s", konf.Marke, konf.Modell, konf.Seriennummer))
 	if err := gemeinsam.PruefeShipId(konf.ShipId); err != nil {
 		return konf, err
 	}
 
-	useCases, err := auswahl("EEBUS_USECASES", "lpc", []string{"lpc", "lpp", "mpc", "mgcp"})
+	useCases, err := auswahl(u, "EEBUS_USECASES", "lpc", []string{"lpc", "lpp", "mpc", "mgcp"})
 	if err != nil {
 		return konf, err
 	}
@@ -117,16 +118,17 @@ func leseKonfiguration() (Konfiguration, error) {
 		return konf, fmt.Errorf("EEBUS_USECASES: lpc oder lpp ist Pflicht")
 	}
 
+	// Auch ohne LPP lesen, damit das UI die Werte vor dem Einschalten zeigt.
+	konf.FailsafeEinspeisegrenzeW = u.Kommazahl("FAILSAFE_EINSPEISEGRENZE_W", 0)
+	konf.NennleistungErzeugungMaxW = u.Kommazahl("NENNLEISTUNG_ERZEUGUNG_MAX_W", 0)
 	if konf.Lpp {
 		// Keine stillschweigende Vorgabe: Die Einspeisegrenze im Failsafe haengt
 		// von der Anlage ab (z. B. 60 % nach Netzanschlussvertrag).
 		for _, name := range []string{"FAILSAFE_EINSPEISEGRENZE_W", "NENNLEISTUNG_ERZEUGUNG_MAX_W"} {
-			if gemeinsam.EnvText(name, "") == "" {
+			if u.Text(name, "") == "" {
 				return konf, fmt.Errorf("%s ist Pflicht, wenn lpp in EEBUS_USECASES steht", name)
 			}
 		}
-		konf.FailsafeEinspeisegrenzeW = gemeinsam.EnvKommazahl("FAILSAFE_EINSPEISEGRENZE_W", 0)
-		konf.NennleistungErzeugungMaxW = gemeinsam.EnvKommazahl("NENNLEISTUNG_ERZEUGUNG_MAX_W", 0)
 	}
 
 	if konf.Mpc && konf.MpcEntitaet != "cem" && konf.MpcEntitaet != "submeter" {
@@ -143,11 +145,15 @@ func leseKonfiguration() (Konfiguration, error) {
 // --- Anzeige im UI (Tab "Konfiguration") ---
 
 // KonfigEintrag ist eine Einstellung mit der Env-Variable, ueber die sie sich
-// aendern laesst. Das Web-Passwort wird nicht angezeigt.
+// aendern laesst. Das Web-Passwort wird nicht angezeigt. Im UI aenderbare
+// Eintraege haben zusaetzlich Eingabe, Rohwert (im Format der Env) und Quelle.
 type KonfigEintrag struct {
-	Name     string `json:"name"`
-	Wert     string `json:"wert"`
-	Variable string `json:"variable"`
+	Name     string   `json:"name"`
+	Wert     string   `json:"wert"`
+	Variable string   `json:"variable"`
+	Eingabe  *Eingabe `json:"eingabe,omitempty"`
+	Roh      string   `json:"roh"`
+	Quelle   string   `json:"quelle,omitempty"` // ui, env oder vorgabe
 }
 
 type KonfigGruppe struct {
@@ -155,8 +161,8 @@ type KonfigGruppe struct {
 	Eintraege []KonfigEintrag `json:"eintraege"`
 }
 
-// Anzeige liefert die beim Start wirksame Konfiguration. Failsafe-Werte aus
-// failsafe.json (Vorgabe der Steuerbox) sind dabei schon eingerechnet.
+// Anzeige liefert die Konfiguration fuer das UI, ohne die Failsafe-Werte der
+// Steuerbox (failsafe.json): Die stehen in der Uebersicht.
 func (k Konfiguration) Anzeige() []KonfigGruppe {
 	anAus := func(b bool) string {
 		if b {
@@ -180,38 +186,38 @@ func (k Konfiguration) Anzeige() []KonfigGruppe {
 
 	return []KonfigGruppe{
 		{"Use Cases", []KonfigEintrag{
-			{"Angeboten", useCaseListe(k), "EEBUS_USECASES"},
-			{"MPC auf Entität", k.MpcEntitaet, "MPC_ENTITAET"},
-			{"Herkunft der Messwerte", string(k.MesswertQuelle), "MESSWERT_QUELLE"},
+			{Name: "Angeboten", Wert: useCaseListe(k), Variable: "EEBUS_USECASES"},
+			{Name: "MPC auf Entität", Wert: k.MpcEntitaet, Variable: "MPC_ENTITAET"},
+			{Name: "Herkunft der Messwerte", Wert: string(k.MesswertQuelle), Variable: "MESSWERT_QUELLE"},
 		}},
 		{"Grenzen beim Start", []KonfigEintrag{
-			{"Nennleistung Bezug", watt(k.NennleistungMaxW), "NENNLEISTUNG_MAX_W"},
-			{"Nennleistung Erzeugung", nurMitLpp(k.NennleistungErzeugungMaxW), "NENNLEISTUNG_ERZEUGUNG_MAX_W"},
-			{"Failsafe-Grenze Bezug", watt(k.FailsafeGrenzeW), "FAILSAFE_GRENZE_W"},
-			{"Failsafe-Grenze Einspeisung", nurMitLpp(k.FailsafeEinspeisegrenzeW), "FAILSAFE_EINSPEISEGRENZE_W"},
-			{"Failsafe-Mindestdauer", stundenMinuten(k.FailsafeMindestdauer), "FAILSAFE_MINDESTDAUER"},
+			{Name: "Nennleistung Bezug", Wert: watt(k.NennleistungMaxW), Variable: "NENNLEISTUNG_MAX_W"},
+			{Name: "Nennleistung Erzeugung", Wert: nurMitLpp(k.NennleistungErzeugungMaxW), Variable: "NENNLEISTUNG_ERZEUGUNG_MAX_W"},
+			{Name: "Failsafe-Grenze Bezug", Wert: watt(k.FailsafeGrenzeW), Variable: "FAILSAFE_GRENZE_W"},
+			{Name: "Failsafe-Grenze Einspeisung", Wert: nurMitLpp(k.FailsafeEinspeisegrenzeW), Variable: "FAILSAFE_EINSPEISEGRENZE_W"},
+			{Name: "Failsafe-Mindestdauer", Wert: stundenMinuten(k.FailsafeMindestdauer), Variable: "FAILSAFE_MINDESTDAUER"},
 		}},
 		{"Kopplung", []KonfigEintrag{
-			{"SHIP Pairing Service", anAus(k.PairingService), "EEBUS_PAIRING_SERVICE"},
-			{"Steuerbox fest (SKI)", text(k.RemoteSki), "EEBUS_REMOTE_SKI"},
-			{"Kopplung im UI", anAus(k.WebKopplung && k.RemoteSki == ""), "WEB_KOPPLUNG"},
-			{"SHIP-ID", k.ShipId, "SHIP_ID"},
+			{Name: "SHIP Pairing Service", Wert: anAus(k.PairingService), Variable: "EEBUS_PAIRING_SERVICE"},
+			{Name: "Steuerbox fest (SKI)", Wert: text(k.RemoteSki), Variable: "EEBUS_REMOTE_SKI"},
+			{Name: "Änderungen im UI", Wert: anAus(k.WebAenderungen), Variable: "WEB_AENDERUNGEN"},
+			{Name: "SHIP-ID", Wert: k.ShipId, Variable: "SHIP_ID"},
 		}},
 		{"Gerät", []KonfigEintrag{
-			{"Hersteller", k.Hersteller, "GERAET_HERSTELLER"},
-			{"Marke", k.Marke, "GERAET_MARKE"},
-			{"Modell", k.Modell, "GERAET_MODELL"},
-			{"Seriennummer", k.Seriennummer, "GERAET_SERIENNUMMER"},
-			{"Hardware-Revision", text(k.HwRevision), "GERAET_HW_REVISION"},
-			{"Software-Version", Version, "Image-Version"},
+			{Name: "Hersteller", Wert: k.Hersteller, Variable: "GERAET_HERSTELLER"},
+			{Name: "Marke", Wert: k.Marke, Variable: "GERAET_MARKE"},
+			{Name: "Modell", Wert: k.Modell, Variable: "GERAET_MODELL"},
+			{Name: "Seriennummer", Wert: k.Seriennummer, Variable: "GERAET_SERIENNUMMER"},
+			{Name: "Hardware-Revision", Wert: text(k.HwRevision), Variable: "GERAET_HW_REVISION"},
+			{Name: "Software-Version", Wert: Version, Variable: "Image-Version"},
 		}},
 		{"Schnittstellen", []KonfigEintrag{
-			{"EEBUS-Port", fmt.Sprint(k.EebusPort), "EEBUS_PORT"},
-			{"Modbus-Server", k.ModbusUrl, "MODBUS_URL"},
-			{"Datenverzeichnis", k.Datenverzeichnis, "DATENVERZEICHNIS"},
-			{"Web-UI", k.WebAdresse, "WEB_ADRESSE"},
-			{"Web-Benutzer", k.WebBenutzer, "WEB_BENUTZER"},
-			{"EEBUS-Protokoll auf stdout", anAus(k.EebusDebug), "EEBUS_DEBUG"},
+			{Name: "EEBUS-Port", Wert: fmt.Sprint(k.EebusPort), Variable: "EEBUS_PORT"},
+			{Name: "Modbus-Server", Wert: k.ModbusUrl, Variable: "MODBUS_URL"},
+			{Name: "Datenverzeichnis", Wert: k.Datenverzeichnis, Variable: "DATENVERZEICHNIS"},
+			{Name: "Web-UI", Wert: k.WebAdresse, Variable: "WEB_ADRESSE"},
+			{Name: "Web-Benutzer", Wert: k.WebBenutzer, Variable: "WEB_BENUTZER"},
+			{Name: "EEBUS-Protokoll auf stdout", Wert: anAus(k.EebusDebug), Variable: "EEBUS_DEBUG"},
 		}},
 	}
 }

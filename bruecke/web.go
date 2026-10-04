@@ -9,8 +9,8 @@ import (
 )
 
 // Status-UI: eine eingebettete Seite, die /api/status jede Sekunde abfragt.
-// Nur lesend, mit einer Ausnahme: Suchmodus und Kopplung mit der Steuerbox
-// (abschaltbar mit WEB_KOPPLUNG=aus).
+// Aenderbar sind nur Kopplung und Suchmodus sowie die Einstellungen samt
+// Neustart (alles abschaltbar mit WEB_AENDERUNGEN=aus).
 
 //go:embed web/index.html
 var indexHtml []byte
@@ -29,10 +29,24 @@ func webHandler(b *Bruecke, protokoll *gemeinsam.Ereignisprotokoll) http.Handler
 		gemeinsam.SchreibeJson(w, http.StatusOK, status)
 	})
 
-	// Die Konfiguration aendert sich nach dem Start nicht: ohne mu lesbar.
 	mux.HandleFunc("GET /api/konfiguration", func(w http.ResponseWriter, r *http.Request) {
-		gemeinsam.SchreibeJson(w, http.StatusOK, b.konf.Anzeige())
+		antwort, err := b.KonfigurationAnzeige()
+		if err != nil {
+			gemeinsam.SchreibeJson(w, http.StatusInternalServerError, gemeinsam.Antwort{Fehler: err.Error()})
+			return
+		}
+		gemeinsam.SchreibeJson(w, http.StatusOK, antwort)
 	})
+
+	mux.HandleFunc("POST /api/konfiguration", gemeinsam.Aktion(func(daten struct {
+		Werte map[string]*string `json:"werte"` // null = zuruecksetzen
+	}) (string, error) {
+		return "Gespeichert, wirksam nach einem Neustart", b.AendereEinstellungen(daten.Werte)
+	}))
+
+	mux.HandleFunc("POST /api/neustart", gemeinsam.Aktion(func(struct{}) (string, error) {
+		return "Bruecke startet neu", b.FordereNeustartAn()
+	}))
 
 	mux.HandleFunc("POST /api/suchmodus", gemeinsam.Aktion(func(daten struct {
 		An bool `json:"an"`

@@ -20,7 +20,7 @@ Docker-Container auf dem WAGO PFC200: tritt als EEBUS „Controllable System“ 
 3. Netzwerk: Direktkabel ETH1 → X2 vorab mit Laptop und Test-Steuerbox an X2 testen (inkl. IPv6-Link-Local ohne DHCP).
 4. Beim ersten Kontakt mit der PROLAN-Box: Karte „Steuerbox: gemeldete Daten“ auswerten (Use-Case-Versionen, Entitäten), ggf. `EEBUS_DEBUG=an`. Prüfen, ob sie MPC auf der CEM-Entität liest, sonst `MPC_ENTITAET=submeter`.
 5. Vor Übergabe: `GERAET_MARKE` auf Firmenkürzel, SHIP-ID mit `SHIP_ID=…` festschreiben (README, „Vor der Übergabe“).
-6. Zustandsautomat (`bruecke/begrenzung.go`, `takt`) gegen die Spezifikationen LPC/LPP und FNN-Lastenheft 1.4 prüfen. Update-Rate der Messwerte klären (sendet bei jeder Änderung).
+6. Zustandsautomat (`bruecke/begrenzung.go`, `takt`) gegen die Spezifikationen LPC/LPP und FNN-Lastenheft 1.4 prüfen. Konkret: Ohne Steuerbox geht Failsafe nach der Mindestdauer in „Unbegrenzt/autonom“ (Anlage frei). Ist das FNN-konform, oder muss die Failsafe-Grenze bleiben? (Vom Nutzer am 04.10.2026 für später vorgemerkt.) Update-Rate der Messwerte klären (sendet bei jeder Änderung).
 7. **Neustart/Stromausfall während einer Begrenzung:** Die aktive Grenze geht verloren (Init → Failsafe-Grenze, nach Heartbeat Unbegrenzt). Die Test-Steuerbox schreibt sie nicht neu (getestet 04.10.2026). Klären: Schreibt eine echte Steuerbox nach dem Wiederverbinden erneut? Sonst Grenze mit Ablaufzeit in einer Datei sichern und im Init wieder einsetzen (Uhr des PFC beachten).
 8. Fehler upstream melden: spine-go `ApproveOrDenyWrite` (third_party/spine-go/PATCH.md, Issue-Text vorbereitet 04.10.2026), eebus-go `gcp/mgcp` Akteur, `cs/lpc`/`cs/lpp` `Set*NominalMax` mit festen IDs 0/0.
 9. `dev` nach `main` übernehmen, wenn der PFC-Test passt.

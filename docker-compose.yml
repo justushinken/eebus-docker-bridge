@@ -1,0 +1,39 @@
+# EEBUS-Gateway allein, als Vorlage fuer den Betrieb. Siehe README.md.
+#
+#   docker compose up -d
+#
+# Nur auf Linux: --network host ist fuer mDNS noetig, das geht mit Docker
+# Desktop (Windows/Mac) nicht. Auf dem PFC200 gibt es meist kein Compose,
+# dort den gleichwertigen "docker run" aus dem README verwenden.
+# Zum Ausprobieren auf dem PC: testwerkzeuge/docker-compose.yml.
+#
+# Das Image kommt aus skripte/pfc-images-bauen.sh (docker load) oder wird hier
+# aus dem Quelltext gebaut (docker compose build).
+
+services:
+  gateway:
+    build: .
+    image: eebus-gateway:latest
+    container_name: eebus-gateway
+    restart: unless-stopped
+    network_mode: host
+    mem_limit: 64m
+    volumes:
+      # Zertifikat, Secret und Kopplung: sichern, nicht loeschen
+      - /home/eebus-gateway:/data
+    environment:
+      # Pflicht: Passwort fuer das Status-UI (http://<ip>:8090, Benutzer admin)
+      WEB_PASSWORT: "bitte-aendern"
+      # Kuerzel der eigenen Firma, erscheint in SHIP-ID und bei der Steuerbox
+      GERAET_MARKE: Demo
+      # Angebotene Use Cases: lpc, lpp, mpc, mgcp (lpc oder lpp ist Pflicht)
+      EEBUS_USECASES: lpc,mpc
+      # Bezug: Nennleistung und Failsafe-Grenze in W
+      NENNLEISTUNG_MAX_W: "22000"
+      FAILSAFE_GRENZE_W: "4200"
+      FAILSAFE_MINDESTDAUER: 2h
+      # Mit lpp (Erzeugung) zusaetzlich Pflicht:
+      # NENNLEISTUNG_ERZEUGUNG_MAX_W: "8000"
+      # FAILSAFE_EINSPEISEGRENZE_W: "4800"
+      # Vor der Uebergabe an den Messstellenbetreiber festschreiben (docs/kopplung.md):
+      # SHIP_ID: Demo-EEBUS-Gateway-0030DE683ADC

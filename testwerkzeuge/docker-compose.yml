@@ -1,0 +1,73 @@
+# Lokale Testumgebung auf dem PC: Gateway, Test-Steuerbox und SPS-Simulator,
+# mit allen vier Use Cases (LPC, LPP, MPC, MGCP). Siehe testwerkzeuge/README.md.
+#
+#   docker compose -f testwerkzeuge/docker-compose.yml up -d --build   (aus der Repo-Wurzel)
+#
+# Gateway:    http://localhost:8090  (admin / test)
+# Steuerbox:  http://localhost:8091  (admin / test)
+# Modbus:     localhost:5502
+#
+# Einmalig koppeln, wahlweise:
+#  - Pairing Service: im Gateway-UI "QR-Text kopieren", im Steuerbox-UI
+#    einfuegen und "Per Pairing Service koppeln". Keine Einstellung noetig.
+#  - SKI-Verfahren: im Steuerbox-UI beim Gateway "Per SKI koppeln", dann im
+#    Gateway-UI bei der Steuerbox "Vertrauen". Alternativ fest per .env neben
+#    dieser Datei: STEUERBOX_SKI=...
+# Zertifikate, Secret und Kopplung liegen in Volumes und bleiben erhalten.
+# Alles entfernen inklusive Volumes: docker compose -f testwerkzeuge/docker-compose.yml down -v
+
+# Fester Projektname: Volumes und Container heissen unabhaengig vom Ordner gleich.
+name: eebus-test
+
+services:
+  gateway:
+    build: ..
+    image: eebus-gateway:dev
+    ports:
+      - "8090:8090"
+      - "5502:5502"
+    environment:
+      EEBUS_REMOTE_SKI: ${STEUERBOX_SKI:-}
+      # Fest statt aus der MAC: Im Docker-Netz kann sich die MAC eines
+      # Containers beim Neuanlegen aendern, auf dem PFC nicht.
+      SHIP_ID: Demo-EEBUS-Gateway-Lokal
+      # Im Container-Netz statt nur 127.0.0.1, damit SPS-Simulator und
+      # Modbus-Master auf dem PC herankommen.
+      MODBUS_URL: tcp://0.0.0.0:5502
+      NENNLEISTUNG_MAX_W: "11000"
+      EEBUS_USECASES: lpc,lpp,mpc,mgcp
+      FAILSAFE_EINSPEISEGRENZE_W: "4800"
+      NENNLEISTUNG_ERZEUGUNG_MAX_W: "8000"
+      WEB_PASSWORT: test
+    volumes:
+      - gateway-daten:/data
+
+  steuerbox:
+    build:
+      context: ..
+      args:
+        PROGRAMM: testwerkzeuge/steuerbox
+    image: eebus-steuerbox:dev
+    ports:
+      - "8091:8091"
+    environment:
+      SHIP_ID: Test-Steuerbox-Lokal
+      WEB_PASSWORT: test
+    volumes:
+      - steuerbox-daten:/data
+
+  # Spielt die CODESYS-Seite: steuerbare Last 9 kW, PV 8 kW, Grundlast 500 W.
+  # Ausfall der SPS testen: docker compose -f testwerkzeuge/docker-compose.yml stop spssimulator
+  spssimulator:
+    build:
+      context: ..
+      args:
+        PROGRAMM: testwerkzeuge/spssimulator
+    image: eebus-spssimulator:dev
+    command: ["-url", "tcp://gateway:5502", "-nennleistung", "22000", "-last", "9000", "-pv", "8000"]
+    depends_on:
+      - gateway
+
+volumes:
+  gateway-daten:
+  steuerbox-daten:

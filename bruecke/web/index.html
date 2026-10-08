@@ -115,6 +115,11 @@
 				<thead><tr><th>Gerät</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
 				<tbody id="gefunden"></tbody>
 			</table>
+			<ul class="zeichenerklaerung">
+				<li><strong>Vertrauen</strong> Die Brücke trägt das Gerät als ihre Steuerbox ein. Eine bisherige Kopplung wird ersetzt.</li>
+				<li><span class="marke orange">vertraut – wartet auf Steuerbox</span> Die Brücke vertraut der Steuerbox, die Steuerbox der Brücke noch nicht. Der Messstellenbetreiber muss die Brücke dort eintragen („Daten für den Messstellenbetreiber“). Danach verbinden sich beide von selbst.</li>
+				<li><span class="marke gruen">verbunden</span> Beide Seiten vertrauen sich, die Verbindung steht.</li>
+			</ul>
 			<p class="hinweis">Fehlt die Steuerbox hier, liegt es am Netz (siehe Anleitung, „Netzwerk“), nicht an der Kopplung.</p>
 		</section>
 
@@ -123,6 +128,7 @@
 			<dl>
 				<dt>Gekoppelt</dt><dd><span class="mono" id="kopplungPartner"></span> <span id="kopplungQuelle"></span>
 					<button class="gefahr kopplung-aktion" id="entkoppeln" type="button" hidden>Kopplung lösen</button></dd>
+				<dt>Zustand</dt><dd id="kopplungZustand"></dd>
 			</dl>
 
 			<div class="abschnitt kopplung-aktion" style="margin-top:16px">
@@ -489,6 +495,10 @@ function zeigeKopplung(s) {
 	$("kopplungPartner").textContent = k ? (k.shipId ? `${k.shipId} (SKI ${k.ski})` : `SKI ${k.ski}`) : "keine";
 	if (k) marke($("kopplungQuelle"), quellen[k.quelle] || k.quelle, "");
 	else $("kopplungQuelle").replaceChildren();
+	// Eine Pairing-Kopplung kennt oft keinen SKI, deshalb über den Verbindungszustand
+	if (!k) $("kopplungZustand").textContent = "–";
+	else if (s.verbindung === 2) marke($("kopplungZustand"), "verbunden", "gruen");
+	else marke($("kopplungZustand"), "vertraut – wartet auf Steuerbox", "orange");
 	for (const el of document.querySelectorAll(".kopplung-aktion")) el.hidden = !s.kopplungAenderbar;
 	$("kopplungFest").hidden = s.kopplungAenderbar;
 	$("anfragenZaehler").hidden = s.anfragen.length === 0;
@@ -530,7 +540,7 @@ function zeigeKopplung(s) {
 		}
 		const td = document.createElement("span");
 		if (verbunden(g.ski)) marke(td, "verbunden", "gruen");
-		else if (k && k.ski === g.ski) marke(td, "gekoppelt", "gruen");
+		else if (k && k.ski === g.ski) marke(td, "vertraut – wartet auf Steuerbox", "orange");
 		else if (s.kopplungAenderbar) td.append(knopf("Vertrauen", "", () => {
 			const text = k ? `Steuerbox ${g.ski} vertrauen? Die bisherige Kopplung wird ersetzt.` : `Steuerbox ${g.ski} vertrauen?`;
 			if (confirm(text)) senden("POST", "api/kopplung", { ski: g.ski }, "kopplungMeldung");

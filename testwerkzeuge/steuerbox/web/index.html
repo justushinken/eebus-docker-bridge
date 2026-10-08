@@ -375,7 +375,8 @@ function zeige(s) {
 		tr.children[1].className = tr.children[2].className = "mono";
 		const td = document.createElement("td");
 		if (g.ski === s.gekoppeltSki) {
-			marke(td, "gekoppelt", "gruen");
+			if (s.verbunden) marke(td, "verbunden", "gruen");
+			else marke(td, "vertraut – wartet auf Brücke", "orange");
 		} else {
 			const knopf = document.createElement("button");
 			knopf.type = "button";

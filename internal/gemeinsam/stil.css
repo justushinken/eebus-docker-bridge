@@ -156,6 +156,9 @@ code { font-family: var(--mono); font-size: 12px; background: var(--grau-flaeche
 .schaubild .rot { fill: var(--rot-flaeche); stroke: var(--rot); }
 .schaubild .grau { fill: var(--grau-flaeche); stroke: var(--grau); }
 .legende { font-size: 13px; color: var(--text-leise); margin: 0 0 8px; }
+.zeichenerklaerung { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; font-size: 13px; color: var(--text-leise); }
+.zeichenerklaerung strong { margin-right: 6px; color: var(--text); }
+.zeichenerklaerung .marke { margin-right: 6px; }
 
 /* Formulare (Test-Steuerbox) */
 .felder { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }

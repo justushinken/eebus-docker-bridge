@@ -13,7 +13,7 @@ import (
 	"github.com/enbility/spine-go/util"
 )
 
-// Grenzen und Failsafe-Werte an die Bruecke senden (Aktionen aus dem Web-UI).
+// Grenzen und Failsafe-Werte an das Gateway senden (Aktionen aus dem Web-UI).
 
 func (s *Steuerbox) SendeGrenze(wertW float64, dauer time.Duration, aktiv bool) error {
 	ziel, err := s.ziel()
@@ -48,7 +48,7 @@ func (s *Steuerbox) SendeFailsafe(grenzeW float64, mindestdauer time.Duration) e
 	return nil
 }
 
-// ergebnisMelden protokolliert die Antwort der Bruecke auf eine Grenze.
+// ergebnisMelden protokolliert die Antwort des Gateways auf eine Grenze.
 func ergebnisMelden(was string) func(model.ResultDataType, model.MsgCounterType) {
 	return func(ergebnis model.ResultDataType, _ model.MsgCounterType) {
 		if ergebnis.ErrorNumber != nil && *ergebnis.ErrorNumber != model.ErrorNumberTypeNoError {
@@ -56,10 +56,10 @@ func ergebnisMelden(was string) func(model.ResultDataType, model.MsgCounterType)
 			if ergebnis.Description != nil {
 				grund = string(*ergebnis.Description)
 			}
-			log.Printf("Bruecke lehnt %s ab (Fehler %d): %s", was, *ergebnis.ErrorNumber, grund)
+			log.Printf("Gateway lehnt %s ab (Fehler %d): %s", was, *ergebnis.ErrorNumber, grund)
 			return
 		}
-		log.Printf("Bruecke hat %s angenommen", was)
+		log.Printf("Gateway hat %s angenommen", was)
 	}
 }
 
@@ -103,8 +103,8 @@ func (s *Steuerbox) SendeFailsafeEinspeisung(grenzeW float64, mindestdauer time.
 
 // SendeGrenzenGemeinsam schreibt Bezugs- und Einspeisegrenze in einer
 // Nachricht. eebus-go schreibt jede Grenze einzeln; andere EEBUS-Stacks
-// (z. B. in einer echten Steuerbox) koennen beide zusammen schreiben. Die
-// Bruecke muss das in LPC und LPP getrennt freigeben.
+// (z. B. in einer echten Steuerbox) koennen beide zusammen schreiben. Das
+// Gateway muss das in LPC und LPP getrennt freigeben.
 func (s *Steuerbox) SendeGrenzenGemeinsam(bezugW, einspeisungW float64, dauer time.Duration) error {
 	ziel, err := s.ziel()
 	if err != nil {
@@ -128,7 +128,7 @@ func (s *Steuerbox) SendeGrenzenGemeinsam(bezugW, einspeisungW float64, dauer ti
 			ScopeType:      util.Ptr(model.ScopeTypeTypeActivePowerLimit),
 		})
 		if err != nil || len(vorhanden) != 1 || vorhanden[0].LimitId == nil {
-			return fmt.Errorf("Grenze %s bei der Bruecke nicht gefunden", g.richtung)
+			return fmt.Errorf("Grenze %s beim Gateway nicht gefunden", g.richtung)
 		}
 		grenze := model.LoadControlLimitDataType{
 			LimitId:       vorhanden[0].LimitId,

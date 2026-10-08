@@ -10,7 +10,7 @@ import (
 // Nicht gesetzte, leere oder ungueltige Werte ergeben die Vorgabe.
 
 // Umgebung liefert eine Einstellung nach Namen. Normalerweise os.LookupEnv,
-// die Bruecke legt ihre im UI geaenderten Einstellungen davor.
+// das Gateway legt seine im UI geaenderten Einstellungen davor.
 type Umgebung func(name string) (string, bool)
 
 var Env Umgebung = os.LookupEnv

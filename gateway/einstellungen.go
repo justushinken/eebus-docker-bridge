@@ -18,12 +18,12 @@ import (
 	"time"
 	"unicode"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 )
 
 // Einstellungen aus dem UI: einstellungen.json im Datenverzeichnis enthaelt
 // geaenderte Umgebungsvariablen und hat Vorrang vor der Env des Containers.
-// Wirksam werden sie mit einem Neustart der Bruecke, den das UI ausloest.
+// Wirksam werden sie mit einem Neustart des Gateways, den das UI ausloest.
 
 const einstellungenDatei = "einstellungen.json"
 
@@ -85,8 +85,8 @@ func mitEinstellungen(werte map[string]string) gemeinsam.Umgebung {
 }
 
 // startKonfiguration liest die Konfiguration beim Start. Passen die Werte aus
-// dem UI nicht (mehr), z. B. weil sich die Env geaendert hat, startet die
-// Bruecke mit der Env allein, statt gar nicht.
+// dem UI nicht (mehr), z. B. weil sich die Env geaendert hat, startet das
+// Gateway mit der Env allein, statt gar nicht.
 func startKonfiguration() (Konfiguration, map[string]string, error) {
 	verzeichnis := gemeinsam.EnvText("DATENVERZEICHNIS", "/data")
 	werte, err := ladeEinstellungen(verzeichnis)
@@ -148,7 +148,7 @@ func pruefeEingabe(name, wert string) error {
 // AendereEinstellungen uebernimmt Aenderungen aus dem UI (nil = zuruecksetzen
 // auf Env bzw. Vorgabe), prueft die ganze Konfiguration und speichert. Wirksam
 // nach dem naechsten Neustart.
-func (b *Bruecke) AendereEinstellungen(aenderungen map[string]*string) error {
+func (b *Gateway) AendereEinstellungen(aenderungen map[string]*string) error {
 	if !b.konf.WebAenderungen {
 		return errUiNurLesend
 	}
@@ -195,7 +195,7 @@ type KonfigAntwort struct {
 	NeustartNoetig bool           `json:"neustartNoetig"` // gespeicherte Aenderungen noch nicht wirksam
 }
 
-func (b *Bruecke) KonfigurationAnzeige() (KonfigAntwort, error) {
+func (b *Gateway) KonfigurationAnzeige() (KonfigAntwort, error) {
 	einstellungenMu.Lock()
 	werte, err := ladeEinstellungen(b.konf.Datenverzeichnis)
 	einstellungenMu.Unlock()
@@ -280,9 +280,9 @@ func (k Konfiguration) rohwert(u gemeinsam.Umgebung, name string) string {
 	return ""
 }
 
-// FordereNeustartAn startet die Bruecke neu, damit geaenderte Einstellungen
+// FordereNeustartAn startet das Gateway neu, damit geaenderte Einstellungen
 // wirken. Der Hauptablauf beendet dazu alles und ersetzt sich selbst.
-func (b *Bruecke) FordereNeustartAn() error {
+func (b *Gateway) FordereNeustartAn() error {
 	if !b.konf.WebAenderungen {
 		return errUiNurLesend
 	}
@@ -295,7 +295,7 @@ func (b *Bruecke) FordereNeustartAn() error {
 
 // starteNeu ersetzt den Prozess durch einen neuen Start desselben Programms.
 // Das geht ohne Docker: Der Container laeuft weiter, die Restart-Policy ist
-// egal. Schlaegt es fehl, beendet sich die Bruecke, Docker startet sie dann
+// egal. Schlaegt es fehl, beendet sich das Gateway, Docker startet es dann
 // mit --restart unless-stopped neu.
 func starteNeu() {
 	programm, err := os.Executable()

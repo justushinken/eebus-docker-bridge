@@ -19,8 +19,8 @@ import (
 // Heartbeat und Failsafe-Mindestdauer (gleiche Entitaet, gleicher Schluessel
 // in der DeviceConfiguration).
 //
-// Die Felder ab zustand gehoeren zum Zustand der Bruecke: Zugriff nur unter
-// Bruecke.mu. uc wird nur ausserhalb von mu aufgerufen.
+// Die Felder ab zustand gehoeren zum Zustand des Gateways: Zugriff nur unter
+// Gateway.mu. uc wird nur ausserhalb von mu aufgerufen.
 type Begrenzung struct {
 	name string // "LPC" oder "LPP", fuer Log und UI
 	text string // "Grenze" bzw. "Einspeisegrenze"
@@ -215,7 +215,7 @@ func (a lppAdapter) SetzeNennleistung(w float64) error {
 // (Stand 30.09.2026): Die suchen die Kennlinie fest unter ElectricalConnection-
 // und Parameter-ID 0, angelegt wird sie aber mit den IDs der Gesamtleistung.
 // Meldet MPC auf derselben Entitaet, sind das andere IDs und der Wert kommt nie
-// an. Hier wird die Kennlinie ueber ihren Typ gesucht. Die Bruecke ist ein
+// an. Hier wird die Kennlinie ueber ihren Typ gesucht. Das Gateway ist ein
 // Energiemanagementsystem, daher die vertraglichen (contractual) Werte.
 func setzeNennleistung(entitaet spineapi.EntityLocalInterface, typ model.ElectricalConnectionCharacteristicTypeType, wertW float64) error {
 	verbindung, err := server.NewElectricalConnection(entitaet)

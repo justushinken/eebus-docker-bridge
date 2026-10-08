@@ -1,6 +1,6 @@
 // SPS-Simulator fuer lokale Tests: spielt die CODESYS-Seite.
 //
-// Liest jede Sekunde die Input-Register der Bruecke und rechnet eine kleine
+// Liest jede Sekunde die Input-Register des Gateways und rechnet eine kleine
 // Anlage durch: eine steuerbare Last, die der Bezugsgrenze folgt, eine
 // PV-Anlage, die bei einer Einspeisegrenze abgeregelt wird, und eine nicht
 // steuerbare Grundlast. Daraus entstehen Leistung und Energie fuer MPC (Anlage =
@@ -34,7 +34,7 @@ func u32(r []uint16, i int) uint32 {
 	return uint32(r[i])<<16 | uint32(r[i+1])
 }
 
-// Registerbelegung siehe bruecke/modbus.go
+// Registerbelegung siehe gateway/modbus.go
 const (
 	blockBezug       = 2
 	blockEinspeisung = 17
@@ -60,9 +60,9 @@ func (r register) ulint(i int, wert float64) {
 }
 
 func main() {
-	url := flag.String("url", "tcp://127.0.0.1:5502", "Modbus-Server der Bruecke")
-	nennleistung := flag.Uint("nennleistung", 0, "an die Bruecke gemeldete Nennleistung Bezug in W, 0 = Vorgabe der Bruecke")
-	nennErzeugung := flag.Uint("nennleistung-erzeugung", 0, "an die Bruecke gemeldete Nennleistung Erzeugung in W, 0 = Vorgabe der Bruecke")
+	url := flag.String("url", "tcp://127.0.0.1:5502", "Modbus-Server des Gateways")
+	nennleistung := flag.Uint("nennleistung", 0, "an das Gateway gemeldete Nennleistung Bezug in W, 0 = Vorgabe des Gateways")
+	nennErzeugung := flag.Uint("nennleistung-erzeugung", 0, "an das Gateway gemeldete Nennleistung Erzeugung in W, 0 = Vorgabe des Gateways")
 	last := flag.Float64("last", 9000, "Leistungsbedarf der steuerbaren Last in W")
 	pv := flag.Float64("pv", 0, "PV-Leistung ohne Abregelung in W")
 	grundlast := flag.Float64("grundlast", 500, "nicht steuerbare Grundlast am Netzanschlusspunkt in W")
@@ -129,7 +129,7 @@ func main() {
 		h.ulint(20, napEinspeisung)
 		h.ulint(24, napBezug)
 
-		// Wie Auto-Reconnect in CODESYS: Nach einem Neustart der Bruecke ist die
+		// Wie Auto-Reconnect in CODESYS: Nach einem Neustart des Gateways ist die
 		// alte TCP-Verbindung tot, also schliessen und neu aufbauen.
 		if err := client.WriteRegisters(0, h); err != nil {
 			log.Printf("Holding schreiben: %v, verbinde neu", err)

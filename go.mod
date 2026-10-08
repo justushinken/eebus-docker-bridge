@@ -1,11 +1,11 @@
-module eebus-bruecke
+module eebus-gateway
 
 go 1.24.1
 
 toolchain go1.24.13
 
 // eebus-go bewusst gepinnt: Die API aendert sich zwischen Minor-Versionen.
-// Vor einem Update die Aufrufe in main.go/bruecke.go mit cmd/hems bzw.
+// Vor einem Update die Aufrufe in main.go/gateway.go mit cmd/hems bzw.
 // cmd/controlbox der neuen Version abgleichen.
 
 // spine-go mit Fix fuer die Freigabe gleichzeitiger Schreibanfragen, siehe

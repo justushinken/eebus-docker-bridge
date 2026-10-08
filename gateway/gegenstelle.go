@@ -43,7 +43,7 @@ type GegenstelleUseCase struct {
 	Verfuegbar bool   `json:"verfuegbar"`
 }
 
-// Kurznamen und Bits (Input-Register 16) der Use Cases, die die Bruecke als
+// Kurznamen und Bits (Input-Register 16) der Use Cases, die das Gateway als
 // Gegenstueck erwartet: Akteur auf Seiten der Steuerbox.
 var steuerboxUseCases = []struct {
 	akteur model.UseCaseActorType
@@ -75,7 +75,7 @@ func text[T ~string](wert *T) string {
 // PruefeGegenstelle liest das SPINE-Modell der verbundenen Steuerbox aus dem
 // lokalen Zwischenspeicher von spine-go und meldet Aenderungen. Zyklisch
 // ausserhalb von mu aufrufen.
-func (b *Bruecke) PruefeGegenstelle() {
+func (b *Gateway) PruefeGegenstelle() {
 	b.mu.Lock()
 	ski, verbunden := b.partner.SKI, b.verbindung == VerbindungVerbunden
 	b.mu.Unlock()
@@ -157,7 +157,7 @@ func (b *Bruecke) PruefeGegenstelle() {
 }
 
 // herstellerAnfordern liefert true beim ersten Aufruf je Steuerbox.
-func (b *Bruecke) herstellerAnfordern(ski string) bool {
+func (b *Gateway) herstellerAnfordern(ski string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.herstellerAngefordert == ski || b.partner.SKI != ski {

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 )
 
 //go:embed web/index.html
@@ -38,7 +38,7 @@ func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handl
 		if err := s.SendeGrenze(daten.WertW, dauer, daten.Aktiv); err != nil {
 			return "", err
 		}
-		return "Gesendet, Antwort der Bruecke unter Ereignisse", nil
+		return "Gesendet, Antwort des Gateways unter Ereignisse", nil
 	}))
 
 	mux.HandleFunc("POST /api/failsafe", gemeinsam.Aktion(func(daten struct {
@@ -51,7 +51,7 @@ func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handl
 		if err := s.SendeFailsafe(daten.GrenzeW, time.Duration(daten.MindestdauerS)*time.Second); err != nil {
 			return "", err
 		}
-		return "Gesendet, die Bruecke meldet die neuen Werte zurueck", nil
+		return "Gesendet, das Gateway meldet die neuen Werte zurueck", nil
 	}))
 
 	mux.HandleFunc("POST /api/einspeisegrenze", gemeinsam.Aktion(func(daten struct {
@@ -65,7 +65,7 @@ func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handl
 		if err := s.SendeEinspeisegrenze(daten.WertW, time.Duration(daten.DauerS)*time.Second, daten.Aktiv); err != nil {
 			return "", err
 		}
-		return "Gesendet, Antwort der Bruecke unter Ereignisse", nil
+		return "Gesendet, Antwort des Gateways unter Ereignisse", nil
 	}))
 
 	mux.HandleFunc("POST /api/failsafe-einspeisung", gemeinsam.Aktion(func(daten struct {
@@ -78,7 +78,7 @@ func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handl
 		if err := s.SendeFailsafeEinspeisung(daten.GrenzeW, time.Duration(daten.MindestdauerS)*time.Second); err != nil {
 			return "", err
 		}
-		return "Gesendet, die Bruecke meldet die neuen Werte zurueck", nil
+		return "Gesendet, das Gateway meldet die neuen Werte zurueck", nil
 	}))
 
 	// Test: beide Grenzen in einer Nachricht, wie es andere EEBUS-Stacks tun koennen
@@ -93,7 +93,7 @@ func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handl
 		if err := s.SendeGrenzenGemeinsam(daten.BezugW, daten.EinspeisungW, time.Duration(daten.DauerS)*time.Second); err != nil {
 			return "", err
 		}
-		return "Gesendet, Antwort der Bruecke unter Ereignisse", nil
+		return "Gesendet, Antwort des Gateways unter Ereignisse", nil
 	}))
 
 	mux.HandleFunc("POST /api/heartbeat", gemeinsam.Aktion(func(daten struct {
@@ -129,7 +129,7 @@ func webHandler(s *Steuerbox, protokoll *gemeinsam.Ereignisprotokoll) http.Handl
 		case gemeinsam.VerfahrenSki:
 			return "Per SKI gekoppelt, Verbindung wird aufgebaut", s.KoppelnPerSki(daten.Ski)
 		case gemeinsam.VerfahrenPairing:
-			return "Ankuendigung laeuft, die Bruecke sollte sich in einigen Sekunden verbinden", s.KoppelnPerPairingService(daten.QrText)
+			return "Ankuendigung laeuft, das Gateway sollte sich in einigen Sekunden verbinden", s.KoppelnPerPairingService(daten.QrText)
 		}
 		return "", fmt.Errorf("unbekanntes Verfahren %q", daten.Verfahren)
 	}))
@@ -149,17 +149,17 @@ type GrenzeDaten struct {
 	DauerS float64 `json:"dauerS"`
 }
 
-// BrueckenWerte sind die zuletzt von der Bruecke gemeldeten Werte, nil = nicht bekannt.
-type BrueckenWerte struct {
+// GatewayWerte sind die zuletzt vom Gateway gemeldeten Werte, nil = nicht bekannt.
+type GatewayWerte struct {
 	Szenarien             []uint            `json:"szenarien"`
 	Grenze                *GrenzeDaten      `json:"grenze"`
 	FailsafeGrenzeW       *float64          `json:"failsafeGrenzeW"`
 	FailsafeMindestdauerS *float64          `json:"failsafeMindestdauerS"`
 	NennleistungW         *float64          `json:"nennleistungW"`
-	Einspeisung           *EinspeisungWerte `json:"einspeisung"` // nil = Bruecke ohne LPP
+	Einspeisung           *EinspeisungWerte `json:"einspeisung"` // nil = Gateway ohne LPP
 	UseCases              []UseCaseDaten    `json:"useCases"`
-	Mpc                   []MesswertDaten   `json:"mpc"`           // nil = Bruecke ohne MPC
-	Mgcp                  []MesswertDaten   `json:"mgcp"`          // nil = Bruecke ohne MGCP
+	Mpc                   []MesswertDaten   `json:"mpc"`           // nil = Gateway ohne MPC
+	Mgcp                  []MesswertDaten   `json:"mgcp"`          // nil = Gateway ohne MGCP
 	Anlagenstatus         string            `json:"anlagenstatus"` // leer = unbekannt
 }
 
@@ -173,7 +173,7 @@ type EinspeisungWerte struct {
 type UseCaseDaten struct {
 	Name         string `json:"name"`
 	Steuerbox    bool   `json:"steuerbox"`    // hier eingeschaltet
-	Unterstuetzt bool   `json:"unterstuetzt"` // von der Bruecke angeboten
+	Unterstuetzt bool   `json:"unterstuetzt"` // vom Gateway angeboten
 }
 
 type StatusDaten struct {
@@ -181,7 +181,7 @@ type StatusDaten struct {
 	EigenerSki        string                       `json:"eigenerSki"`
 	ShipId            string                       `json:"shipId"`
 	Fingerprint       string                       `json:"fingerprint"`
-	Gekoppelt         string                       `json:"gekoppelt"`    // Bezeichnung der Bruecke, leer = keine
+	Gekoppelt         string                       `json:"gekoppelt"`    // Bezeichnung des Gateways, leer = keine
 	GekoppeltSki      string                       `json:"gekoppeltSki"` // fuer die Markierung in der Geraeteliste
 	Verfahren         string                       `json:"verfahren"`    // ski | pairing
 	Ankuendigung      bool                         `json:"ankuendigung"` // Pairing Service kuendigt gerade an
@@ -189,7 +189,7 @@ type StatusDaten struct {
 	Unterbrochen      bool                         `json:"unterbrochen"`
 	HeartbeatLaeuft   bool                         `json:"heartbeatLaeuft"`
 	HeartbeatAbstandS float64                      `json:"heartbeatAbstandS"`
-	Bruecke           *BrueckenWerte               `json:"bruecke"` // nil = keine LPC-Entitaet
+	Gateway           *GatewayWerte                `json:"gateway"` // nil = keine LPC-Entitaet
 	Gefunden          []gemeinsam.GefundenesGeraet `json:"gefunden"`
 	LaufzeitS         float64                      `json:"laufzeitS"`
 	Ereignisse        []gemeinsam.Ereignis         `json:"ereignisse"`
@@ -237,7 +237,7 @@ func (s *Steuerbox) Status(jetzt time.Time) StatusDaten {
 	status.HeartbeatAbstandS = abstand.Seconds()
 
 	if ziel, err := s.ziel(); err == nil {
-		werte := &BrueckenWerte{Szenarien: s.lpc.AvailableScenariosForEntity(ziel)}
+		werte := &GatewayWerte{Szenarien: s.lpc.AvailableScenariosForEntity(ziel)}
 		if grenze, err := s.lpc.ConsumptionLimit(ziel); err == nil {
 			werte.Grenze = &GrenzeDaten{WertW: grenze.Value, Aktiv: grenze.IsActive, DauerS: grenze.Duration.Seconds()}
 		}
@@ -264,8 +264,8 @@ func (s *Steuerbox) Status(jetzt time.Time) StatusDaten {
 		if zielMgcp, err := s.zielFuer(s.mgcp, "MGCP"); err == nil {
 			werte.Mgcp = s.leseMesswerte(zielMgcp)
 		}
-		werte.UseCases = s.brueckenUseCases()
-		status.Bruecke = werte
+		werte.UseCases = s.gatewayUseCases()
+		status.Gateway = werte
 	}
 	return status
 }

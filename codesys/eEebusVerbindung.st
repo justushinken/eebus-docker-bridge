@@ -1,5 +1,5 @@
-// Verbindungszustand zwischen Brücke und Steuerbox.
-// Zahlenwerte identisch mit Verbindung in bruecke.go.
+// Verbindungszustand zwischen Gateway und Steuerbox.
+// Zahlenwerte identisch mit Verbindung in gateway.go.
 {attribute 'qualified_only'}
 {attribute 'strict'}
 TYPE eEebusVerbindung :

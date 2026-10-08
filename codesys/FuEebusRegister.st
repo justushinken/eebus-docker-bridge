@@ -1,4 +1,4 @@
-// Hilfsfunktionen: Werte in die Holding-Register der Brücke schreiben bzw.
+// Hilfsfunktionen: Werte in die Holding-Register des Gateways schreiben bzw.
 // aus den Input-Registern lesen. Mehrwortige Werte: High-Word zuerst.
 
 FUNCTION FuEebusSchreibeDint : BOOL

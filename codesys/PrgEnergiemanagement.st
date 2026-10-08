@@ -8,7 +8,7 @@
 // BK6-22-300 Anlage 1 zu berücksichtigen.
 PROGRAM PrgEnergiemanagement
 VAR
-	fbBruecke     : FbEebusBruecke;
+	fbGateway     : FbEebusGateway;
 	fbBezug       : FbEebusBegrenzung;
 	fbEinspeisung : FbEebusBegrenzung;
 	fbMesswerte   : FbEebusMesswerte;
@@ -24,25 +24,25 @@ VAR
 	xAnlagenstoerung         : BOOL;
 END_VAR
 
-fbBruecke(
+fbGateway(
 	xFreigabe                 := TRUE,
 	udiNennleistungBezugW     := 22000,
 	udiNennleistungErzeugungW := udiPvMaxW,
 	eStatus                   := SEL(xAnlagenstoerung, eAnlagenstatus.Normal, eAnlagenstatus.Stoerung),
-	tBrueckeTimeout           := T#10S,
+	tGatewayTimeout           := T#10S,
 	aInputRegister            := GvlEebus.aInputRegister,
 	aHoldingRegister          := GvlEebus.aHoldingRegister);
 
 fbBezug(
-	xBrueckeOk       := fbBruecke.xBrueckeOk,
-	xUseCaseAktiv    := fbBruecke.xLpcAktiv,
+	xGatewayOk       := fbGateway.xGatewayOk,
+	xUseCaseAktiv    := fbGateway.xLpcAktiv,
 	iBasis           := 2,
 	udiErsatzgrenzeW := 4200,
 	aInputRegister   := GvlEebus.aInputRegister);
 
 fbEinspeisung(
-	xBrueckeOk       := fbBruecke.xBrueckeOk,
-	xUseCaseAktiv    := fbBruecke.xLppAktiv,
+	xGatewayOk       := fbGateway.xGatewayOk,
+	xUseCaseAktiv    := fbGateway.xLppAktiv,
 	iBasis           := 17,
 	udiErsatzgrenzeW := udiPvMaxW * 6 / 10,   // z. B. 60 % nach Netzanschlussvertrag
 	aInputRegister   := GvlEebus.aInputRegister);

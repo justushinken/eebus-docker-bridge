@@ -7,15 +7,15 @@
 // Regelung muss sie dort einhalten (Messwert am Netzanschlusspunkt), nicht an
 // einer einzelnen Last.
 //
-// Ist die Brücke ausgefallen, gilt die lokale Ersatzgrenze (sichere Seite, wie
-// im Failsafe). Bietet die Brücke den Use Case bewusst nicht an
+// Ist das Gateway ausgefallen, gilt die lokale Ersatzgrenze (sichere Seite, wie
+// im Failsafe). Bietet das Gateway den Use Case bewusst nicht an
 // (EEBUS_USECASES), gibt es in dieser Richtung keine Begrenzung.
 FUNCTION_BLOCK FbEebusBegrenzung
 VAR_INPUT
-	xBrueckeOk       : BOOL;                     // von FbEebusBruecke
-	xUseCaseAktiv    : BOOL;                     // von FbEebusBruecke (xLpcAktiv bzw. xLppAktiv), FALSE = Use Case aus, keine Begrenzung
+	xGatewayOk       : BOOL;                     // von FbEebusGateway
+	xUseCaseAktiv    : BOOL;                     // von FbEebusGateway (xLpcAktiv bzw. xLppAktiv), FALSE = Use Case aus, keine Begrenzung
 	iBasis           : INT := 2;                 // 2 = Bezug, 17 = Einspeisung
-	udiErsatzgrenzeW : UDINT := 4200;            // gilt, solange die Brücke nicht verfügbar ist
+	udiErsatzgrenzeW : UDINT := 4200;            // gilt, solange das Gateway nicht verfügbar ist
 END_VAR
 VAR_IN_OUT
 	aInputRegister   : ARRAY [0..30] OF WORD;
@@ -27,7 +27,7 @@ VAR_OUTPUT
 	udiRestdauerS       : UDINT;                 // Restlaufzeit der Grenze, 0 = unbefristet
 	udiGrenzeNetzW      : UDINT;                 // zuletzt empfangene Grenze (Diagnose)
 	udiFailsafeGrenzeW  : UDINT;                 // aktuelle Failsafe-Grenze (Diagnose)
-	xErsatzgrenze       : BOOL;                  // Ersatzgrenze aktiv, Brücke nicht verfügbar
+	xErsatzgrenze       : BOOL;                  // Ersatzgrenze aktiv, Gateway nicht verfügbar
 END_VAR
 VAR
 	uiRohZustand : UINT;
@@ -44,7 +44,7 @@ END_VAR
 
 uiRohZustand := WORD_TO_UINT(aInputRegister[iBasis + iBlkZustand]);
 
-IF xBrueckeOk AND NOT xUseCaseAktiv THEN
+IF xGatewayOk AND NOT xUseCaseAktiv THEN
 	// Use Case abgeschaltet: keine Vorgaben in dieser Richtung
 	eZustand            := eLpcZustand.Unbekannt;
 	xBegrenzungAktiv    := FALSE;
@@ -54,7 +54,7 @@ IF xBrueckeOk AND NOT xUseCaseAktiv THEN
 	udiFailsafeGrenzeW  := 0;
 	xErsatzgrenze       := FALSE;
 
-ELSIF xBrueckeOk AND uiRohZustand <= 4 THEN
+ELSIF xGatewayOk AND uiRohZustand <= 4 THEN
 	CASE uiRohZustand OF
 		0: eZustand := eLpcZustand.Init;
 		1: eZustand := eLpcZustand.UnbegrenztGesteuert;
@@ -69,7 +69,7 @@ ELSIF xBrueckeOk AND uiRohZustand <= 4 THEN
 	udiFailsafeGrenzeW  := FuEebusLiesUdint(aRegister := aInputRegister, iIndex := iBasis + iBlkFailsafeGrenze);
 	xErsatzgrenze       := FALSE;
 ELSE
-	// Brücke ausgefallen oder Zustand ungültig: wie Failsafe verhalten
+	// Gateway ausgefallen oder Zustand ungültig: wie Failsafe verhalten
 	eZustand            := eLpcZustand.Unbekannt;
 	xBegrenzungAktiv    := TRUE;
 	udiLeistungsgrenzeW := udiErsatzgrenzeW;

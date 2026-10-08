@@ -19,7 +19,7 @@ import (
 // Energie. Mehr verlangen weder der FNN-Hinweis (4.1.2.3: aktuelle
 // Wirkleistung) noch die Pflicht-Szenarien der Use Cases. Die SPS schreibt die
 // Werte in die Holding-Register und meldet per Gueltigkeitsmaske, welche
-// gerade stimmen. Die Bruecke gibt sie nur weiter.
+// gerade stimmen. Das Gateway gibt sie nur weiter.
 
 // messgroesse ist ein angebotener Messwert: woher er kommt (Holding-Register,
 // Gueltigkeitsbit) und wie er an eebus-go geht.
@@ -132,7 +132,7 @@ func updates(groessen []messgroesse, r *[anzahlHoldingRegister]uint16, spsOk boo
 // sendeMesswerte gibt geaenderte Register an den EEBUS-Stack weiter.
 // Ungueltige Werte (Masken-Bit fehlt, SPS ausgefallen) gehen mit dem
 // ValueState "error" raus, die Steuerbox verwirft sie dann.
-func (b *Bruecke) sendeMesswerte() {
+func (b *Gateway) sendeMesswerte() {
 	if b.mpc == nil && b.mgcp == nil {
 		return
 	}
@@ -190,7 +190,7 @@ type Messwert struct {
 
 // messwerteUi liefert die angebotenen Messwerte mit aktuellem Stand, nil =
 // Use Case aus. Aufruf unter mu.
-func (b *Bruecke) messwerteUi(groessen []messgroesse) []Messwert {
+func (b *Gateway) messwerteUi(groessen []messgroesse) []Messwert {
 	if groessen == nil {
 		return nil
 	}

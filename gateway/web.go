@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 )
 
 // Status-UI: eine eingebettete Seite, die /api/status jede Sekunde abfragt.
@@ -18,7 +18,7 @@ var indexHtml []byte
 //go:embed web/anleitung.html
 var anleitungHtml []byte
 
-func webHandler(b *Bruecke, protokoll *gemeinsam.Ereignisprotokoll) http.Handler {
+func webHandler(b *Gateway, protokoll *gemeinsam.Ereignisprotokoll) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", gemeinsam.SeiteAusliefern(gemeinsam.MitStil(indexHtml)))
 	mux.HandleFunc("GET /anleitung", gemeinsam.SeiteAusliefern(gemeinsam.MitStil(anleitungHtml)))
@@ -45,7 +45,7 @@ func webHandler(b *Bruecke, protokoll *gemeinsam.Ereignisprotokoll) http.Handler
 	}))
 
 	mux.HandleFunc("POST /api/neustart", gemeinsam.Aktion(func(struct{}) (string, error) {
-		return "Bruecke startet neu", b.FordereNeustartAn()
+		return "Gateway startet neu", b.FordereNeustartAn()
 	}))
 
 	mux.HandleFunc("POST /api/suchmodus", gemeinsam.Aktion(func(daten struct {
@@ -63,7 +63,7 @@ func webHandler(b *Bruecke, protokoll *gemeinsam.Ereignisprotokoll) http.Handler
 	mux.HandleFunc("POST /api/kopplung", gemeinsam.Aktion(func(daten struct {
 		Ski string `json:"ski"`
 	}) (string, error) {
-		return "Gekoppelt, die Bruecke verbindet sich, sobald auch die Steuerbox ihr vertraut", b.KoppelnPerSki(daten.Ski)
+		return "Gekoppelt, das Gateway verbindet sich, sobald auch die Steuerbox ihm vertraut", b.KoppelnPerSki(daten.Ski)
 	}))
 
 	mux.HandleFunc("POST /api/kopplungsanfrage", gemeinsam.Aktion(func(daten struct {
@@ -119,7 +119,7 @@ type StatusDaten struct {
 	Verbindung            Verbindung `json:"verbindung"`
 	VerbindungText        string     `json:"verbindungText"`
 	VerbindungSeitS       float64    `json:"verbindungSeitS"`
-	Abgelehnt             bool       `json:"abgelehnt"` // Steuerbox lehnt die Verbindung ab (vertraut der Bruecke nicht)
+	Abgelehnt             bool       `json:"abgelehnt"` // Steuerbox lehnt die Verbindung ab (vertraut dem Gateway nicht)
 	FailsafeMindestdauerS float64    `json:"failsafeMindestdauerS"`
 	HeartbeatAlterS       *float64   `json:"heartbeatAlterS"` // nil = nie
 
@@ -191,7 +191,7 @@ func begrenzungStatus(r *Begrenzung, jetzt time.Time) *BegrenzungStatus {
 
 // Status erstellt das Abbild fuer das UI. Grenze und Restdauer wie in
 // inputRegister(), damit UI und Modbus dasselbe zeigen.
-func (b *Bruecke) Status(jetzt time.Time) StatusDaten {
+func (b *Gateway) Status(jetzt time.Time) StatusDaten {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

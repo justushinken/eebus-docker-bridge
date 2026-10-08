@@ -16,7 +16,7 @@ offener Anfragen. Folge: Zwei schnell aufeinanderfolgende Schreibanfragen der
 Steuerbox werden nie vollständig freigegeben und laufen in den Timeout
 ("write not approved in time by application").
 
-Das betrifft die Brücke, sobald LPC und LPP auf derselben Entität laufen: Dann
+Das betrifft das Gateway, sobald LPC und LPP auf derselben Entität laufen: Dann
 haben LoadControl und DeviceConfiguration je zwei Callbacks. Beobachtet beim
 Senden von Failsafe-Grenze und Failsafe-Mindestdauer direkt hintereinander.
 

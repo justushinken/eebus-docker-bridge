@@ -1,29 +1,29 @@
-// Auswertung der EEBUS-LPC-Brücke (Docker-Container auf derselben Steuerung).
+// Auswertung des EEBUS-Gateways, nur LPC (Docker-Container auf derselben Steuerung).
 //
-// VERALTET: Für neue Projekte FbEebusBruecke, FbEebusBegrenzung und
+// VERALTET: Für neue Projekte FbEebusGateway, FbEebusBegrenzung und
 // FbEebusMesswerte verwenden (LPP, Messwerte, Anlagenstatus). Dieser Baustein
-// läuft mit neueren Brücken unverändert weiter, weil die Register 0 bis 13
+// läuft mit neueren Gateway-Versionen unverändert weiter, weil die Register 0 bis 13
 // und 0 bis 2 gleich geblieben sind (Schnittstellenversion 1).
 //
-// Die Brücke liefert die vom Netzbetreiber vorgegebene Leistungsgrenze
+// Das Gateway liefert die vom Netzbetreiber vorgegebene Leistungsgrenze
 // (Use Case LPC, Paragraf 14a EnWG) als Modbus-Input-Register. Der Baustein
-// - überwacht das Lebenszeichen und die Schnittstellenversion der Brücke,
+// - überwacht das Lebenszeichen und die Schnittstellenversion des Gateways,
 // - dekodiert Zustand, Verbindung und wirksame Leistungsgrenze,
-// - fällt bei Ausfall der Brücke auf eine lokale Ersatzgrenze zurück (sichere Seite),
-// - erzeugt die Holding-Register (SPS-Lebenszeichen, Nennleistung) für die Brücke.
+// - fällt bei Ausfall des Gateways auf eine lokale Ersatzgrenze zurück (sichere Seite),
+// - erzeugt die Holding-Register (SPS-Lebenszeichen, Nennleistung) für das Gateway.
 //
 // Der Baustein greift auf keine globalen Variablen zu. Die Kopplung an das
 // Modbus-Prozessabbild erfolgt beim Aufruf.
 FUNCTION_BLOCK FbEebusLpc
 VAR_INPUT
 	xFreigabe           : BOOL;                    // Auswertung aktiv
-	aInputRegister      : ARRAY [0..13] OF WORD;   // Abbild der Input-Register der Brücke
+	aInputRegister      : ARRAY [0..13] OF WORD;   // Abbild der Input-Register des Gateways
 	udiNennleistungMaxW : UDINT;                   // max. Leistungsaufnahme der Anlage in W, wird an die Steuerbox gemeldet
-	udiErsatzgrenzeW    : UDINT := 4200;           // gilt, solange die Brücke nicht verfügbar ist
-	tBrueckeTimeout     : TIME := T#10S;           // max. Zeit ohne Änderung des Brücken-Lebenszeichens
+	udiErsatzgrenzeW    : UDINT := 4200;           // gilt, solange das Gateway nicht verfügbar ist
+	tGatewayTimeout     : TIME := T#10S;           // max. Zeit ohne Änderung des Gateway-Lebenszeichens
 END_VAR
 VAR_OUTPUT
-	xBrueckeOk          : BOOL;                    // Brücke lebt und Schnittstellenversion passt
+	xGatewayOk          : BOOL;                    // Gateway lebt und Schnittstellenversion passt
 	xBegrenzungAktiv    : BOOL;                    // udiLeistungsgrenzeW muss eingehalten werden
 	udiLeistungsgrenzeW : UDINT;                   // nur gültig bei xBegrenzungAktiv
 	eZustand            : eLpcZustand;
@@ -32,11 +32,11 @@ VAR_OUTPUT
 	uiHeartbeatAlterS   : UINT;                    // Sekunden seit letztem Heartbeat der Steuerbox
 	xFehler             : BOOL;
 	udiFehlerId         : UDINT;                   // siehe Konstanten udiFehler*
-	aHoldingRegister    : ARRAY [0..2] OF WORD;    // an die Brücke zu schreibende Register
+	aHoldingRegister    : ARRAY [0..2] OF WORD;    // an das Gateway zu schreibende Register
 END_VAR
 VAR
 	wLebenszeichenAlt   : WORD;
-	tonBrueckeTimeout   : TON;
+	tonGatewayTimeout   : TON;
 	tonSekundentakt     : TON;
 	uiLebenszeichenSps  : UINT;
 	uiRohZustand        : UINT;
@@ -66,13 +66,13 @@ VAR CONSTANT
 
 	// Fehlernummern
 	udiFehlerKeine            : UDINT := 0;
-	udiFehlerBrueckeTimeout   : UDINT := 1;    // Lebenszeichen der Brücke steht
+	udiFehlerGatewayTimeout   : UDINT := 1;    // Lebenszeichen des Gateways steht
 	udiFehlerVersion          : UDINT := 2;    // Registerlayout passt nicht
 	udiFehlerZustandUngueltig : UDINT := 3;    // unbekannter Zustandswert
 END_VAR
 
 // ---------------------------------------------------------------------------
-// Register an die Brücke: Lebenszeichen im Sekundentakt und Nennleistung
+// Register an das Gateway: Lebenszeichen im Sekundentakt und Nennleistung
 // ---------------------------------------------------------------------------
 tonSekundentakt(IN := NOT tonSekundentakt.Q, PT := T#1S);
 IF tonSekundentakt.Q THEN
@@ -84,10 +84,10 @@ aHoldingRegister[iRegNennleistungHi]   := UDINT_TO_WORD(SHR(udiNennleistungMaxW,
 aHoldingRegister[iRegNennleistungLo]   := UDINT_TO_WORD(udiNennleistungMaxW AND 16#0000FFFF);
 
 // ---------------------------------------------------------------------------
-// Überwachung der Brücke
+// Überwachung des Gateways
 // ---------------------------------------------------------------------------
-tonBrueckeTimeout(IN := xFreigabe AND (aInputRegister[iRegLebenszeichen] = wLebenszeichenAlt),
-                  PT := tBrueckeTimeout);
+tonGatewayTimeout(IN := xFreigabe AND (aInputRegister[iRegLebenszeichen] = wLebenszeichenAlt),
+                  PT := tGatewayTimeout);
 wLebenszeichenAlt := aInputRegister[iRegLebenszeichen];
 
 uiRohZustand    := WORD_TO_UINT(aInputRegister[iRegZustand]);
@@ -95,7 +95,7 @@ uiRohVerbindung := WORD_TO_UINT(aInputRegister[iRegVerbindung]);
 xVersionOk      := WORD_TO_UINT(aInputRegister[iRegVersion]) = uiSchnittstellenVersion;
 xZustandGueltig := uiRohZustand <= 4;
 
-xBrueckeOk := xFreigabe AND NOT tonBrueckeTimeout.Q AND xVersionOk AND xZustandGueltig;
+xGatewayOk := xFreigabe AND NOT tonGatewayTimeout.Q AND xVersionOk AND xZustandGueltig;
 
 // ---------------------------------------------------------------------------
 // Auswertung
@@ -110,7 +110,7 @@ IF NOT xFreigabe THEN
 	xFehler             := FALSE;
 	udiFehlerId         := udiFehlerKeine;
 
-ELSIF xBrueckeOk THEN
+ELSIF xGatewayOk THEN
 	CASE uiRohZustand OF
 		0: eZustand := eLpcZustand.Init;
 		1: eZustand := eLpcZustand.UnbegrenztGesteuert;
@@ -139,7 +139,7 @@ ELSIF xBrueckeOk THEN
 	udiFehlerId         := udiFehlerKeine;
 
 ELSE
-	// Brücke ausgefallen oder inkompatibel: Zustand der Steuerbox unbekannt,
+	// Gateway ausgefallen oder inkompatibel: Zustand der Steuerbox unbekannt,
 	// daher wie Failsafe verhalten und die lokale Ersatzgrenze einhalten.
 	xBegrenzungAktiv    := TRUE;
 	udiLeistungsgrenzeW := udiErsatzgrenzeW;
@@ -149,8 +149,8 @@ ELSE
 	uiHeartbeatAlterS   := 16#FFFF;
 	xFehler             := TRUE;
 
-	IF tonBrueckeTimeout.Q THEN
-		udiFehlerId := udiFehlerBrueckeTimeout;
+	IF tonGatewayTimeout.Q THEN
+		udiFehlerId := udiFehlerGatewayTimeout;
 	ELSIF NOT xVersionOk THEN
 		udiFehlerId := udiFehlerVersion;
 	ELSE

@@ -1,11 +1,11 @@
 # Ein Dockerfile fuer alle Programme im Repo, Auswahl per PROGRAMM.
 # Go-Kompilat fuer die Zielplattform, Laufzeit-Image "scratch".
 #
-# Bruecke fuer den PFC200 (ARMv7):
-#   docker buildx build --platform linux/arm/v7 -t eebus-bruecke:0.4 --load .
+# Gateway fuer den PFC200 (ARMv7):
+#   docker buildx build --platform linux/arm/v7 -t eebus-gateway:0.5 --load .
 # Test-Steuerbox:
-#   docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM=testwerkzeuge/steuerbox -t eebus-steuerbox:0.4 --load .
-# Fuer lokale Tests auf dem PC (amd64) ohne --platform bauen, oder docker compose verwenden.
+#   docker buildx build --platform linux/arm/v7 --build-arg PROGRAMM=testwerkzeuge/steuerbox -t eebus-steuerbox:0.5 --load .
+# Fuer lokale Tests auf dem PC (amd64) ohne --platform bauen, oder testwerkzeuge/docker-compose.yml verwenden.
 
 FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS bau
 ARG TARGETOS TARGETARCH TARGETVARIANT
@@ -15,10 +15,10 @@ COPY go.mod go.sum ./
 COPY third_party ./third_party
 RUN go mod download
 # Erst nach dem Download: So teilen sich alle Programme die Modul-Schicht im Cache.
-ARG PROGRAMM=bruecke
+ARG PROGRAMM=gateway
 ARG VERSION=dev
 COPY internal ./internal
-COPY bruecke ./bruecke
+COPY gateway ./gateway
 COPY testwerkzeuge ./testwerkzeuge
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOARM=${TARGETVARIANT#v} \
     go build -trimpath -ldflags="-s -w -X main.Version=$VERSION" -o /programm ./$PROGRAMM

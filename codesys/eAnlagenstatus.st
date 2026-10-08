@@ -1,4 +1,4 @@
-// Betriebszustand der Anlage, den die Brücke an die Steuerbox meldet
+// Betriebszustand der Anlage, den das Gateway an die Steuerbox meldet
 // (FNN-Hinweis 4.1.2.7). Zahlenwerte identisch mit anlagenstatus* in anlage.go.
 {attribute 'qualified_only'}
 {attribute 'strict'}

@@ -1,6 +1,6 @@
-// Zustand der Use Cases LPC (Bezug) und LPP (Einspeisung), wie ihn die
-// EEBUS-Brücke meldet. Beide haben denselben Zustandsautomaten.
-// Zahlenwerte identisch mit LpcZustand in bruecke.go.
+// Zustand der Use Cases LPC (Bezug) und LPP (Einspeisung), wie ihn das
+// EEBUS-Gateway meldet. Beide haben denselben Zustandsautomaten.
+// Zahlenwerte identisch mit LpcZustand in gateway.go.
 {attribute 'qualified_only'}
 {attribute 'strict'}
 TYPE eLpcZustand :
@@ -10,6 +10,6 @@ TYPE eLpcZustand :
 	Begrenzt            := 2,   // Grenze des Netzbetreibers aktiv
 	Failsafe            := 3,   // Heartbeat ausgefallen, Failsafe-Grenze gilt
 	UnbegrenztAutonom   := 4,   // keine Kommunikation, Failsafe-Mindestdauer abgelaufen
-	Unbekannt           := 99   // Brücke nicht erreichbar oder Wert ungültig
+	Unbekannt           := 99   // Gateway nicht erreichbar oder Wert ungültig
 ) UINT;
 END_TYPE

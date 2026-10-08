@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EEBUS-Brücke</title>
+<title>EEBUS-Gateway</title>
 <!--STIL-->
 </head>
 <body>
 <main>
 	<header>
 		<div class="kopf">
-			<h1>EEBUS-Brücke</h1>
+			<h1>EEBUS-Gateway</h1>
 			<nav>
 				<a href="#uebersicht" data-reiter="uebersicht">Übersicht</a>
 				<a href="#kopplung" data-reiter="kopplung">Kopplung<span class="zaehler" id="anfragenZaehler" hidden></span></a>
@@ -93,7 +93,7 @@
 				<dt>Letzte Änderung</dt><dd id="spsAlter"></dd>
 				<dt>Anlagenstatus</dt><dd id="anlagenstatus"></dd>
 			</dl>
-			<p class="hinweis">Ohne SPS lehnt die Brücke neue Grenzen ab und meldet der Steuerbox eine Störung.</p>
+			<p class="hinweis">Ohne SPS lehnt das Gateway neue Grenzen ab und meldet der Steuerbox eine Störung.</p>
 		</section>
 
 		<section class="karte" id="karteMpc" hidden>
@@ -116,8 +116,8 @@
 				<tbody id="gefunden"></tbody>
 			</table>
 			<ul class="zeichenerklaerung">
-				<li><strong>Vertrauen</strong> Die Brücke trägt das Gerät als ihre Steuerbox ein. Eine bisherige Kopplung wird ersetzt.</li>
-				<li><span class="marke orange">vertraut – wartet auf Steuerbox</span> Die Brücke vertraut der Steuerbox, die Steuerbox der Brücke noch nicht. Der Messstellenbetreiber muss die Brücke dort eintragen („Daten für den Messstellenbetreiber“). Danach verbinden sich beide von selbst.</li>
+				<li><strong>Vertrauen</strong> Das Gateway trägt das Gerät als seine Steuerbox ein. Eine bisherige Kopplung wird ersetzt.</li>
+				<li><span class="marke orange">vertraut – wartet auf Steuerbox</span> Das Gateway vertraut der Steuerbox, die Steuerbox dem Gateway noch nicht. Der Messstellenbetreiber muss das Gateway dort eintragen („Daten für den Messstellenbetreiber“). Danach verbinden sich beide von selbst.</li>
 				<li><span class="marke gruen">verbunden</span> Beide Seiten vertrauen sich, die Verbindung steht.</li>
 			</ul>
 			<p class="hinweis">Fehlt die Steuerbox hier, liegt es am Netz (siehe Anleitung, „Netzwerk“), nicht an der Kopplung.</p>
@@ -136,7 +136,7 @@
 			<!-- Ausweg, wenn die Steuerbox nicht per mDNS sichtbar ist. Klappt von selbst auf, sobald gesucht wird oder eine Anfrage kommt. -->
 			<details class="ausklapp kopplung-aktion" id="suchBereich">
 				<summary>Steuerbox nicht in der Liste? Suchmodus <span id="suchStatus"></span></summary>
-				<p class="hinweis">Die Brücke wartet auf den Verbindungsversuch der Steuerbox, statt sie per mDNS zu suchen. Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht sofort abgewiesen, sondern hier zur Entscheidung angezeigt. Vorher muss der Messstellenbetreiber die Brücke in der Steuerbox eingetragen haben (SKI und SHIP-ID unten).</p>
+				<p class="hinweis">Das Gateway wartet auf den Verbindungsversuch der Steuerbox, statt sie per mDNS zu suchen. Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht sofort abgewiesen, sondern hier zur Entscheidung angezeigt. Vorher muss der Messstellenbetreiber das Gateway in der Steuerbox eingetragen haben (SKI und SHIP-ID unten).</p>
 				<div class="knoepfe" style="margin-top:12px">
 					<button class="primaer" id="suchmodus" type="button">Steuerbox suchen</button>
 				</div>
@@ -157,7 +157,7 @@
 						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
 						<dt>SHIP-ID</dt><dd><span class="mono" id="shipId"></span><button data-kopieren="shipId" type="button">Kopieren</button></dd>
 					</dl>
-					<p class="hinweis">Der Messstellenbetreiber trägt SKI und SHIP-ID in der Steuerbox ein. Danach hier den Suchmodus starten und die Anfrage annehmen.</p>
+					<p class="hinweis">Der Messstellenbetreiber trägt SKI und SHIP-ID in der Steuerbox ein. Hier oben bei der Steuerbox „Vertrauen“ wählen, die Reihenfolge ist egal.</p>
 				</div>
 				<div>
 					<h3>SHIP Pairing Service <span id="pairingStatus"></span></h3>
@@ -184,7 +184,7 @@
 		<section class="karte">
 			<h2>Use Cases</h2>
 			<table>
-				<thead><tr><th>Use Case</th><th>Brücke</th><th>Steuerbox</th></tr></thead>
+				<thead><tr><th>Use Case</th><th>Gateway</th><th>Steuerbox</th></tr></thead>
 				<tbody id="useCases"></tbody>
 			</table>
 			<p class="hinweis">LPC Bezug, LPP Einspeisung, MPC Messwerte der Anlage, MGCP Messwerte am Netzanschlusspunkt.</p>
@@ -223,7 +223,7 @@
 			<div class="punkt"></div>
 			<div style="flex:1;min-width:220px">
 				<div class="titel" style="font-size:18px">Neustart nötig</div>
-				<div class="leise">Gespeicherte Änderungen werden erst nach einem Neustart der Brücke wirksam. Container und PFC laufen dabei weiter.</div>
+				<div class="leise">Gespeicherte Änderungen werden erst nach einem Neustart des Gateways wirksam. Container und PFC laufen dabei weiter.</div>
 				<p class="meldung" id="neustartMeldung"></p>
 			</div>
 			<button class="gross primaer" id="neustartKnopf" type="button">Jetzt neu starten</button>
@@ -385,7 +385,7 @@ function zeigeMesswerte(id, liste) {
 	}));
 }
 
-// Wie heartbeatTimeout in bruecke.go
+// Wie heartbeatTimeout in gateway.go
 function heartbeatOk(s) {
 	return s.verbindung === 2 && s.heartbeatAlterS != null && s.heartbeatAlterS < 120;
 }
@@ -406,7 +406,7 @@ function statusleiste(s) {
 	} else if (s.verbindung === 1) {
 		statusfeld("stSteuerbox", "rot", s.abgelehnt ? "Verbindung abgelehnt" : "Getrennt",
 			s.abgelehnt
-				? `Die Steuerbox vertraut der Brücke nicht. SKI und SHIP-ID der Brücke müssen in der Steuerbox eingetragen sein · ${name}`
+				? `Die Steuerbox vertraut dem Gateway nicht. SKI und SHIP-ID des Gateways müssen in der Steuerbox eingetragen sein · ${name}`
 				: `Gekoppelt, aber nicht verbunden · seit ${dauer(s.verbindungSeitS)} · ${name}`);
 	} else {
 		statusfeld("stSteuerbox", "", "Nicht gekoppelt",
@@ -524,7 +524,7 @@ function zeigeKopplung(s) {
 			knopf("Annehmen", "primaer", () => senden("POST", "api/kopplungsanfrage", { ski: a.ski, annehmen: true }, "kopplungMeldung")),
 			knopf("Ablehnen", "gefahr", () => senden("POST", "api/kopplungsanfrage", { ski: a.ski, annehmen: false }, "kopplungMeldung")));
 		return zeile([[a.marke, a.modell].filter(x => x).join(" ") || "unbekanntes Gerät", a.shipId || "–", a.ski, aktionen]);
-	}) : [leereZeile(4, "Noch keine Anfrage. Die Steuerbox muss der Brücke bereits vertrauen und sich melden.")]));
+	}) : [leereZeile(4, "Noch keine Anfrage. Die Steuerbox muss dem Gateway bereits vertrauen und sich melden.")]));
 
 	const kk = s.kennung;
 	$("eigenerSki").textContent = s.eigenerSki;
@@ -585,7 +585,7 @@ async function senden(methode, pfad, daten, meldungId) {
 		return antwort.ok;
 	} catch (fehler) {
 		meldung.className = "meldung fehler";
-		meldung.textContent = "Brücke nicht erreichbar";
+		meldung.textContent = "Gateway nicht erreichbar";
 		return false;
 	}
 }
@@ -593,7 +593,7 @@ async function senden(methode, pfad, daten, meldungId) {
 $("suchmodus").addEventListener("click", () =>
 	senden("POST", "api/suchmodus", { an: !(zuletzt && zuletzt.suchmodusRestS > 0) }, "kopplungMeldung"));
 $("entkoppeln").addEventListener("click", () => {
-	if (confirm("Kopplung mit der Steuerbox lösen? Danach nimmt die Brücke keine Grenzen mehr von ihr an.")) {
+	if (confirm("Kopplung mit der Steuerbox lösen? Danach nimmt das Gateway keine Grenzen mehr von ihr an.")) {
 		senden("DELETE", "api/kopplung", {}, "kopplungMeldung");
 	}
 });
@@ -617,7 +617,7 @@ async function abfragen() {
 			zeige(await antwort.json());
 		}
 	} catch (fehler) {
-		zeigeAmpel("", "Brücke nicht erreichbar", "Letzter Versuch " + new Date().toLocaleTimeString("de-DE"));
+		zeigeAmpel("", "Gateway nicht erreichbar", "Letzter Versuch " + new Date().toLocaleTimeString("de-DE"));
 	}
 	setTimeout(abfragen, 1000);
 }
@@ -658,7 +658,7 @@ function zeigeReiter() {
 window.addEventListener("hashchange", () => { zeigeReiter(); window.scrollTo(0, 0); });
 
 // --- Konfiguration ---
-// Werte für den nächsten Start. Änderungen speichert die Brücke in
+// Werte für den nächsten Start. Änderungen speichert das Gateway in
 // einstellungen.json, wirksam werden sie mit „Jetzt neu starten“.
 let konfigurationGeladen = false;
 let eingaben = []; // { variable, roh, lies, el }
@@ -820,7 +820,7 @@ $("konfigVerwerfen").addEventListener("click", () => {
 });
 
 $("neustartKnopf").addEventListener("click", async () => {
-	let frage = "Brücke jetzt neu starten? Die Verbindung zur Steuerbox ist für einige Sekunden getrennt.";
+	let frage = "Gateway jetzt neu starten? Die Verbindung zur Steuerbox ist für einige Sekunden getrennt.";
 	if (zuletzt && [zuletzt.bezug, zuletzt.einspeisung].some(r => r && r.begrenzungAktiv)) {
 		frage += "\n\nAchtung: Gerade ist eine Begrenzung aktiv. Bis sich die Steuerbox wieder meldet, gilt die Failsafe-Grenze.";
 	}
@@ -843,7 +843,7 @@ $("neustartKnopf").addEventListener("click", async () => {
 			clearInterval(warten);
 			$("neustartKnopf").disabled = false;
 			$("neustartMeldung").className = "meldung fehler";
-			$("neustartMeldung").textContent = "Die Brücke meldet sich nicht. Auf dem PFC prüfen: docker logs eebus-bruecke";
+			$("neustartMeldung").textContent = "Das Gateway meldet sich nicht. Auf dem PFC prüfen: docker logs eebus-gateway";
 		}
 	}, 1000);
 });

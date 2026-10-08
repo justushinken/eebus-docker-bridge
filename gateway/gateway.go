@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
 	ucapi "github.com/enbility/eebus-go/usecases/api"
@@ -76,10 +76,10 @@ const (
 	spsTimeout = 10 * time.Second
 )
 
-// Bruecke haelt den gesamten Zustand. Zugriff nur unter mu.
+// Gateway haelt den gesamten Zustand. Zugriff nur unter mu.
 // Aufrufe in den EEBUS-Stack (dienst, Use Cases) immer ausserhalb von mu,
 // damit es keine Verklemmung mit dessen Callbacks gibt.
-type Bruecke struct {
+type Gateway struct {
 	// beim Start gesetzt, danach unveraenderlich
 	konf          Konfiguration
 	pairing       gemeinsam.Pairingprotokoll
@@ -131,9 +131,9 @@ type Bruecke struct {
 	herstellerAngefordert string // SKI, fuer die die Herstellerdaten angefordert wurden
 }
 
-func NeueBruecke(konf Konfiguration, einstellungen map[string]string, eigenerSki string, kopplung *gemeinsam.Kopplung) *Bruecke {
+func NeuesGateway(konf Konfiguration, einstellungen map[string]string, eigenerSki string, kopplung *gemeinsam.Kopplung) *Gateway {
 	jetzt := time.Now()
-	b := &Bruecke{
+	b := &Gateway{
 		konf:                 konf,
 		einstellungen:        einstellungen,
 		neustart:             make(chan struct{}, 1),
@@ -150,7 +150,7 @@ func NeueBruecke(konf Konfiguration, einstellungen map[string]string, eigenerSki
 
 // begrenzungen liefert die aktiven Richtungen. Aufruf unter mu oder nach dem
 // Start (die Zeiger aendern sich danach nicht mehr).
-func (b *Bruecke) begrenzungen() []*Begrenzung {
+func (b *Gateway) begrenzungen() []*Begrenzung {
 	var liste []*Begrenzung
 	for _, r := range []*Begrenzung{b.bezug, b.einspeisung} {
 		if r != nil {
@@ -161,7 +161,7 @@ func (b *Bruecke) begrenzungen() []*Begrenzung {
 }
 
 // SetzeStartwerte meldet Nennleistungen und Failsafe-Werte im SPINE-Modell an.
-func (b *Bruecke) SetzeStartwerte() {
+func (b *Gateway) SetzeStartwerte() {
 	pruefe := func(was string, err error) {
 		if err != nil {
 			log.Printf("Startwert %s nicht gesetzt: %v", was, err)
@@ -180,15 +180,15 @@ func (b *Bruecke) SetzeStartwerte() {
 
 // --- Ereignisse der Use Cases LPC und LPP ---
 
-func (b *Bruecke) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
+func (b *Gateway) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
 	b.begrenzungsEreignis(b.bezug, lpcArten[ereignis])
 }
 
-func (b *Bruecke) LppEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
+func (b *Gateway) LppEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
 	b.begrenzungsEreignis(b.einspeisung, lppArten[ereignis])
 }
 
-func (b *Bruecke) begrenzungsEreignis(r *Begrenzung, art ereignisArt) {
+func (b *Gateway) begrenzungsEreignis(r *Begrenzung, art ereignisArt) {
 	if r == nil {
 		return
 	}
@@ -285,7 +285,7 @@ func (b *Bruecke) begrenzungsEreignis(r *Begrenzung, art ereignisArt) {
 
 // --- Zyklische Bearbeitung (1 s) ---
 
-func (b *Bruecke) Takt(jetzt time.Time) {
+func (b *Gateway) Takt(jetzt time.Time) {
 	b.pruefeSpsWerte(jetzt)
 	b.pruefeSuchmodus(jetzt)
 
@@ -301,7 +301,7 @@ func (b *Bruecke) Takt(jetzt time.Time) {
 
 // pruefeSpsWerte ueberwacht das SPS-Lebenszeichen und gibt Nennleistungen,
 // Anlagenstatus und Messwerte an den EEBUS-Stack weiter.
-func (b *Bruecke) pruefeSpsWerte(jetzt time.Time) {
+func (b *Gateway) pruefeSpsWerte(jetzt time.Time) {
 	type nennleistung struct {
 		r    *Begrenzung
 		wert float64
@@ -379,7 +379,7 @@ type Kennung struct {
 	QrText      string `json:"qrText"`
 }
 
-func (b *Bruecke) SetzeKennung(dienst api.ServiceInterface, secret shipapi.PairingSecret) {
+func (b *Gateway) SetzeKennung(dienst api.ServiceInterface, secret shipapi.PairingSecret) {
 	b.kennung = Kennung{ShipId: b.konf.ShipId, Ski: b.eigenerSki}
 	if fingerprint, err := dienst.GetLocalCertificateFingerprint(); err == nil {
 		b.kennung.Fingerprint = fingerprint
@@ -414,7 +414,7 @@ type FailsafeWerte struct {
 	EinspeisegrenzeW *float64 `json:"einspeisegrenzeW,omitempty"`
 }
 
-func (b *Bruecke) speichereFailsafe() {
+func (b *Gateway) speichereFailsafe() {
 	// Werte einer gerade abgeschalteten Richtung aus der Datei behalten
 	werte := LadeFailsafe(b.konf.Datenverzeichnis)
 	if werte == nil {

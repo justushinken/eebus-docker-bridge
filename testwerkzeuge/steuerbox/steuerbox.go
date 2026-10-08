@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
 	eglpc "github.com/enbility/eebus-go/usecases/eg/lpc"
@@ -21,7 +21,7 @@ import (
 	"github.com/enbility/spine-go/model"
 )
 
-// Datei im Datenverzeichnis mit der gekoppelten Bruecke.
+// Datei im Datenverzeichnis mit dem gekoppelten Gateway.
 const kopplungsdatei = "kopplung.json"
 
 // Steuerbox haelt den Zustand der simulierten Steuerbox. Zugriff nur unter mu.
@@ -43,12 +43,12 @@ type Steuerbox struct {
 	mgcp     *mamgcp.MGCP // nil = abgeschaltet
 
 	mu           sync.Mutex
-	kopplung     *gemeinsam.Kopplung // gekoppelte Bruecke, nil = keine
+	kopplung     *gemeinsam.Kopplung // gekoppeltes Gateway, nil = keine
 	unterbrochen bool                // Verbindung absichtlich getrennt (Simulation)
 	verbunden    bool
-	partner      shipapi.ServiceIdentity // verbundene Bruecke
+	partner      shipapi.ServiceIdentity // verbundenes Gateway
 	gefunden     []shipapi.RemoteMdnsService
-	gemeldet     map[string]string // zuletzt von der Bruecke gemeldete Werte, fuer das Log
+	gemeldet     map[string]string // zuletzt vom Gateway gemeldete Werte, fuer das Log
 
 	abonniert          string // MPC-Entitaet, deren Messwerte abonniert sind
 	zustandAngefordert string // Entitaet, deren Betriebszustand angefordert wurde
@@ -84,13 +84,13 @@ func (s *Steuerbox) RemoteServiceConnected(dienst api.ServiceInterface, partner 
 	s.partner = partner
 	s.mu.Unlock()
 	if neu {
-		log.Printf("Bruecke verbunden: %s", gemeinsam.Bezeichnung(partner))
+		log.Printf("Gateway verbunden: %s", gemeinsam.Bezeichnung(partner))
 	}
 }
 
 func (s *Steuerbox) RemoteServiceDisconnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	s.mu.Lock()
-	// Nur die Bruecke, mit der die Steuerbox verbunden ist. Andere EEBUS-Geraete
+	// Nur das Gateway, mit der die Steuerbox verbunden ist. Andere EEBUS-Geraete
 	// im LAN koennen sich ebenfalls melden und wieder trennen.
 	if s.verbunden && !s.partner.IsZero() && !gemeinsam.GleicheIdentitaet(partner, s.partner) {
 		s.mu.Unlock()
@@ -101,7 +101,7 @@ func (s *Steuerbox) RemoteServiceDisconnected(dienst api.ServiceInterface, partn
 	s.partner = shipapi.ServiceIdentity{}
 	s.mu.Unlock()
 	if neu {
-		log.Printf("Bruecke getrennt: %s", gemeinsam.Bezeichnung(partner))
+		log.Printf("Gateway getrennt: %s", gemeinsam.Bezeichnung(partner))
 	}
 }
 
@@ -126,7 +126,7 @@ func (s *Steuerbox) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, 
 	log.Printf("Pairing %s: %s", gemeinsam.Bezeichnung(partner), text)
 	if detail.State() == shipapi.ConnectionStateRemoteDeniedTrust {
 		if k := s.Kopplung(); k != nil && k.Verfahren == gemeinsam.VerfahrenSki {
-			log.Printf("Die Bruecke vertraut dieser Steuerbox nicht: an der Bruecke den Suchmodus starten und die Anfrage annehmen (SKI %s)", s.eigenerSki)
+			log.Printf("Das Gateway vertraut dieser Steuerbox nicht: am Gateway den Suchmodus starten und die Anfrage annehmen (SKI %s)", s.eigenerSki)
 		}
 	}
 }
@@ -147,12 +147,12 @@ func (s *Steuerbox) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterfac
 	switch ereignis {
 	case eglpc.UseCaseSupportUpdate:
 		if szenarien := s.lpc.AvailableScenariosForEntity(entitaet); len(szenarien) > 0 {
-			log.Printf("Bruecke unterstuetzt LPC, Szenarien %v", szenarien)
+			log.Printf("Gateway unterstuetzt LPC, Szenarien %v", szenarien)
 		}
 
 	case eglpc.DataUpdateLimit:
 		if grenze, err := s.lpc.ConsumptionLimit(entitaet); err == nil {
-			log.Printf("Bruecke meldet Grenze: aktiv=%v, %.0f W, Dauer %v", grenze.IsActive, grenze.Value, grenze.Duration.Round(time.Second))
+			log.Printf("Gateway meldet Grenze: aktiv=%v, %.0f W, Dauer %v", grenze.IsActive, grenze.Value, grenze.Duration.Round(time.Second))
 		}
 
 	// eebus-go meldet bei jeder Aenderung der Konfiguration beide Failsafe-Ereignisse,
@@ -160,22 +160,22 @@ func (s *Steuerbox) LpcEreignis(ski string, geraet spineapi.DeviceRemoteInterfac
 	case eglpc.DataUpdateFailsafeConsumptionActivePowerLimit:
 		if wert, err := s.lpc.FailsafeConsumptionActivePowerLimit(entitaet); err == nil {
 			if s.merke("failsafeGrenze", fmt.Sprintf("%.0f W", wert)) {
-				log.Printf("Bruecke meldet Failsafe-Grenze: %.0f W", wert)
+				log.Printf("Gateway meldet Failsafe-Grenze: %.0f W", wert)
 			}
 		}
 
 	case eglpc.DataUpdateFailsafeDurationMinimum:
 		if dauer, err := s.lpc.FailsafeDurationMinimum(entitaet); err == nil {
 			if s.merke("failsafeDauer", dauer.String()) {
-				log.Printf("Bruecke meldet Failsafe-Mindestdauer: %v", dauer)
+				log.Printf("Gateway meldet Failsafe-Mindestdauer: %v", dauer)
 			}
 		}
 
-	// Die Nennleistung kommt von der SPS ueber die Bruecke: Test der ganzen Kette.
+	// Die Nennleistung kommt von der SPS ueber das Gateway: Test der ganzen Kette.
 	case eglpc.DataUpdatePowerConsumptionNominalMax:
 		if wert, err := s.lpc.ConsumptionNominalMax(entitaet); err == nil {
 			if s.merke("nennleistung", fmt.Sprintf("%.0f W", wert)) {
-				log.Printf("Bruecke meldet Nennleistung: %.0f W", wert)
+				log.Printf("Gateway meldet Nennleistung: %.0f W", wert)
 			}
 		}
 	}
@@ -187,25 +187,25 @@ func (s *Steuerbox) LppEreignis(ski string, geraet spineapi.DeviceRemoteInterfac
 	switch ereignis {
 	case eglpp.UseCaseSupportUpdate:
 		if szenarien := s.lpp.AvailableScenariosForEntity(entitaet); len(szenarien) > 0 {
-			log.Printf("Bruecke unterstuetzt LPP, Szenarien %v", szenarien)
+			log.Printf("Gateway unterstuetzt LPP, Szenarien %v", szenarien)
 		}
 
 	case eglpp.DataUpdateLimit:
 		if grenze, err := s.lpp.ProductionLimit(entitaet); err == nil {
-			log.Printf("Bruecke meldet Einspeisegrenze: aktiv=%v, %.0f W, Dauer %v", grenze.IsActive, grenze.Value, grenze.Duration.Round(time.Second))
+			log.Printf("Gateway meldet Einspeisegrenze: aktiv=%v, %.0f W, Dauer %v", grenze.IsActive, grenze.Value, grenze.Duration.Round(time.Second))
 		}
 
 	case eglpp.DataUpdateFailsafeProductionActivePowerLimit:
 		if wert, err := s.lpp.FailsafeProductionActivePowerLimit(entitaet); err == nil {
 			if s.merke("failsafeEinspeisung", fmt.Sprintf("%.0f W", wert)) {
-				log.Printf("Bruecke meldet Failsafe-Einspeisegrenze: %.0f W", wert)
+				log.Printf("Gateway meldet Failsafe-Einspeisegrenze: %.0f W", wert)
 			}
 		}
 
 	case eglpp.DataUpdatePowerProductionNominalMax:
 		if wert, err := s.lpp.ProductionNominalMax(entitaet); err == nil {
 			if s.merke("nennleistungErzeugung", fmt.Sprintf("%.0f W", wert)) {
-				log.Printf("Bruecke meldet Nennleistung Erzeugung: %.0f W", wert)
+				log.Printf("Gateway meldet Nennleistung Erzeugung: %.0f W", wert)
 			}
 		}
 	}
@@ -214,7 +214,7 @@ func (s *Steuerbox) LppEreignis(ski string, geraet spineapi.DeviceRemoteInterfac
 func (s *Steuerbox) MgcpEreignis(ski string, geraet spineapi.DeviceRemoteInterface, entitaet spineapi.EntityRemoteInterface, ereignis api.EventType) {
 	if ereignis == mamgcp.UseCaseSupportUpdate {
 		if szenarien := s.mgcp.AvailableScenariosForEntity(entitaet); len(szenarien) > 0 {
-			log.Printf("Bruecke unterstuetzt MGCP, Szenarien %v", szenarien)
+			log.Printf("Gateway unterstuetzt MGCP, Szenarien %v", szenarien)
 		}
 	}
 }
@@ -235,12 +235,12 @@ type ucMitEntitaeten interface {
 	RemoteEntitiesScenarios() []api.RemoteEntityScenarios
 }
 
-// ziel liefert die LPC-Entitaet der verbundenen Bruecke.
+// ziel liefert die LPC-Entitaet des verbundenen Gateways.
 func (s *Steuerbox) ziel() (spineapi.EntityRemoteInterface, error) {
 	return s.zielFuer(s.lpc, "LPC")
 }
 
-// zielFuer liefert die Entitaet der verbundenen Bruecke, die den Use Case anbietet.
+// zielFuer liefert die Entitaet des verbundenen Gateways, die den Use Case anbietet.
 func (s *Steuerbox) zielFuer(uc ucMitEntitaeten, name string) (spineapi.EntityRemoteInterface, error) {
 	if uc == nil || (name == "LPP" && s.lpp == nil) || (name == "MGCP" && s.mgcp == nil) {
 		return nil, fmt.Errorf("%s ist in dieser Steuerbox abgeschaltet (STEUERBOX_USECASES)", name)
@@ -249,17 +249,17 @@ func (s *Steuerbox) zielFuer(uc ucMitEntitaeten, name string) (spineapi.EntityRe
 	gekoppelt, verbunden := s.kopplung != nil, s.verbunden
 	s.mu.Unlock()
 	if !gekoppelt {
-		return nil, errors.New("keine Bruecke gekoppelt")
+		return nil, errors.New("kein Gateway gekoppelt")
 	}
 	if !verbunden {
-		return nil, errors.New("Bruecke nicht verbunden")
+		return nil, errors.New("Gateway nicht verbunden")
 	}
 	for _, e := range uc.RemoteEntitiesScenarios() {
 		if e.Entity != nil && len(e.Scenarios) > 0 {
 			return e.Entity, nil
 		}
 	}
-	return nil, fmt.Errorf("Bruecke hat %s nicht gemeldet (noch nicht oder dort abgeschaltet)", name)
+	return nil, fmt.Errorf("Gateway hat %s nicht gemeldet (noch nicht oder dort abgeschaltet)", name)
 }
 
 // --- Aktionen aus dem Web-UI: Senden siehe senden.go ---
@@ -270,7 +270,7 @@ func (s *Steuerbox) SetzeHeartbeat(an bool) {
 		log.Printf("Heartbeat gestartet")
 	} else {
 		s.lpc.StopHeartbeat()
-		log.Printf("Heartbeat gestoppt (Test): Bruecke geht nach 120 s ohne Heartbeat in Failsafe")
+		log.Printf("Heartbeat gestoppt (Test): Gateway geht nach 120 s ohne Heartbeat in Failsafe")
 	}
 }
 
@@ -285,7 +285,7 @@ func (s *Steuerbox) UnterbrecheKurz() error {
 	partner, verbunden := s.partner, s.verbunden
 	s.mu.Unlock()
 	if !verbunden {
-		return errors.New("Bruecke nicht verbunden")
+		return errors.New("Gateway nicht verbunden")
 	}
 	log.Printf("Verbindung kurz unterbrochen (Test), Neuaufbau automatisch")
 	s.dienst.DisconnectService(partner, "Test: kurze Unterbrechung")
@@ -293,7 +293,7 @@ func (s *Steuerbox) UnterbrecheKurz() error {
 }
 
 // Dauerhafte Trennung, bis sie mit Wiederherstellen aufgehoben wird. Die
-// Steuerbox vertraut der Bruecke solange nicht, daher baut auch die Bruecke
+// Steuerbox vertraut dem Gateway solange nicht, daher baut auch das Gateway
 // die Verbindung nicht wieder auf.
 func (s *Steuerbox) Trenne() error {
 	s.mu.Lock()
@@ -301,7 +301,7 @@ func (s *Steuerbox) Trenne() error {
 	s.unterbrochen = kopplung != nil
 	s.mu.Unlock()
 	if kopplung == nil {
-		return errors.New("keine Bruecke gekoppelt")
+		return errors.New("kein Gateway gekoppelt")
 	}
 	log.Printf("Verbindung getrennt (Test), bleibt getrennt bis \"Wiederherstellen\"")
 	s.dienst.UnregisterRemoteService(kopplung.Identitaet)
@@ -314,14 +314,14 @@ func (s *Steuerbox) StelleWiederHer() error {
 	s.unterbrochen = false
 	s.mu.Unlock()
 	if kopplung == nil {
-		return errors.New("keine Bruecke gekoppelt")
+		return errors.New("kein Gateway gekoppelt")
 	}
 	log.Printf("Verbindung wird wiederhergestellt")
 	s.dienst.RegisterRemoteService(kopplung.Identitaet)
 	return nil
 }
 
-// KoppelnPerSki: bisheriges Verfahren. Die Bruecke muss den SKI dieser
+// KoppelnPerSki: bisheriges Verfahren. Das Gateway muss den SKI dieser
 // Steuerbox ebenfalls kennen (EEBUS_REMOTE_SKI).
 func (s *Steuerbox) KoppelnPerSki(ski string) error {
 	ski, err := gemeinsam.NormalisiereSki(ski)
@@ -335,14 +335,14 @@ func (s *Steuerbox) KoppelnPerSki(ski string) error {
 	if err := s.ersetzeKopplung(kopplung); err != nil {
 		return err
 	}
-	log.Printf("Gekoppelt per SKI mit Bruecke %s", ski)
+	log.Printf("Gekoppelt per SKI mit Gateway %s", ski)
 	s.dienst.RegisterRemoteService(kopplung.Identitaet)
 	return nil
 }
 
-// KoppelnPerPairingService: neues Verfahren. Der QR-Text der Bruecke enthaelt
-// SKI, SHIP-ID, Fingerprint und Secret. Die Steuerbox vertraut der Bruecke und
-// kuendigt sich per mDNS mit einem HMAC ueber das Secret an. Die Bruecke prueft
+// KoppelnPerPairingService: neues Verfahren. Der QR-Text des Gateways enthaelt
+// SKI, SHIP-ID, Fingerprint und Secret. Die Steuerbox vertraut dem Gateway und
+// kuendigt sich per mDNS mit einem HMAC ueber das Secret an. Das Gateway prueft
 // das und vertraut der Steuerbox dann ohne weiteres Zutun.
 func (s *Steuerbox) KoppelnPerPairingService(qrText string) error {
 	daten, err := gemeinsam.LiesPairingQr(qrText)
@@ -360,7 +360,7 @@ func (s *Steuerbox) KoppelnPerPairingService(qrText string) error {
 	if err := s.dienst.StartAnnouncementTo(ziel); err != nil {
 		return fmt.Errorf("Ankuendigung starten: %w", err)
 	}
-	log.Printf("Pairing Service: Ankuendigung an Bruecke %s gestartet", gemeinsam.Bezeichnung(identitaet))
+	log.Printf("Pairing Service: Ankuendigung an Gateway %s gestartet", gemeinsam.Bezeichnung(identitaet))
 	return nil
 }
 
@@ -369,12 +369,12 @@ func (s *Steuerbox) Entkoppeln() error {
 	alt := s.kopplung
 	s.mu.Unlock()
 	if alt == nil {
-		return errors.New("keine Bruecke gekoppelt")
+		return errors.New("kein Gateway gekoppelt")
 	}
 	if err := s.ersetzeKopplung(nil); err != nil {
 		return err
 	}
-	log.Printf("Kopplung mit Bruecke %s aufgehoben", gemeinsam.Bezeichnung(alt.Identitaet))
+	log.Printf("Kopplung mit Gateway %s aufgehoben", gemeinsam.Bezeichnung(alt.Identitaet))
 	return nil
 }
 
@@ -415,8 +415,8 @@ func (s *Steuerbox) UseCaseNamen() []string {
 	return namen
 }
 
-// brueckenUseCases: Welche Use Cases bietet die Bruecke an (Akteur auf ihrer Seite)?
-func (s *Steuerbox) brueckenUseCases() []UseCaseDaten {
+// gatewayUseCases: Welche Use Cases bietet das Gateway an (Akteur auf seiner Seite)?
+func (s *Steuerbox) gatewayUseCases() []UseCaseDaten {
 	eigene := s.UseCaseNamen()
 	var liste []UseCaseDaten
 	for _, uc := range []struct {

@@ -16,7 +16,7 @@ const (
 	ErweiterungsVersion   = 2 // 2: LPP, MPC, MGCP, Anlagenstatus
 )
 
-// Input-Register (FC04), Bruecke -> SPS. 32-Bit-Werte: High-Word zuerst.
+// Input-Register (FC04), Gateway -> SPS. 32-Bit-Werte: High-Word zuerst.
 //
 // Je Richtung ein Block mit gleichem Aufbau: Bezug (LPC) ab Register 2,
 // Einspeisung (LPP) ab Register 17. Offsets im Block siehe blk*.
@@ -28,7 +28,7 @@ const (
 	blockEinspeisung = 17
 
 	regErweiterung       = 14 // ErweiterungsVersion
-	regUseCasesLokal     = 15 // Bitmaske ucBit*: von der Bruecke angeboten
+	regUseCasesLokal     = 15 // Bitmaske ucBit*: vom Gateway angeboten
 	regUseCasesSteuerbox = 16 // Bitmaske ucBit*: von der Steuerbox unterstuetzt
 
 	regMindestdauerHi   = 29 // Failsafe-Mindestdauer in s (gemeinsam fuer LPC und LPP)
@@ -60,8 +60,8 @@ const (
 	ucBitMgcp = 1 << 3
 )
 
-// Holding-Register (FC03/FC16), SPS -> Bruecke. Alle in einem FC16-Aufruf
-// schreiben, dann sieht die Bruecke immer einen zusammengehoerigen Stand.
+// Holding-Register (FC03/FC16), SPS -> Gateway. Alle in einem FC16-Aufruf
+// schreiben, dann sieht das Gateway immer einen zusammengehoerigen Stand.
 const (
 	regSpsLebenszeichen        = 0 // zaehlt in der SPS jede Sekunde hoch
 	regNennleistungHi          = 1 // max. Leistungsaufnahme der Anlage in W
@@ -106,7 +106,7 @@ func alsUint32(wert float64) uint32 {
 	return uint32(math.Round(wert))
 }
 
-func starteModbusServer(url string, b *Bruecke) (*modbus.ModbusServer, error) {
+func starteModbusServer(url string, b *Gateway) (*modbus.ModbusServer, error) {
 	server, err := modbus.NewServer(&modbus.ServerConfiguration{
 		URL:        url,
 		Timeout:    30 * time.Second,
@@ -119,7 +119,7 @@ func starteModbusServer(url string, b *Bruecke) (*modbus.ModbusServer, error) {
 }
 
 // useCasesLokal liefert die Bitmaske der angebotenen Use Cases.
-func (b *Bruecke) useCasesLokal() uint16 {
+func (b *Gateway) useCasesLokal() uint16 {
 	var bits uint16
 	for _, uc := range []struct {
 		an  bool
@@ -133,7 +133,7 @@ func (b *Bruecke) useCasesLokal() uint16 {
 }
 
 // inputRegister erstellt ein konsistentes Abbild aller Input-Register.
-func (b *Bruecke) inputRegister(jetzt time.Time) [anzahlInputRegister]uint16 {
+func (b *Gateway) inputRegister(jetzt time.Time) [anzahlInputRegister]uint16 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -174,7 +174,7 @@ func (b *Bruecke) inputRegister(jetzt time.Time) [anzahlInputRegister]uint16 {
 }
 
 type modbusHandler struct {
-	b *Bruecke
+	b *Gateway
 }
 
 func (h *modbusHandler) HandleCoils(req *modbus.CoilsRequest) ([]bool, error) {

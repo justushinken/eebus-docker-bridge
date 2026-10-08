@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
 	shipapi "github.com/enbility/ship-go/api"
@@ -28,7 +28,7 @@ const (
 	anfrageGueltig = 2 * time.Minute // ship-go wartet bis zu 60 s plus Verlaengerungen
 )
 
-// Anfrage ist ein Verbindungsversuch einer Steuerbox, der die Bruecke noch
+// Anfrage ist ein Verbindungsversuch einer Steuerbox, der das Gateway noch
 // nicht vertraut. Im Suchmodus wartet ship-go auf die Entscheidung im UI.
 type Anfrage struct {
 	Identitaet shipapi.ServiceIdentity
@@ -45,12 +45,12 @@ func LadeGespeicherteKopplung(verzeichnis string) (*gemeinsam.Kopplung, error) {
 }
 
 // hatPartner: Es ist eine Steuerbox eingetragen. Aufruf unter mu.
-func (b *Bruecke) hatPartner() bool {
+func (b *Gateway) hatPartner() bool {
 	return b.konf.RemoteSki != "" || b.kopplung != nil
 }
 
 // ohneVerbindung: Zustand, wenn keine Steuerbox verbunden ist. Aufruf unter mu.
-func (b *Bruecke) ohneVerbindung() Verbindung {
+func (b *Gateway) ohneVerbindung() Verbindung {
 	if b.hatPartner() {
 		return VerbindungGetrennt
 	}
@@ -58,14 +58,14 @@ func (b *Bruecke) ohneVerbindung() Verbindung {
 }
 
 // setzeVerbindung merkt sich, seit wann der Zustand gilt. Aufruf unter mu.
-func (b *Bruecke) setzeVerbindung(v Verbindung) {
+func (b *Gateway) setzeVerbindung(v Verbindung) {
 	if v != b.verbindung || b.verbindungSeit.IsZero() {
 		b.verbindung, b.verbindungSeit = v, time.Now()
 	}
 }
 
 // vertraut: Dieser Partner ist bereits als Steuerbox eingetragen. Aufruf unter mu.
-func (b *Bruecke) vertraut(partner shipapi.ServiceIdentity) bool {
+func (b *Gateway) vertraut(partner shipapi.ServiceIdentity) bool {
 	return (b.konf.RemoteSki != "" && strings.EqualFold(partner.SKI, b.konf.RemoteSki)) ||
 		(b.kopplung != nil && gemeinsam.GleicheIdentitaet(partner, b.kopplung.Identitaet))
 }
@@ -73,7 +73,7 @@ func (b *Bruecke) vertraut(partner shipapi.ServiceIdentity) bool {
 // --- api.ServiceReaderInterface ---
 
 // Verbindungswechsel nur einmal protokollieren, ship-go meldet sie teils doppelt.
-func (b *Bruecke) RemoteServiceConnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
+func (b *Gateway) RemoteServiceConnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	b.mu.Lock()
 	neu := b.verbindung != VerbindungVerbunden
 	b.setzeVerbindung(VerbindungVerbunden)
@@ -86,7 +86,7 @@ func (b *Bruecke) RemoteServiceConnected(dienst api.ServiceInterface, partner sh
 	}
 }
 
-func (b *Bruecke) RemoteServiceDisconnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
+func (b *Gateway) RemoteServiceDisconnected(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	b.mu.Lock()
 	// Nur die verbundene Steuerbox. Andere EEBUS-Geraete im LAN koennen sich
 	// ebenfalls melden und wieder trennen.
@@ -108,7 +108,7 @@ func (b *Bruecke) RemoteServiceDisconnected(dienst api.ServiceInterface, partner
 
 // Hilfreich bei der Inbetriebnahme: zeigt die per mDNS gefundenen Geraete samt SKI.
 // mDNS meldet die Liste wiederholt, protokolliert werden nur neu gefundene Geraete.
-func (b *Bruecke) VisibleRemoteMdnsServicesUpdated(dienst api.ServiceInterface, eintraege []shipapi.RemoteMdnsService) {
+func (b *Gateway) VisibleRemoteMdnsServicesUpdated(dienst api.ServiceInterface, eintraege []shipapi.RemoteMdnsService) {
 	b.mu.Lock()
 	neu := gemeinsam.NeuGefunden(b.gefunden, eintraege)
 	b.gefunden = slices.Clone(eintraege)
@@ -119,13 +119,13 @@ func (b *Bruecke) VisibleRemoteMdnsServicesUpdated(dienst api.ServiceInterface, 
 	}
 }
 
-func (b *Bruecke) ServiceUpdated(partner shipapi.ServiceIdentity) {}
+func (b *Gateway) ServiceUpdated(partner shipapi.ServiceIdentity) {}
 
 // ServicePairingDetailUpdate meldet die Zustaende des SHIP-Handshakes. Ein
-// Geraet, dem die Bruecke nicht vertraut, erscheint hier mit
+// Geraet, dem das Gateway nicht vertraut, erscheint hier mit
 // ConnectionStateReceivedPairingRequest. Wird aus ship-go heraus aufgerufen:
 // hier nur Zustand merken, nicht in den Stack zurueckrufen.
-func (b *Bruecke) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, detail *shipapi.ConnectionStateDetail) {
+func (b *Gateway) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, detail *shipapi.ConnectionStateDetail) {
 	if text, melden := b.pairing.Neu(partner, detail); melden {
 		log.Printf("Pairing %s: %s", gemeinsam.Bezeichnung(partner), text)
 	}
@@ -137,7 +137,7 @@ func (b *Bruecke) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, de
 	var meldung string
 	switch detail.State() {
 	case shipapi.ConnectionStateRemoteDeniedTrust:
-		// Die Bruecke vertraut der Steuerbox, aber nicht umgekehrt
+		// Das Gateway vertraut der Steuerbox, aber nicht umgekehrt
 		b.abgelehnt = b.abgelehnt || b.vertraut(partner)
 	case shipapi.ConnectionStateReceivedPairingRequest:
 		switch {
@@ -149,7 +149,7 @@ func (b *Bruecke) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, de
 			b.anfragen[partner.SKI] = &Anfrage{Identitaet: partner, Seit: time.Now()}
 		case !b.unbekannt[partner.SKI]:
 			// Ohne Suchmodus lehnt ship-go sofort ab. Einmal melden: Oft hat der
-			// Messstellenbetreiber die Bruecke eingetragen, die Bruecke die
+			// Messstellenbetreiber das Gateway eingetragen, das Gateway die
 			// Steuerbox aber noch nicht.
 			b.unbekannt[partner.SKI] = true
 			meldung = fmt.Sprintf("Verbindungsversuch eines unbekannten Geraets abgelehnt: %s. Zum Koppeln den Suchmodus starten.", gemeinsam.Bezeichnung(partner))
@@ -172,7 +172,7 @@ func (b *Bruecke) ServicePairingDetailUpdate(partner shipapi.ServiceIdentity, de
 // haelt das nur im Speicher, deshalb wird sie im Volume abgelegt und beim
 // Start wieder angemeldet (siehe main.go).
 
-func (b *Bruecke) ServiceAutoTrusted(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
+func (b *Gateway) ServiceAutoTrusted(dienst api.ServiceInterface, partner shipapi.ServiceIdentity) {
 	// Eigene Goroutine: Aus diesem Callback heraus nicht in ship-go zurueckrufen.
 	go func() {
 		kopplung := &gemeinsam.Kopplung{Verfahren: gemeinsam.VerfahrenPairing, Identitaet: partner}
@@ -183,7 +183,7 @@ func (b *Bruecke) ServiceAutoTrusted(dienst api.ServiceInterface, partner shipap
 	}()
 }
 
-func (b *Bruecke) ServiceAutoTrustFailed(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund error) {
+func (b *Gateway) ServiceAutoTrustFailed(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund error) {
 	// Eine schon gekoppelte Steuerbox wiederholt ihre Ankuendigung bis zu 15 min.
 	// Nach einem Neustart erkennt ship-go das als Wiederholung und lehnt ab, die
 	// Steuerbox ist aber ohnehin vertraut: keine Meldung wert.
@@ -198,11 +198,11 @@ func (b *Bruecke) ServiceAutoTrustFailed(dienst api.ServiceInterface, partner sh
 
 // Kommt z. B., wenn eine neue Steuerbox die alte ersetzt. Die neue meldet
 // sich danach ueber ServiceAutoTrusted.
-func (b *Bruecke) ServiceAutoTrustRemoved(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund string) {
+func (b *Gateway) ServiceAutoTrustRemoved(dienst api.ServiceInterface, partner shipapi.ServiceIdentity, grund string) {
 	go b.entfernePairingKopplung(partner, grund)
 }
 
-func (b *Bruecke) entfernePairingKopplung(partner shipapi.ServiceIdentity, grund string) {
+func (b *Gateway) entfernePairingKopplung(partner shipapi.ServiceIdentity, grund string) {
 	b.kopplungMu.Lock()
 	defer b.kopplungMu.Unlock()
 	b.mu.Lock()
@@ -226,7 +226,7 @@ func (b *Bruecke) entfernePairingKopplung(partner shipapi.ServiceIdentity, grund
 
 // --- Kopplung verwalten ---
 
-func (b *Bruecke) speichereKopplung(k *gemeinsam.Kopplung) error {
+func (b *Gateway) speichereKopplung(k *gemeinsam.Kopplung) error {
 	var fehler []error
 	for _, datei := range []string{KopplungsdateiPairing, KopplungsdateiSki} {
 		var inhalt *gemeinsam.Kopplung
@@ -242,7 +242,7 @@ func (b *Bruecke) speichereKopplung(k *gemeinsam.Kopplung) error {
 // gekoppelte Steuerbox beim EEBUS-Stack ab. Es gibt nur eine Steuerbox.
 // kopplungMu haelt Datei, Zustand und EEBUS-Stack in derselben Reihenfolge.
 // Nicht aus Callbacks von ship-go heraus aufrufen (dort per Goroutine).
-func (b *Bruecke) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
+func (b *Gateway) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
 	b.kopplungMu.Lock()
 	defer b.kopplungMu.Unlock()
 	if err := b.speichereKopplung(neu); err != nil {
@@ -271,7 +271,7 @@ func (b *Bruecke) ersetzeKopplung(neu *gemeinsam.Kopplung) error {
 var errKopplungEnv = fmt.Errorf("%w: Kopplung ist per EEBUS_REMOTE_SKI fest eingestellt", gemeinsam.ErrVerboten)
 var errUiNurLesend = fmt.Errorf("%w: Aenderungen im UI abgeschaltet (WEB_AENDERUNGEN=aus)", gemeinsam.ErrVerboten)
 
-func (b *Bruecke) pruefeKopplungAenderbar() error {
+func (b *Gateway) pruefeKopplungAenderbar() error {
 	switch {
 	case !b.konf.WebAenderungen:
 		return errUiNurLesend
@@ -285,7 +285,7 @@ func (b *Bruecke) pruefeKopplungAenderbar() error {
 // Geraete an, bis sie im UI angenommen oder abgelehnt werden. SetAutoAccept
 // wird bewusst nicht verwendet: Sonst koennte jedes Geraet im LAN, das sich in
 // dieser Zeit meldet, Leistungsgrenzen setzen.
-func (b *Bruecke) SetzeSuchmodus(an bool) error {
+func (b *Gateway) SetzeSuchmodus(an bool) error {
 	if !b.konf.WebAenderungen {
 		return errUiNurLesend
 	}
@@ -308,7 +308,7 @@ func (b *Bruecke) SetzeSuchmodus(an bool) error {
 
 // beendeSuchmodus lehnt noch wartende Anfragen ab, damit ship-go sie nicht
 // bis zum Timeout offen haelt.
-func (b *Bruecke) beendeSuchmodus(meldung string) {
+func (b *Gateway) beendeSuchmodus(meldung string) {
 	b.mu.Lock()
 	war := !b.suchmodusBis.IsZero()
 	b.suchmodusBis = time.Time{}
@@ -328,7 +328,7 @@ func (b *Bruecke) beendeSuchmodus(meldung string) {
 	}
 }
 
-func (b *Bruecke) pruefeSuchmodus(jetzt time.Time) {
+func (b *Gateway) pruefeSuchmodus(jetzt time.Time) {
 	b.mu.Lock()
 	abgelaufen := !b.suchmodusBis.IsZero() && jetzt.After(b.suchmodusBis)
 	for ski, a := range b.anfragen {
@@ -343,9 +343,9 @@ func (b *Bruecke) pruefeSuchmodus(jetzt time.Time) {
 	}
 }
 
-// KoppelnPerSki vertraut einer gefundenen Steuerbox. Die Bruecke baut die
+// KoppelnPerSki vertraut einer gefundenen Steuerbox. Das Gateway baut die
 // Verbindung dann selbst auf, sobald auch die Steuerbox ihr vertraut.
-func (b *Bruecke) KoppelnPerSki(ski string) error {
+func (b *Gateway) KoppelnPerSki(ski string) error {
 	if err := b.pruefeKopplungAenderbar(); err != nil {
 		return err
 	}
@@ -365,7 +365,7 @@ func (b *Bruecke) KoppelnPerSki(ski string) error {
 }
 
 // BeantworteAnfrage nimmt eine wartende Kopplungsanfrage an oder lehnt sie ab.
-func (b *Bruecke) BeantworteAnfrage(ski string, annehmen bool) error {
+func (b *Gateway) BeantworteAnfrage(ski string, annehmen bool) error {
 	if err := b.pruefeKopplungAenderbar(); err != nil {
 		return err
 	}
@@ -394,7 +394,7 @@ func (b *Bruecke) BeantworteAnfrage(ski string, annehmen bool) error {
 	return nil
 }
 
-func (b *Bruecke) Entkoppeln() error {
+func (b *Gateway) Entkoppeln() error {
 	if err := b.pruefeKopplungAenderbar(); err != nil {
 		return err
 	}
@@ -429,7 +429,7 @@ type AnfrageDaten struct {
 }
 
 // kopplungStatus: Aufruf unter mu.
-func (b *Bruecke) kopplungStatus(jetzt time.Time) (kopplung *KopplungDaten, anfragen []AnfrageDaten, suchmodusRestS float64) {
+func (b *Gateway) kopplungStatus(jetzt time.Time) (kopplung *KopplungDaten, anfragen []AnfrageDaten, suchmodusRestS float64) {
 	switch {
 	case b.konf.RemoteSki != "":
 		kopplung = &KopplungDaten{Verfahren: gemeinsam.VerfahrenSki, Quelle: "env", Ski: b.konf.RemoteSki}

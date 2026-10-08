@@ -14,7 +14,7 @@ import (
 // Hersteller, Produkt, Seriennummer, Hardware- und Software-Revision sowie
 // eine Stoerung der Anlage.
 
-// Version der Bruecke, beim Bauen per -ldflags "-X main.Version=..." gesetzt.
+// Version des Gateways, beim Bauen per -ldflags "-X main.Version=..." gesetzt.
 var Version = "dev"
 
 // Werte von Holding-Register regAnlagenstatus, 0 = normal
@@ -76,8 +76,8 @@ var zustandTexte = map[model.DeviceDiagnosisOperatingStateType]string{
 }
 
 // meldeAnlagenstatus gibt einen geaenderten Betriebszustand an die Steuerbox.
-// Ohne SPS gilt die Anlage als gestoert, die Bruecke allein kann nichts umsetzen.
-func (b *Bruecke) meldeAnlagenstatus() {
+// Ohne SPS gilt die Anlage als gestoert, das Gateway allein kann nichts umsetzen.
+func (b *Gateway) meldeAnlagenstatus() {
 	b.mu.Lock()
 	register := b.holding[regAnlagenstatus]
 	zustand := betriebszustand(b.spsOk, register)

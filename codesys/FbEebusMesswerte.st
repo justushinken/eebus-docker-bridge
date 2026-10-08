@@ -1,9 +1,9 @@
 // Schreibt Leistung und Energie für MPC (Anlage) und MGCP (Netzanschlusspunkt)
-// in die Holding-Register 5, 6 und 8 bis 27 der Brücke. Ob ein Wert gerade
+// in die Holding-Register 5, 6 und 8 bis 27 des Gateways. Ob ein Wert gerade
 // gültig ist, steht in wGueltig der Strukturen.
 //
 // Mindestens die aktuelle Wirkleistung der Anlage muss die Steuerbox abfragen
-// können (FNN-Hinweis 4.1.2.3). Ohne gültigen Wert meldet die Brücke ihn als
+// können (FNN-Hinweis 4.1.2.3). Ohne gültigen Wert meldet das Gateway ihn als
 // ungültig.
 FUNCTION_BLOCK FbEebusMesswerte
 VAR_INPUT

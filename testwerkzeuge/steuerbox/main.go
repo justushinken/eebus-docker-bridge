@@ -1,10 +1,10 @@
 // Test-Steuerbox
 //
-// Simuliert die FNN-Steuerbox fuer Tests der EEBUS-Bruecke ohne echtes Smart
+// Simuliert die FNN-Steuerbox fuer Tests des EEBUS-Gateways ohne echtes Smart
 // Meter Gateway: Energy Guard fuer LPC und LPP, Monitoring Appliance fuer MPC
 // und MGCP. Ueber das Web-UI lassen sich Grenzen und Failsafe-Werte senden,
 // der Heartbeat anhalten und Verbindungsabbrueche simulieren, die Messwerte
-// der Bruecke werden angezeigt. Nur fuer Tests, nicht fuer den Produktivbetrieb.
+// des Gateways werden angezeigt. Nur fuer Tests, nicht fuer den Produktivbetrieb.
 package main
 
 import (
@@ -16,7 +16,7 @@ import (
 	"syscall"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
 	"github.com/enbility/eebus-go/service"
@@ -42,8 +42,8 @@ func leseKonfiguration() Konfiguration {
 	return Konfiguration{
 		EebusPort:        gemeinsam.EnvGanzzahl("EEBUS_PORT", 4713),
 		Datenverzeichnis: gemeinsam.EnvText("DATENVERZEICHNIS", "/data"),
-		// Heartbeat wird alle (Timeout - 2 s) gesendet. Kurz gewaehlt, damit die
-		// Bruecke nach dem Verbinden schnell aus "Init" kommt.
+		// Heartbeat wird alle (Timeout - 2 s) gesendet. Kurz gewaehlt, damit das
+		// Gateway nach dem Verbinden schnell aus "Init" kommt.
 		HeartbeatTimeout: gemeinsam.EnvDauer("HEARTBEAT_TIMEOUT", 10*time.Second),
 		WebAdresse:       gemeinsam.EnvTextLeerErlaubt("WEB_ADRESSE", ":8091"),
 		WebBenutzer:      gemeinsam.EnvText("WEB_BENUTZER", "admin"),
@@ -75,10 +75,10 @@ func main() {
 	if err := gemeinsam.PruefeShipId(shipId); err != nil {
 		log.Fatalf("SHIP_ID: %v", err)
 	}
-	log.Printf("Eigener SKI: %s (bei der Bruecke als EEBUS_REMOTE_SKI eintragen), SHIP-ID: %s", eigenerSki, shipId)
+	log.Printf("Eigener SKI: %s (beim Gateway als EEBUS_REMOTE_SKI eintragen), SHIP-ID: %s", eigenerSki, shipId)
 
 	// Beim Pairing Service ist die Steuerbox die ankuendigende Seite ("Announcer").
-	// Das Secret kommt je Bruecke aus deren QR-Code, nicht aus der Konfiguration.
+	// Das Secret kommt je Gateway aus deren QR-Code, nicht aus der Konfiguration.
 	konfiguration, err := api.NewConfiguration(
 		"Test", "Test", "Steuerbox-Simulator", seriennummer,
 		[]shipapi.DeviceCategoryType{shipapi.DeviceCategoryTypeGridConnectionHub},
@@ -126,13 +126,13 @@ func main() {
 	}
 	steuerbox.shipId = shipId
 
-	// Nach erfolgreichem Pairing vertraut die Bruecke dieser Steuerbox dauerhaft,
+	// Nach erfolgreichem Pairing vertraut das Gateway dieser Steuerbox dauerhaft,
 	// eine erneute Ankuendigung ist nach einem Neustart nicht noetig.
 	if k := steuerbox.Kopplung(); k != nil {
-		log.Printf("Gekoppelt mit Bruecke %s (%s)", gemeinsam.Bezeichnung(k.Identitaet), k.Verfahren)
+		log.Printf("Gekoppelt mit Gateway %s (%s)", gemeinsam.Bezeichnung(k.Identitaet), k.Verfahren)
 		dienst.RegisterRemoteService(k.Identitaet)
 	} else {
-		log.Printf("Noch keine Bruecke gekoppelt: im Web-UI unter \"Kopplung\" auswaehlen")
+		log.Printf("Noch kein Gateway gekoppelt: im Web-UI unter \"Kopplung\" auswaehlen")
 	}
 
 	webBeenden := gemeinsam.StarteWebUi(konf.WebAdresse, konf.WebBenutzer, konf.WebPasswort, webHandler(steuerbox, protokoll))

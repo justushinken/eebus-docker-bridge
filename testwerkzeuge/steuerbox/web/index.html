@@ -11,7 +11,7 @@
 	<header>
 		<div class="kopf">
 			<h1>Test-Steuerbox</h1>
-			<nav><a href="#steuern" data-reiter="steuern">Steuern</a><a href="#bruecke" data-reiter="bruecke">Brücke</a><a href="#kopplung" data-reiter="kopplung">Kopplung</a><a href="anleitung">Anleitung</a></nav>
+			<nav><a href="#steuern" data-reiter="steuern">Steuern</a><a href="#gateway" data-reiter="gateway">Gateway</a><a href="#kopplung" data-reiter="kopplung">Kopplung</a><a href="anleitung">Anleitung</a></nav>
 		</div>
 		<span class="marke orange">Simulator, nicht für den Produktivbetrieb</span>
 	</header>
@@ -86,7 +86,7 @@
 				<div class="knoepfe" style="margin-top:10px">
 					<button class="gefahr" id="heartbeatSchalter" type="button"></button>
 				</div>
-				<p class="hinweis">Ohne Heartbeat geht die Brücke nach 120 s in Failsafe. Zurück nur mit Heartbeat <em>und</em> einer neuen Grenze.</p>
+				<p class="hinweis">Ohne Heartbeat geht das Gateway nach 120 s in Failsafe. Zurück nur mit Heartbeat <em>und</em> einer neuen Grenze.</p>
 			</div>
 			<div class="abschnitt">
 				<dl><dt>Verbindung</dt><dd id="verbindung"></dd></dl>
@@ -100,7 +100,7 @@
 				<div class="knoepfe">
 					<button class="braucht-lpp" id="gemeinsam" type="button">Beide Grenzen in einer Nachricht</button>
 				</div>
-				<p class="hinweis">Schreibt die Werte aus „Bezug senden“ und „Einspeisung senden“ zusammen, wie es andere EEBUS-Stacks tun können. Die Brücke muss beide getrennt freigeben.</p>
+				<p class="hinweis">Schreibt die Werte aus „Bezug senden“ und „Einspeisung senden“ zusammen, wie es andere EEBUS-Stacks tun können. Das Gateway muss beide getrennt freigeben.</p>
 			</div>
 			<p class="meldung" id="stoerungMeldung"></p>
 		</section>
@@ -111,10 +111,10 @@
 		</section>
 	</div>
 
-	<!-- Brücke: was die Brücke über EEBUS meldet -->
-	<div class="raster" data-reiter-inhalt="bruecke" hidden>
+	<!-- Gateway: was das Gateway über EEBUS meldet -->
+	<div class="raster" data-reiter-inhalt="gateway" hidden>
 		<section class="karte">
-			<h2>Werte bei der Brücke</h2>
+			<h2>Werte beim Gateway</h2>
 			<dl>
 				<dt>Grenze</dt><dd id="bGrenze"></dd>
 				<dt>Failsafe-Grenze</dt><dd id="bFailsafeW"></dd>
@@ -127,10 +127,10 @@
 				<dt>Anlagenstatus</dt><dd id="bAnlagenstatus"></dd>
 			</dl>
 			<table style="margin-top:12px">
-				<thead><tr><th>Use Case</th><th>Steuerbox</th><th>Brücke</th></tr></thead>
+				<thead><tr><th>Use Case</th><th>Steuerbox</th><th>Gateway</th></tr></thead>
 				<tbody id="bUseCases"></tbody>
 			</table>
-			<p class="hinweis">So wie die Brücke sie über EEBUS meldet.</p>
+			<p class="hinweis">So wie das Gateway sie über EEBUS meldet.</p>
 		</section>
 
 		<section class="karte" id="karteMpc" hidden>
@@ -149,31 +149,31 @@
 		<section class="karte breit">
 			<h2>Kopplung</h2>
 			<dl>
-				<dt>Gekoppelte Brücke</dt><dd><span class="mono" id="gekoppelt"></span> <span id="verfahren"></span> <button class="gefahr" id="entkoppeln" type="button">Entkoppeln</button></dd>
+				<dt>Gekoppeltes Gateway</dt><dd><span class="mono" id="gekoppelt"></span> <span id="verfahren"></span> <button class="gefahr" id="entkoppeln" type="button">Entkoppeln</button></dd>
 			</dl>
 			<div class="zweispaltig" style="margin-top:16px">
 				<div>
 					<h3>A · SHIP Pairing Service</h3>
-					<label>QR-Text der Brücke (Statusseite der Brücke, „QR-Text kopieren“)
+					<label>QR-Text des Gateways (Statusseite des Gateways, „QR-Text kopieren“)
 						<textarea id="qrText" rows="3" placeholder="SHIP;SKI:…;ID:…;FPH256:…;SPSEC:…;ENDSHIP;"></textarea>
 					</label>
 					<div class="knoepfe" style="margin-top:10px">
 						<button class="primaer" id="pairingKoppeln" type="button">Per Pairing Service koppeln</button>
 					</div>
-					<p class="hinweis">Die Steuerbox kündigt sich mit dem Secret an. Die Brücke vertraut ihr dann ohne weitere Einstellung.</p>
+					<p class="hinweis">Die Steuerbox kündigt sich mit dem Secret an. Das Gateway vertraut ihr dann ohne weitere Einstellung.</p>
 				</div>
 				<div>
 					<h3>B · SKI-Verfahren</h3>
 					<dl>
 						<dt>Eigener SKI</dt><dd><span class="mono" id="eigenerSki"></span><button data-kopieren="eigenerSki" type="button">Kopieren</button></dd>
 					</dl>
-					<label>SKI der Brücke (Statusseite der Brücke, Reiter „Kopplung“)
-						<input id="skiBruecke" class="mono" placeholder="40 Hex-Zeichen" autocomplete="off">
+					<label>SKI des Gateways (Statusseite des Gateways, Reiter „Kopplung“)
+						<input id="skiGateway" class="mono" placeholder="40 Hex-Zeichen" autocomplete="off">
 					</label>
 					<div class="knoepfe" style="margin-top:10px">
 						<button class="primaer" id="skiKoppeln" type="button">Per SKI koppeln</button>
 					</div>
-					<p class="hinweis">Oder unten bei der gefundenen Brücke „Per SKI koppeln“. Dann an der Brücke diese Steuerbox in der Geräteliste „Vertrauen“, oder dort „Steuerbox suchen“ und die Anfrage annehmen.</p>
+					<p class="hinweis">Oder unten beim gefundenen Gateway „Per SKI koppeln“. Dann am Gateway diese Steuerbox in der Geräteliste „Vertrauen“, oder dort „Steuerbox suchen“ und die Anfrage annehmen.</p>
 				</div>
 			</div>
 			<table class="geraete" style="margin-top:16px">
@@ -284,22 +284,22 @@ function zeige(s) {
 	const gekoppelt = s.gekoppelt !== "";
 
 	if (!gekoppelt) {
-		zeigeAmpel("", "Nicht gekoppelt", "Unten unter „Kopplung“ die Brücke auswählen");
+		zeigeAmpel("", "Nicht gekoppelt", "Unten unter „Kopplung“ das Gateway auswählen");
 	} else if (s.unterbrochen) {
 		zeigeAmpel("rot", "Getrennt (Test)", "Verbindung absichtlich getrennt, unter „Störungen“ wiederherstellen");
 	} else if (!s.verbunden) {
 		zeigeAmpel("orange", "Verbindungsaufbau …", s.ankuendigung
-			? "Pairing Service: Ankündigung läuft, warte auf die Brücke"
-			: `Brücke ${s.gekoppelt} noch nicht verbunden`);
+			? "Pairing Service: Ankündigung läuft, warte auf das Gateway"
+			: `Gateway ${s.gekoppelt} noch nicht verbunden`);
 	} else if (!s.heartbeatLaeuft) {
-		zeigeAmpel("rot", "Verbunden, Heartbeat gestoppt", "Brücke geht 120 s nach dem letzten Heartbeat in Failsafe");
+		zeigeAmpel("rot", "Verbunden, Heartbeat gestoppt", "Gateway geht 120 s nach dem letzten Heartbeat in Failsafe");
 	} else {
-		const ucs = s.bruecke && s.bruecke.useCases ? s.bruecke.useCases.filter(u => u.steuerbox && u.unterstuetzt).map(u => u.name) : [];
-		zeigeAmpel("gruen", "Verbunden mit der Brücke", s.bruecke ? `Bereit: ${ucs.join(", ")}` : "Warte auf LPC-Meldung der Brücke …");
+		const ucs = s.gateway && s.gateway.useCases ? s.gateway.useCases.filter(u => u.steuerbox && u.unterstuetzt).map(u => u.name) : [];
+		zeigeAmpel("gruen", "Verbunden mit dem Gateway", s.gateway ? `Bereit: ${ucs.join(", ")}` : "Warte auf LPC-Meldung des Gateways …");
 	}
 
 	// Aktionen, die eine Verbindung brauchen
-	const bereit = s.verbunden && s.bruecke !== null;
+	const bereit = s.verbunden && s.gateway !== null;
 	for (const b of document.querySelectorAll(".braucht-verbindung")) b.disabled = !bereit;
 
 	marke($("heartbeat"), s.heartbeatLaeuft ? `läuft, alle ${dauer(s.heartbeatAbstandS)}` : "gestoppt", s.heartbeatLaeuft ? "gruen" : "rot");
@@ -313,7 +313,7 @@ function zeige(s) {
 	$("trennen").className = s.unterbrochen ? "primaer" : "gefahr";
 	$("trennen").disabled = !gekoppelt;
 
-	const b = s.bruecke;
+	const b = s.gateway;
 	const unbekannt = "–";
 	$("bGrenze").textContent = b && b.grenze
 		? `${watt(b.grenze.wertW)}, ${b.grenze.aktiv ? "aktiv" : "inaktiv"}` + (b.grenze.dauerS > 0 ? `, noch ${dauer(b.grenze.dauerS)}` : "")
@@ -376,7 +376,7 @@ function zeige(s) {
 		const td = document.createElement("td");
 		if (g.ski === s.gekoppeltSki) {
 			if (s.verbunden) marke(td, "verbunden", "gruen");
-			else marke(td, "vertraut – wartet auf Brücke", "orange");
+			else marke(td, "vertraut – wartet auf Gateway", "orange");
 		} else {
 			const knopf = document.createElement("button");
 			knopf.type = "button";
@@ -466,11 +466,11 @@ $("kurz").addEventListener("click", () =>
 $("trennen").addEventListener("click", () =>
 	senden("POST", "api/verbindung", { aktion: zuletzt.unterbrochen ? "wiederherstellen" : "trennen" }, "stoerungMeldung"));
 $("skiKoppeln").addEventListener("click", () =>
-	senden("POST", "api/kopplung", { verfahren: "ski", ski: $("skiBruecke").value }, "kopplungMeldung"));
+	senden("POST", "api/kopplung", { verfahren: "ski", ski: $("skiGateway").value }, "kopplungMeldung"));
 $("pairingKoppeln").addEventListener("click", () =>
 	senden("POST", "api/kopplung", { verfahren: "pairing", qrText: $("qrText").value }, "kopplungMeldung"));
 $("entkoppeln").addEventListener("click", () => {
-	if (confirm("Kopplung mit der Brücke aufheben?")) senden("DELETE", "api/kopplung", {}, "kopplungMeldung");
+	if (confirm("Kopplung mit dem Gateway aufheben?")) senden("DELETE", "api/kopplung", {}, "kopplungMeldung");
 });
 
 // navigator.clipboard gibt es nur über HTTPS oder localhost, auf dem PFC
@@ -495,7 +495,7 @@ for (const knopf of document.querySelectorAll("[data-kopieren]")) {
 }
 
 // --- Reiter ---
-// Der aktive Reiter steht im Anker der Adresse (#bruecke …).
+// Der aktive Reiter steht im Anker der Adresse (#gateway …).
 const reiter = [...document.querySelectorAll("nav a[data-reiter]")];
 function zeigeReiter() {
 	const gewuenscht = location.hash.slice(1);

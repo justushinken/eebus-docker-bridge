@@ -230,7 +230,7 @@ func (r *FeatureLocal) ApproveOrDenyWrite(msg *api.Message, err model.ErrorType)
 	r.muxWriteReceived.Lock()
 	defer r.muxWriteReceived.Unlock()
 	if count > 1 && err.ErrorNumber == 0 {
-		// PATCH eebus-bruecke: Die Map je SKI nur anlegen, wenn es sie noch nicht
+		// PATCH eebus-gateway: Die Map je SKI nur anlegen, wenn es sie noch nicht
 		// gibt. Das Original legte sie bei jeder neuen msgCounter neu an und
 		// verwarf damit die Zaehlstaende anderer gleichzeitig offener
 		// Schreibanfragen: Bei mehreren Freigabe-Callbacks (z. B. LPC und LPP auf

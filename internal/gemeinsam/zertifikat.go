@@ -1,4 +1,4 @@
-// Package gemeinsam enthaelt, was Bruecke und Test-Steuerbox gleichermassen
+// Package gemeinsam enthaelt, was Gateway und Test-Steuerbox gleichermassen
 // brauchen: Zertifikat, Umgebungsvariablen, Ereignisprotokoll, Web-UI.
 package gemeinsam
 

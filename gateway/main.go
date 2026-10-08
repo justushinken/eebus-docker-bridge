@@ -1,4 +1,4 @@
-// EEBUS-Bruecke
+// EEBUS-Gateway
 //
 // Laeuft als Docker-Container auf dem WAGO PFC200. Tritt gegenueber der
 // FNN-Steuerbox als "Controllable System" auf und bildet die Use Cases des
@@ -25,7 +25,7 @@ import (
 	"syscall"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 
 	"github.com/enbility/eebus-go/api"
 	"github.com/enbility/eebus-go/service"
@@ -43,17 +43,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("Konfiguration: %v", err)
 	}
-	log.Printf("EEBUS-Bruecke %s, Use Cases: %s", Version, useCaseListe(konf))
+	log.Printf("EEBUS-Gateway %s, Use Cases: %s", Version, useCaseListe(konf))
 
 	zertifikat, eigenerSki, err := gemeinsam.LadeOderErzeugeZertifikat(
-		konf.Datenverzeichnis, "LPC-Bruecke", "EEBUS-LPC-Bruecke-"+konf.Seriennummer)
+		konf.Datenverzeichnis, "EEBUS-Gateway", "EEBUS-Gateway-"+konf.Seriennummer)
 	if err != nil {
 		log.Fatalf("Zertifikat: %v", err)
 	}
 	// Diesen SKI traegt der Messstellenbetreiber in der Steuerbox ein.
 	log.Printf("Eigener SKI: %s, SHIP-ID: %s", eigenerSki, konf.ShipId)
 
-	// SHIP Pairing Service: Die Bruecke wartet als "Listener" auf eine Steuerbox,
+	// SHIP Pairing Service: Das Gateway wartet als "Listener" auf eine Steuerbox,
 	// die das Secret kennt. Verlauf gegen Wiederholungsangriffe im Volume.
 	var pairingKonfig *shipapi.PairingConfig
 	var secret shipapi.PairingSecret
@@ -103,8 +103,8 @@ func main() {
 		}
 	}
 
-	bruecke := NeueBruecke(konf, einstellungen, eigenerSki, kopplung)
-	dienst := service.NewService(konfiguration, bruecke)
+	gw := NeuesGateway(konf, einstellungen, eigenerSki, kopplung)
+	dienst := service.NewService(konfiguration, gw)
 	if konf.EebusDebug {
 		dienst.SetLogging(gemeinsam.NeuesEebusLog())
 		log.Printf("EEBUS_DEBUG: Protokoll von eebus-go auf stdout (docker logs)")
@@ -112,15 +112,15 @@ func main() {
 	if err := dienst.Setup(); err != nil {
 		log.Fatalf("EEBUS-Dienst einrichten: %v", err)
 	}
-	bruecke.dienst = dienst
-	bruecke.cem = dienst.LocalDevice().EntityForType(model.EntityTypeTypeCEM)
-	richteUseCasesEin(bruecke, dienst, konf)
-	bruecke.SetzeStartwerte()
-	bruecke.SetzeKennung(dienst, secret)
+	gw.dienst = dienst
+	gw.cem = dienst.LocalDevice().EntityForType(model.EntityTypeTypeCEM)
+	richteUseCasesEin(gw, dienst, konf)
+	gw.SetzeStartwerte()
+	gw.SetzeKennung(dienst, secret)
 	SetzeAnlageninfo(dienst, konf)
-	RichteAnlagenstatusEin(bruecke.cem)
+	RichteAnlagenstatusEin(gw.cem)
 	// Fuer die Diagnose der Steuerbox: deren Herstellerdaten lesen
-	bruecke.cem.GetOrAddFeature(model.FeatureTypeTypeDeviceClassification, model.RoleTypeClient)
+	gw.cem.GetOrAddFeature(model.FeatureTypeTypeDeviceClassification, model.RoleTypeClient)
 
 	switch {
 	case konf.RemoteSki != "":
@@ -133,13 +133,13 @@ func main() {
 		log.Printf("Keine Steuerbox gekoppelt: im UI den Suchmodus starten oder den QR-Code an den Messstellenbetreiber geben")
 	}
 
-	modbusServer, err := starteModbusServer(konf.ModbusUrl, bruecke)
+	modbusServer, err := starteModbusServer(konf.ModbusUrl, gw)
 	if err != nil {
 		log.Fatalf("Modbus-Server: %v", err)
 	}
 	defer modbusServer.Stop()
 
-	webBeenden := gemeinsam.StarteWebUi(konf.WebAdresse, konf.WebBenutzer, konf.WebPasswort, webHandler(bruecke, protokoll))
+	webBeenden := gemeinsam.StarteWebUi(konf.WebAdresse, konf.WebBenutzer, konf.WebPasswort, webHandler(gw, protokoll))
 	defer webBeenden()
 
 	if err := dienst.Start(); err != nil {
@@ -155,14 +155,14 @@ func main() {
 	for i := 0; ; i++ {
 		select {
 		case jetzt := <-takt.C:
-			bruecke.Takt(jetzt)
+			gw.Takt(jetzt)
 			if i%5 == 0 {
-				bruecke.PruefeGegenstelle()
+				gw.PruefeGegenstelle()
 			}
 		case sig := <-signale:
 			log.Printf("Beende nach Signal %v", sig)
 			return
-		case <-bruecke.neustart:
+		case <-gw.neustart:
 			// Geaenderte Einstellungen uebernehmen. Erst das UI (beantwortet
 			// laufende Anfragen noch), dann EEBUS sauber trennen.
 			log.Printf("Neustart aus dem UI")
@@ -191,7 +191,7 @@ func useCaseListe(konf Konfiguration) string {
 // der CEM-Entitaet kommt vor LPC/LPP: Deren Grenzen verweisen auf die
 // Gesamtleistung (ACPowerTotal) derselben Entitaet, und die Nennleistung
 // nutzt die ersten IDs der ElectricalConnection.
-func richteUseCasesEin(b *Bruecke, dienst api.ServiceInterface, konf Konfiguration) {
+func richteUseCasesEin(b *Gateway, dienst api.ServiceInterface, konf Konfiguration) {
 	jetzt := time.Now()
 	melde := func(name string, uc api.UseCaseInterface) {
 		if err := dienst.AddUseCase(uc); err != nil {

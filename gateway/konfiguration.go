@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"eebus-bruecke/internal/gemeinsam"
+	"eebus-gateway/internal/gemeinsam"
 
 	"github.com/enbility/spine-go/model"
 )
@@ -71,7 +71,7 @@ func leseKonfiguration(u gemeinsam.Umgebung) (Konfiguration, error) {
 		PairingService:       u.Text("EEBUS_PAIRING_SERVICE", "an") != "aus",
 		Hersteller:           u.Text("GERAET_HERSTELLER", "Demo"),
 		Marke:                u.Text("GERAET_MARKE", "Demo"),
-		Modell:               u.Text("GERAET_MODELL", "PFC200-LPC-Bruecke"),
+		Modell:               u.Text("GERAET_MODELL", "EEBUS-Gateway"),
 		Seriennummer:         u.Text("GERAET_SERIENNUMMER", ""),
 		HwRevision:           u.Text("GERAET_HW_REVISION", ""),
 		FailsafeGrenzeW:      u.Kommazahl("FAILSAFE_GRENZE_W", 4200),

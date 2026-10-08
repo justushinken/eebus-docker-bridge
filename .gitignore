@@ -7,7 +7,7 @@ dist/
 backup-pfc/
 
 # Go-Kompilat
-/eebus-bruecke
+/eebus-gateway
 *.exe
 
 # Editor

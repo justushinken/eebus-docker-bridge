@@ -57,7 +57,7 @@ h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacin
 .ampel.orange { background: var(--orange-flaeche); } .ampel.orange .punkt { background: var(--orange); }
 .ampel.rot { background: var(--rot-flaeche); } .ampel.rot .punkt { background: var(--rot); }
 
-/* Gesamtstatus (Bruecke): Ampel und darunter die Verbindungen in einem Rahmen */
+/* Gesamtstatus (Gateway): Ampel und darunter die Verbindungen in einem Rahmen */
 .gesamtstatus { border: 1px solid var(--rand); border-radius: 10px; overflow: hidden; margin-bottom: 16px; background: var(--flaeche); }
 .gesamtstatus .ampel { margin: 0; border: none; border-radius: 0; }
 .statusleiste { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rand); }

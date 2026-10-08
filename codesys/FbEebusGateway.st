@@ -1,30 +1,30 @@
-// Verbindung zur EEBUS-Brücke (Erweiterungsversion 2: LPC, LPP, MPC, MGCP).
+// Verbindung zum EEBUS-Gateway (Erweiterungsversion 2: LPC, LPP, MPC, MGCP).
 //
 // Der Baustein
-// - überwacht Lebenszeichen und Schnittstellenversion der Brücke,
+// - überwacht Lebenszeichen und Schnittstellenversion des Gateways,
 // - dekodiert Verbindung, Heartbeat und die Use-Case-Masken,
 // - schreibt SPS-Lebenszeichen, Nennleistungen und Anlagenstatus in die
 //   Holding-Register (Register 0 bis 4 und 7).
 //
 // Die Begrenzungen je Richtung wertet FbEebusBegrenzung aus, die Messwerte
 // schreibt FbEebusMesswerte. Alle drei arbeiten auf denselben Registerabbildern.
-FUNCTION_BLOCK FbEebusBruecke
+FUNCTION_BLOCK FbEebusGateway
 VAR_INPUT
 	xFreigabe                 : BOOL;            // Auswertung aktiv
-	udiNennleistungBezugW     : UDINT;           // max. Leistungsaufnahme der Anlage in W (LPC), 0 = Vorgabe der Brücke
-	udiNennleistungErzeugungW : UDINT;           // max. Einspeiseleistung in W (LPP), 0 = Vorgabe der Brücke
+	udiNennleistungBezugW     : UDINT;           // max. Leistungsaufnahme der Anlage in W (LPC), 0 = Vorgabe des Gateways
+	udiNennleistungErzeugungW : UDINT;           // max. Einspeiseleistung in W (LPP), 0 = Vorgabe des Gateways
 	eStatus                   : eAnlagenstatus;  // Störung der Anlage an die Steuerbox melden
-	tBrueckeTimeout           : TIME := T#10S;   // max. Zeit ohne Änderung des Brücken-Lebenszeichens
+	tGatewayTimeout           : TIME := T#10S;   // max. Zeit ohne Änderung des Gateway-Lebenszeichens
 END_VAR
 VAR_IN_OUT
-	aInputRegister   : ARRAY [0..30] OF WORD;    // Abbild der Input-Register der Brücke
-	aHoldingRegister : ARRAY [0..27] OF WORD;    // an die Brücke zu schreibende Register
+	aInputRegister   : ARRAY [0..30] OF WORD;    // Abbild der Input-Register des Gateways
+	aHoldingRegister : ARRAY [0..27] OF WORD;    // an das Gateway zu schreibende Register
 END_VAR
 VAR_OUTPUT
-	xBrueckeOk          : BOOL;                  // Brücke lebt und Version passt
+	xGatewayOk          : BOOL;                  // Gateway lebt und Version passt
 	eVerbindung         : eEebusVerbindung;
 	uiHeartbeatAlterS   : UINT;                  // Sekunden seit letztem Heartbeat der Steuerbox, 65535 = nie
-	xLpcAktiv           : BOOL;                  // Use Case von der Brücke angeboten ...
+	xLpcAktiv           : BOOL;                  // Use Case vom Gateway angeboten ...
 	xLppAktiv           : BOOL;
 	xMpcAktiv           : BOOL;
 	xMgcpAktiv          : BOOL;
@@ -35,7 +35,7 @@ VAR_OUTPUT
 END_VAR
 VAR
 	wLebenszeichenAlt   : WORD;
-	tonBrueckeTimeout   : TON;
+	tonGatewayTimeout   : TON;
 	tonSekundentakt     : TON;
 	uiLebenszeichenSps  : UINT;
 	xVersionOk          : BOOL;
@@ -69,12 +69,12 @@ VAR CONSTANT
 
 	// Fehlernummern
 	udiFehlerKeine          : UDINT := 0;
-	udiFehlerBrueckeTimeout : UDINT := 1;   // Lebenszeichen der Brücke steht
-	udiFehlerVersion        : UDINT := 2;   // Registerlayout passt nicht (Brücke zu alt?)
+	udiFehlerGatewayTimeout : UDINT := 1;   // Lebenszeichen des Gateways steht
+	udiFehlerVersion        : UDINT := 2;   // Registerlayout passt nicht (Gateway zu alt?)
 END_VAR
 
 // ---------------------------------------------------------------------------
-// Register an die Brücke
+// Register an das Gateway
 // ---------------------------------------------------------------------------
 tonSekundentakt(IN := NOT tonSekundentakt.Q, PT := T#1S);
 IF tonSekundentakt.Q THEN
@@ -87,17 +87,17 @@ FuEebusSchreibeUdint(aRegister := aHoldingRegister, iIndex := iRegNennleistungEr
 aHoldingRegister[iRegAnlagenstatus] := TO_WORD(eStatus);
 
 // ---------------------------------------------------------------------------
-// Überwachung der Brücke
+// Überwachung des Gateways
 // ---------------------------------------------------------------------------
-tonBrueckeTimeout(IN := xFreigabe AND (aInputRegister[iRegLebenszeichen] = wLebenszeichenAlt),
-                  PT := tBrueckeTimeout);
+tonGatewayTimeout(IN := xFreigabe AND (aInputRegister[iRegLebenszeichen] = wLebenszeichenAlt),
+                  PT := tGatewayTimeout);
 wLebenszeichenAlt := aInputRegister[iRegLebenszeichen];
 
 xVersionOk := WORD_TO_UINT(aInputRegister[iRegVersion]) = uiSchnittstellenVersion
               AND WORD_TO_UINT(aInputRegister[iRegErweiterung]) >= uiErweiterungMindestens;
-xBrueckeOk := xFreigabe AND NOT tonBrueckeTimeout.Q AND xVersionOk;
+xGatewayOk := xFreigabe AND NOT tonGatewayTimeout.Q AND xVersionOk;
 
-IF xBrueckeOk THEN
+IF xGatewayOk THEN
 	CASE WORD_TO_UINT(aInputRegister[iRegVerbindung]) OF
 		0: eVerbindung := eEebusVerbindung.KeinPartner;
 		1: eVerbindung := eEebusVerbindung.Getrennt;
@@ -120,8 +120,8 @@ ELSE
 	xFehler                  := xFreigabe;
 	IF NOT xFreigabe THEN
 		udiFehlerId := udiFehlerKeine;
-	ELSIF tonBrueckeTimeout.Q THEN
-		udiFehlerId := udiFehlerBrueckeTimeout;
+	ELSIF tonGatewayTimeout.Q THEN
+		udiFehlerId := udiFehlerGatewayTimeout;
 	ELSE
 		udiFehlerId := udiFehlerVersion;
 	END_IF

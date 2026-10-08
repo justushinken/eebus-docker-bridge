@@ -9,12 +9,12 @@ import (
 	"github.com/enbility/spine-go/util"
 )
 
-// Messwerte der Bruecke lesen (MPC und MGCP).
+// Messwerte des Gateways lesen (MPC und MGCP).
 //
 // ma/mpc aus eebus-go akzeptiert nur bestimmte Geraete-Entitaeten (Waermepumpe,
 // Wallbox, Unterzaehler, ...), nicht die CEM-Entitaet eines Energiemanagers,
-// auf der die Bruecke MPC anbietet. Deshalb liest die Steuerbox die Messwerte
-// hier selbst: Entitaet aus der Use-Case-Liste der Bruecke suchen, Measurement
+// auf der das Gateway MPC anbietet. Deshalb liest die Steuerbox die Messwerte
+// hier selbst: Entitaet aus der Use-Case-Liste des Gateways suchen, Measurement
 // abonnieren und die Messwerte anzeigen.
 
 type MesswertDaten struct {
@@ -36,7 +36,7 @@ var scopes = []struct {
 	{model.ScopeTypeTypeGridConsumption, "Energie Bezug"},
 }
 
-// entitaetFuerUseCase sucht die Entitaet der Bruecke, auf der sie den Use Case
+// entitaetFuerUseCase sucht die Entitaet des Gateways, auf der es den Use Case
 // mit diesem Akteur anbietet.
 func (s *Steuerbox) entitaetFuerUseCase(akteur model.UseCaseActorType, name model.UseCaseNameType) spineapi.EntityRemoteInterface {
 	s.mu.Lock()
@@ -100,7 +100,7 @@ func (s *Steuerbox) PflegeMesswerte() {
 	}
 }
 
-// leseMesswerte liefert alle Messwerte einer Entitaet der Bruecke, nil = keine.
+// leseMesswerte liefert alle Messwerte einer Entitaet des Gateways, nil = keine.
 func (s *Steuerbox) leseMesswerte(entitaet spineapi.EntityRemoteInterface) []MesswertDaten {
 	if entitaet == nil {
 		return nil
@@ -130,7 +130,7 @@ func (s *Steuerbox) leseMesswerte(entitaet spineapi.EntityRemoteInterface) []Mes
 	return werte
 }
 
-// leseAnlagenstatus liefert den Betriebszustand der Bruecke (DeviceDiagnosis).
+// leseAnlagenstatus liefert den Betriebszustand des Gateways (DeviceDiagnosis).
 // eg/lpc abonniert die DeviceDiagnosis bereits, der Zustand wird einmal angefordert.
 func (s *Steuerbox) leseAnlagenstatus(entitaet spineapi.EntityRemoteInterface) string {
 	diagnose, err := client.NewDeviceDiagnosis(s.entitaet, entitaet)

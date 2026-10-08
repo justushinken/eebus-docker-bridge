@@ -131,18 +131,20 @@
 				<dt>Zustand</dt><dd id="kopplungZustand"></dd>
 			</dl>
 
-			<div class="abschnitt kopplung-aktion" style="margin-top:16px">
-				<h3>Suchmodus <span id="suchStatus"></span></h3>
-				<div class="knoepfe">
+			<p class="meldung" id="kopplungMeldung"></p>
+
+			<!-- Ausweg, wenn die Steuerbox nicht per mDNS sichtbar ist. Klappt von selbst auf, sobald gesucht wird oder eine Anfrage kommt. -->
+			<details class="ausklapp kopplung-aktion" id="suchBereich">
+				<summary>Steuerbox nicht in der Liste? Suchmodus <span id="suchStatus"></span></summary>
+				<p class="hinweis">Die Brücke wartet auf den Verbindungsversuch der Steuerbox, statt sie per mDNS zu suchen. Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht sofort abgewiesen, sondern hier zur Entscheidung angezeigt. Vorher muss der Messstellenbetreiber die Brücke in der Steuerbox eingetragen haben (SKI und SHIP-ID unten).</p>
+				<div class="knoepfe" style="margin-top:12px">
 					<button class="primaer" id="suchmodus" type="button">Steuerbox suchen</button>
 				</div>
-				<p class="hinweis">Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht sofort abgewiesen, sondern hier zur Entscheidung angezeigt. Vorher muss der Messstellenbetreiber die Brücke in der Steuerbox eingetragen haben (SKI und SHIP-ID unten).</p>
 				<table class="geraete" style="margin-top:12px" id="anfragenTabelle" hidden>
 					<thead><tr><th>Kopplungsanfrage</th><th>SHIP-ID</th><th>SKI</th><th></th></tr></thead>
 					<tbody id="anfragen"></tbody>
 				</table>
-				<p class="meldung" id="kopplungMeldung"></p>
-			</div>
+			</details>
 			<p class="hinweis" id="kopplungFest" hidden>Die Kopplung ist per Einstellung festgelegt und lässt sich hier nicht ändern (siehe Konfiguration).</p>
 		</section>
 
@@ -489,6 +491,7 @@ function zeige(s) {
 }
 
 const quellen = { env: "fest per EEBUS_REMOTE_SKI", ui: "SKI, im UI gekoppelt", pairing: "Pairing Service" };
+let suchteVorher = false, anfragenVorher = 0;
 
 function zeigeKopplung(s) {
 	const k = s.kopplung;
@@ -506,7 +509,12 @@ function zeigeKopplung(s) {
 	$("entkoppeln").hidden = !s.kopplungAenderbar || !k || k.quelle === "env";
 
 	const sucht = s.suchmodusRestS > 0;
-	marke($("suchStatus"), sucht ? `läuft, noch ${dauer(s.suchmodusRestS)}` : "aus", sucht ? "orange" : "");
+	// Nur beim Wechsel aufklappen, damit man den Bereich danach wieder zuklappen kann
+	if ((sucht && !suchteVorher) || s.anfragen.length > anfragenVorher) $("suchBereich").open = true;
+	suchteVorher = sucht;
+	anfragenVorher = s.anfragen.length;
+	if (sucht) marke($("suchStatus"), `läuft, noch ${dauer(s.suchmodusRestS)}`, "orange");
+	else $("suchStatus").replaceChildren();
 	$("suchmodus").textContent = sucht ? "Suchmodus beenden" : "Steuerbox suchen";
 	$("suchmodus").className = sucht ? "" : "primaer";
 	$("anfragenTabelle").hidden = !sucht;

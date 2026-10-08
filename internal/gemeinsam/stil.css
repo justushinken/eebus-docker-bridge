@@ -159,6 +159,11 @@ code { font-family: var(--mono); font-size: 12px; background: var(--grau-flaeche
 .zeichenerklaerung { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; font-size: 13px; color: var(--text-leise); }
 .zeichenerklaerung strong { margin-right: 6px; color: var(--text); }
 .zeichenerklaerung .marke { margin-right: 6px; }
+.ausklapp { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--rand); }
+.ausklapp > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.ausklapp > summary::-webkit-details-marker { display: none; }
+.ausklapp > summary::before { content: "▸"; color: var(--text-leise); }
+.ausklapp[open] > summary::before { content: "▾"; }
 
 /* Formulare (Test-Steuerbox) */
 .felder { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 12px; }

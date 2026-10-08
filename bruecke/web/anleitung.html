@@ -182,13 +182,13 @@
 		</ol>
 		<p class="hinweis">Das <strong>Secret</strong> ist wie ein Schlüssel: Wer es kennt, kann eine Steuerbox koppeln. Nur an den Messstellenbetreiber geben. Wird die Steuerbox später getauscht, koppelt sich die neue nach 15 Minuten automatisch, wenn sie das Secret kennt.</p>
 
-		<h3 style="margin-top:20px">B · SKI-Verfahren mit Suchmodus</h3>
+		<h3 style="margin-top:20px">B · SKI-Verfahren</h3>
 		<ol>
 			<li><strong>SKI und SHIP-ID</strong> der Brücke (Statusseite, „Kopplung“) an den Messstellenbetreiber geben. Er trägt sie in der Steuerbox ein.</li>
-			<li>Auf der Statusseite <strong>„Steuerbox suchen“</strong> drücken. Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht abgewiesen, sondern als <strong>Kopplungsanfrage</strong> angezeigt.</li>
-			<li>Sobald die Steuerbox sich meldet, die Anfrage prüfen (SKI, Marke, Modell) und <strong>„Annehmen“</strong>. Die Brücke merkt sich die Steuerbox dauerhaft.</li>
+			<li>In der Liste „Per mDNS gefundene EEBUS-Geräte“ bei der Steuerbox <strong>„Vertrauen“</strong> wählen. Die Brücke merkt sich die Steuerbox dauerhaft.</li>
+			<li>Die Verbindung kommt von selbst, sobald beide Seiten eingetragen sind. Die Reihenfolge von Schritt 1 und 2 ist egal. Bis dahin steht bei dem Gerät „vertraut – wartet auf Steuerbox“, danach „verbunden“.</li>
 		</ol>
-		<p>Alternativ ohne Anfrage: In der Liste „Per mDNS gefundene EEBUS-Geräte“ bei der Steuerbox <strong>„Vertrauen“</strong> wählen. Die Brücke verbindet sich dann selbst, sobald auch die Steuerbox ihr vertraut. Bis dahin steht bei dem Gerät „vertraut – wartet auf Steuerbox“, danach „verbunden“.</p>
+		<p><strong>Steuerbox nicht in der Liste?</strong> Dann den Suchmodus darunter aufklappen und <strong>„Steuerbox suchen“</strong> drücken. Für 10 Minuten werden Verbindungsversuche unbekannter Geräte nicht abgewiesen, sondern als <strong>Kopplungsanfrage</strong> angezeigt. Meldet sich die Steuerbox, die Anfrage prüfen (SKI, Marke, Modell) und <strong>„Annehmen“</strong>. Das klappt auch, wenn die Brücke die Steuerbox per mDNS nicht sieht, die Steuerbox die Brücke aber erreicht.</p>
 		<p class="hinweis">Ohne Suchmodus lehnt die Brücke unbekannte Geräte ab und meldet das einmal unter „Ereignisse“. Taucht dort eine Steuerbox auf, hat der Messstellenbetreiber die Brücke schon eingetragen, es fehlt nur noch die Brückenseite. Eine automatische Annahme gibt es bewusst nicht: Sonst könnte jedes Gerät im Netz Grenzen setzen.</p>
 
 		<h3 style="margin-top:20px">C · SKI fest per Einstellung</h3>

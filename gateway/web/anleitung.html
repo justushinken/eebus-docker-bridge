@@ -236,8 +236,9 @@
 		<h2>Swistec SwisBox</h2>
 		<ul>
 			<li><strong>Anschluss:</strong> EEBUS über die Buchse <strong>ETH1</strong>, z. B. direkt an X2 des PFC (siehe „Direktes Kabel an X2“).</li>
-			<li><strong>Kopplung:</strong> derzeit nur per <strong>SKI</strong> (Verfahren B oder C), kein Pairing Service. Der Messstellenbetreiber trägt den SKI des Gateways ein.</li>
-			<li><strong>Port:</strong> Die Box wählt ihren SHIP-Port bei jedem Neustart neu und kündigt ihn per mDNS an. Das Gateway findet ihn selbst.</li>
+			<li><strong>Kopplung:</strong> nur per <strong>SKI</strong> (Verfahren B oder C), kein Pairing Service. Der Messstellenbetreiber trägt den SKI des Gateways ein.</li>
+			<li><strong>Verbindung:</strong> Die Box verbindet sich <strong>nur selbst</strong> zum Gateway. Ihr eigener Port lehnt ab, „Port geschlossen (TCP-RST)“ unter „Verbindungsversuche“ ist bei ihr also normal. Dafür muss das Gateway ihr eine erreichbare Adresse ankündigen: an X2 <code>EEBUS_SCHNITTSTELLEN=br1</code> setzen.</li>
+			<li><strong>Use Cases:</strong> Die Box meldet LPC und LPP (1.0.0), keine Messwerte (MPC, MGCP). Hersteller und Modell meldet sie über EEBUS nicht, nur per mDNS.</li>
 		</ul>
 	</section>
 
@@ -273,6 +274,7 @@
 				<tr><td>Steuerbox „Kein Partner“</td><td>Noch keine Kopplung eingerichtet, siehe oben.</td></tr>
 				<tr><td>Steuerbox bleibt „Getrennt“</td><td>Steuerbox nicht im selben Netzsegment oder Subnetz wie der PFC, oder die PFC-Firewall sperrt TCP 4712 bzw. UDP 5353. Siehe „Netzwerk“ oben. Den Grund zeigt der Reiter „Diagnose“ unter „Verbindungsversuche“.</td></tr>
 				<tr><td>„Port geschlossen (TCP-RST)“</td><td>Die Steuerbox ist erreichbar, nimmt auf ihrem per mDNS angekündigten Port aber keine Verbindung an. Liegt an der Steuerbox: EEBUS-Dienst aus oder nicht freigeschaltet. Beim Messstellenbetreiber nachfragen.</td></tr>
+				<tr><td>„keine eigene Adresse in diesem Netz“</td><td>Der PFC hat keine Adresse im Netz der Steuerbox. Im WBM die IP von X2 (br1) eintragen, z. B. 192.168.1.74/24 ohne Gateway.</td></tr>
 				<tr><td>„keine Antwort“ oder „nicht erreichbar“</td><td>Das Gateway erreicht die Adresse der Steuerbox nicht: anderes Subnetz, Kabel oder Firewall. Bei getrenntem X2 <code>EEBUS_SCHNITTSTELLEN</code> prüfen.</td></tr>
 				<tr><td>„TLS fehlgeschlagen“</td><td>Eine Seite vertraut dem Zertifikat der anderen nicht, meist ein falscher SKI. „EOF“ von einem Laptop ist nur eine Portprüfung.</td></tr>
 				<tr><td>„von Gegenseite abgelehnt“</td><td>Beim SKI-Verfahren ist auf einer Seite ein falscher SKI eingetragen.</td></tr>

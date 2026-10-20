@@ -43,7 +43,7 @@ func TestKlassifiziere(t *testing.T) {
 		"dial tcp 192.168.1.100:51555: connect: connection refused": ErgebnisPortZu,
 		"dial tcp 192.168.1.100:51555: i/o timeout":                 ErgebnisKeineAntwort,
 		"dial tcp 192.168.1.100:51555: connect: no route to host":   ErgebnisUnerreichbar,
-		"dial tcp 10.0.0.1:4712: connect: network is unreachable":   ErgebnisUnerreichbar,
+		"dial tcp 10.0.0.1:4712: connect: network is unreachable":   ErgebnisKeinNetz,
 		"remote error: tls: bad certificate":                        ErgebnisTls,
 		"certificate validation failed for d4e4: SKI mismatch":      ErgebnisTls,
 		"EOF":                      ErgebnisTls,

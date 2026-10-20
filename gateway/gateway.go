@@ -247,9 +247,11 @@ func (b *Gateway) begrenzungsEreignis(r *Begrenzung, art ereignisArt) {
 			return
 		}
 		b.mu.Lock()
-		r.uebernehmeGrenze(grenze, jetzt)
+		geaendert := r.uebernehmeGrenze(grenze, jetzt)
 		b.mu.Unlock()
-		log.Printf("Neue %s: aktiv=%v, %.0f W, Dauer %v", r.text, grenze.IsActive, grenze.Value, grenze.Duration)
+		if geaendert {
+			log.Printf("Neue %s: aktiv=%v, %.0f W, Dauer %v", r.text, grenze.IsActive, grenze.Value, grenze.Duration)
+		}
 
 	case artHeartbeat:
 		b.mu.Lock()

@@ -447,19 +447,23 @@ const versuchTexte = {
 	portZu: ["Port geschlossen (TCP-RST)", "rot"],
 	keineAntwort: ["keine Antwort", "rot"],
 	unerreichbar: ["nicht erreichbar", "rot"],
+	keinNetz: ["keine eigene Adresse in diesem Netz", "rot"],
 	tls: ["TLS fehlgeschlagen", "rot"],
 	fehler: ["fehlgeschlagen", "rot"],
 };
 const versuchHinweise = {
 	portZu: "Die Steuerbox ist im Netz erreichbar, nimmt auf dem per mDNS angekündigten SHIP-Port aber keine Verbindung an. Das liegt an der Steuerbox (EEBUS-Dienst aus oder nicht freigeschaltet).",
 	keineAntwort: "Keine Antwort von der Adresse: anderes Netz, Firewall oder Kabel. Prüfen, ob Gateway und Steuerbox im selben Subnetz sind (EEBUS_SCHNITTSTELLEN).",
-	unerreichbar: "Kein Weg zur Adresse: Die Steuerbox antwortet nicht auf ARP oder liegt in einem Netz ohne Route.",
+	unerreichbar: "Die Steuerbox antwortet nicht auf ARP: ausgeschaltet, Kabel oder falsche Adresse.",
+	keinNetz: "Der PFC hat keine Adresse im Netz der Steuerbox. Im WBM die IP der Schnittstelle prüfen, z. B. X2 (br1) 192.168.1.74/24.",
 	tls: "TLS scheitert: Meist vertraut eine Seite dem Zertifikat (SKI) der anderen nicht. „EOF“ von einer fremden Adresse ist meist nur eine Portprüfung.",
 	fehler: "Die Verbindung ist gescheitert, Einzelheiten in der Meldung darunter.",
 };
 
-function versuchText(v) {
-	const [text, farbe] = versuchTexte[v.ergebnis] || [v.ergebnis, ""];
+// Steht die Verbindung, sind Fehler der anderen Richtung ohne Bedeutung: grau
+function versuchText(v, verbunden) {
+	let [text, farbe] = versuchTexte[v.ergebnis] || [v.ergebnis, ""];
+	if (verbunden && farbe === "rot") farbe = "";
 	const span = document.createElement("span");
 	span.className = "marke " + farbe;
 	span.textContent = text;
@@ -473,12 +477,16 @@ function versuchText(v) {
 
 function zeigeVersuche(s) {
 	const leer = (id, text) => { const p = document.createElement("span"); p.className = "leise"; p.textContent = text; $(id).replaceChildren(p); };
-	if (s.ausgehend) $("vAusgehend").replaceChildren(...versuchText(s.ausgehend));
+	const verbunden = s.verbindung === 2;
+	if (s.ausgehend) $("vAusgehend").replaceChildren(...versuchText(s.ausgehend, verbunden));
 	else leer("vAusgehend", s.kopplung ? "Noch kein Versuch: Steuerbox per mDNS nicht gefunden" : "Keine Steuerbox gekoppelt");
-	if (s.eingehend) $("vEingehend").replaceChildren(...versuchText(s.eingehend));
+	if (s.eingehend) $("vEingehend").replaceChildren(...versuchText(s.eingehend, verbunden));
 	else leer("vEingehend", "Noch kein Versuch seit dem Start");
-	const fehler = s.verbindung !== 2 && [s.ausgehend, s.eingehend].find(v => v && versuchHinweise[v.ergebnis]);
-	$("vHinweis").textContent = fehler ? versuchHinweise[fehler.ergebnis]
+	const fehler = [s.ausgehend, s.eingehend].find(v => v && versuchHinweise[v.ergebnis]);
+	$("vHinweis").textContent = verbunden
+		? (fehler ? "Verbunden, ältere Fehlversuche sind damit ohne Bedeutung. Es genügt, wenn eine Seite die Verbindung aufbaut: Die Swistec SwisBox z. B. verbindet sich nur selbst zum Gateway, ihr eigener Port lehnt ab."
+			: "Verbunden. Zeigt, was unterhalb von SHIP passiert: TCP-Verbindung und TLS-Handshake in beide Richtungen.")
+		: fehler ? versuchHinweise[fehler.ergebnis]
 		: "Zeigt, was unterhalb von SHIP passiert: TCP-Verbindung und TLS-Handshake in beide Richtungen.";
 }
 

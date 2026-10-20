@@ -2,38 +2,31 @@
 
 Docker-Container, betrieben auf dem WAGO PFC200: tritt als EEBUS „Controllable System“ gegenüber der Steuerbox des Messstellenbetreibers auf und bildet die Use Cases des VDE FNN Hinweises „Schnittstellen der Steuerungseinrichtung“ ab: LPC (Bezug begrenzen, §14a EnWG), LPP (Einspeisung begrenzen, §9 EEG), MPC (Messwerte Anlage), MGCP (Messwerte Netzanschlusspunkt). Austausch mit der CODESYS-Applikation per Modbus TCP (127.0.0.1:5502). Hieß bis 08.10.2026 „EEBUS-Brücke“ (Ordner `bruecke/`, Container `eebus-bruecke`).
 
-Doku für Anwender: `README.md` (Schnellstart, kurz halten), `docs/betrieb.md` (Installation, Variablen, UI), `docs/kopplung.md` (Kopplung, SHIP-ID, Netzwerk, PROLAN), `codesys/README.md` (Registerlayout, Bausteine), `testwerkzeuge/README.md` (Test-Steuerbox, Simulator, Testumgebung), `docs/entwicklung.md` (Repo-Aufbau, Workarounds, offene Punkte). Diese Datei ist für die Weiterarbeit.
+Doku für Anwender: `README.md` (Schnellstart, kurz halten), `docs/betrieb.md` (Installation, Variablen, UI), `docs/kopplung.md` (Kopplung, SHIP-ID, Netzwerk, Fehlersuche, Swistec, PROLAN), `codesys/README.md` (Registerlayout, Bausteine), `testwerkzeuge/README.md` (Test-Steuerbox, Simulator, Testumgebung), `docs/entwicklung.md` (Repo-Aufbau, Workarounds, offene Punkte). Diese Datei ist für die Weiterarbeit.
 
-## Stand (Oktober 2026)
+## Stand: Version 1.0 (20.10.2026)
 
-- **Branch `dev`** (früher `ship-pairing`, noch nicht nach `main` übernommen):
-  - SHIP Pairing Service, Anleitungsseiten, gespeicherte Failsafe-Werte, SHIP-ID aus der MAC.
-  - **Neu:** alle vier FNN-Use-Cases (per `EEBUS_USECASES` wählbar, Vorgabe `lpc`), Suchmodus und Kopplung vom Gateway aus, Diagnose der Gegenstelle, Anlagenstatus und Revisionen, Freigabe nur bei erreichbarer SPS, Modbus-Erweiterung 2, neue CODESYS-Bausteine.
-  - Umbenennung Brücke → EEBUS-Gateway, README aufgeteilt, Compose getrennt (08.10.2026).
-  - Nach der ersten Inbetriebnahme (20.10.2026): `EEBUS_SCHNITTSTELLEN` (mDNS nur auf z. B. `br1`), Startmeldung zu Avahi/Zeroconf, Karte „Verbindungsversuche“ (liest ship-go-Log mit), `.local`-Lookup-Fehler unterdrückt. Lokal getestet, nicht auf dem PFC.
-  - `main` = Stand 0.3 (nur SKI-Verfahren, eebus-go v0.7.0).
-- **Lokal mit der Test-Steuerbox getestet** (alle Szenarien der Steuerbox-Anleitung, Stand 03.10.2026), **noch keine Verbindung mit einer echten Steuerbox**.
+- **`main` = 1.0** (Tag `v1.0`), `dev` ist darin aufgegangen. Enthält: SHIP Pairing Service, alle vier FNN-Use-Cases (`EEBUS_USECASES`, Vorgabe `lpc`), Suchmodus und Kopplung im UI, Diagnose der Gegenstelle, Anlagenstatus, Freigabe nur bei erreichbarer SPS, Modbus-Erweiterung 2, `EEBUS_SCHNITTSTELLEN`, Karte „Verbindungsversuche“.
+- **Im Betrieb mit der Swistec SwisBox** seit 20.10.2026 auf dem PFC (Gateway 0.6, danach 1.0): Kopplung per SKI, Grenze 11 000 W, Heartbeat. Erkenntnisse in docs/kopplung.md, „Swistec SwisBox“. Kurz: Box ist reiner Client (eigener Port RST), Ursache der anfänglichen Funkstille war die mDNS-Ankündigung (X1-Adresse vorn, dann br1 ohne IP). Box meldet LPC+LPP 1.0.0, keine Messwerte, keine Herstellerdaten über SPINE, schreibt die Grenze nach dem Verbinden 10× in 12 s.
+- **PFC-Konfiguration** (laut Anleitung vom 20.10.2026 umgezogen auf Container `eebus-gateway`, Daten `/home/eebus-gateway`): `GERAET_MARKE=ecg`, `SHIP_ID=ecg-PFC200-LPC-Bruecke-0030DE683ADC` (bleibt so, steht beim MSB), `EEBUS_USECASES=lpc`, `EEBUS_REMOTE_SKI=d4e4c4aeb6082d84bc5b09ecd679e0edd6241a5c` (SwisBox, SHIP-ID `GSWIC026090004`), `EEBUS_SCHNITTSTELLEN=br1`, `NENNLEISTUNG_MAX_W=11000`, `FAILSAFE_GRENZE_W=11000`, `FAILSAFE_MINDESTDAUER=2h`. Im UI gesetzt (einstellungen.json): `EEBUS_PAIRING_SERVICE=aus`, `EEBUS_DEBUG` (für den Betrieb aus). SKI des Gateways `d3b6409e4b5f…`. Netz: X1 = br0 192.168.111.74, X2 = br1 192.168.1.74/24 direkt an ETH1 der Box (192.168.1.100). Kein avahi-daemon auf dem PFC, der D-Bus-Mount ist überflüssig. Die SPS meldet die Nennleistung mit 22 000 W.
 - **CODESYS-Bausteine** der Erweiterung 2 sind ohne CODESYS geschrieben, nicht kompiliert.
-- **Auf dem PFC läuft 0.5** (Stand 20.10.2026) noch unter altem Namen: Container `eebus-bruecke`, `/home/eebus-bruecke`, `--network host`, `-v /var/run/dbus:/var/run/dbus`. Env: `GERAET_MARKE=ecg`, `SHIP_ID=ecg-PFC200-LPC-Bruecke-0030DE683ADC` (bleibt so, steht beim MSB), `EEBUS_USECASES=lpc`, `EEBUS_PAIRING_SERVICE=aus`, `EEBUS_REMOTE_SKI=d4e4c4aeb6082d84bc5b09ecd679e0edd6241a5c`, `NENNLEISTUNG_MAX_W=11000`, `FAILSAFE_GRENZE_W=11000`, `FAILSAFE_MINDESTDAUER=2h`, `EEBUS_DEBUG=an`. SKI des Gateways `d3b6409e4b5f…`, Port 4712. Als nächstes 0.6 mit `EEBUS_SCHNITTSTELLEN=br1`.
-- **Erste echte Steuerbox: Swistec SwisBox** (nicht PROLAN), SHIP-ID `GSWIC026090004`, EEBUS an ETH1 mit 192.168.1.100/24, nur SKI-Verfahren, SHIP-Port dynamisch. Netz zum Test X1+X2 gebrückt (br0 = 192.168.1.74/24), Ziel X2 getrennt (br1). **Box nimmt keine Verbindung an** (TCP-RST auf ihrem angekündigten Port, verbindet sich selbst nie), Anfrage an MSB/Swistec läuft. Details in docs/kopplung.md, „Swistec SwisBox“. PROLAN STB-142E bleibt dokumentiert (Abschnitt „PROLAN-Steuerbox“).
+- PROLAN STB-142E bleibt dokumentiert (docs/kopplung.md), noch nicht getestet.
 
 ## Nächste Schritte / offen
 
-1. Antwort von MSB/Swistec zur SwisBox abwarten (docs/kopplung.md, „Swistec SwisBox“): Konfiguration mit `ski1` aktiv, EEBUS auf ETH1 frei, Client/Server-Rolle, warum Port geschlossen, Log der Box.
-2. 0.6 bauen, auf dem PFC als `eebus-gateway` umziehen (docs/betrieb.md, „Umstieg“, dabei `SHIP_ID` und `EEBUS_REMOTE_SKI` übernehmen), X2 wieder trennen und `EEBUS_SCHNITTSTELLEN=br1` setzen. Prüfen: Startmeldungen „mDNS nur auf br1“ und Avahi-Grund, `tcpdump -ni br1 udp port 5353` zeigt nur 192.168.1.74, Karte „Verbindungsversuche“. CODESYS-Bausteine übernehmen und kompilieren.
+1. Mit der SwisBox noch nicht erprobt: Grenzwechsel und Ablauf, Failsafe bei Verbindungsverlust, ob die Box Failsafe-Werte schreibt (`failsafe.json` vorhanden?), Verhalten nach Neustart des Gateways (schreibt die Box die Grenze neu? Laut Beobachtung ja, direkt nach dem Verbinden). LPP meldet die Box, wird aber nicht genutzt.
+2. CODESYS-Bausteine übernehmen und kompilieren. Nennleistung der SPS (22 000 W) mit der Anlage abgleichen.
 3. Netzwerk: IPv6-Link-Local ohne IPv4 an X2 noch ungetestet.
-4. Beim ersten Kontakt mit einer echten Steuerbox: Karte „Steuerbox: gemeldete Daten“ auswerten (Use-Case-Versionen, Entitäten), ggf. `EEBUS_DEBUG=an`. Prüfen, ob sie MPC auf der CEM-Entität liest, sonst `MPC_ENTITAET=submeter`.
-5. Vor Übergabe: `GERAET_MARKE` auf Firmenkürzel, SHIP-ID mit `SHIP_ID=…` festschreiben (docs/kopplung.md, „Vor der Übergabe“).
-6. Zustandsautomat (`gateway/begrenzung.go`, `takt`) gegen die Spezifikationen LPC/LPP und FNN-Lastenheft 1.4 prüfen. Konkret: Ohne Steuerbox geht Failsafe nach der Mindestdauer in „Unbegrenzt/autonom“ (Anlage frei). Ist das FNN-konform, oder muss die Failsafe-Grenze bleiben? (Vom Nutzer am 04.10.2026 für später vorgemerkt.) Update-Rate der Messwerte klären (sendet bei jeder Änderung).
-7. **Neustart/Stromausfall während einer Begrenzung:** Die aktive Grenze geht verloren (Init → Failsafe-Grenze, nach Heartbeat Unbegrenzt). Die Test-Steuerbox schreibt sie nicht neu (getestet 04.10.2026). Klären: Schreibt eine echte Steuerbox nach dem Wiederverbinden erneut? Sonst Grenze mit Ablaufzeit in einer Datei sichern und im Init wieder einsetzen (Uhr des PFC beachten).
-8. Fehler upstream melden: spine-go `ApproveOrDenyWrite` (third_party/spine-go/PATCH.md, Issue-Text vorbereitet 04.10.2026), eebus-go `gcp/mgcp` Akteur, `cs/lpc`/`cs/lpp` `Set*NominalMax` mit festen IDs 0/0.
-9. `dev` nach `main` übernehmen, wenn der PFC-Test passt.
+4. Vor Übergabe weiterer Anlagen: `GERAET_MARKE` auf Firmenkürzel, SHIP-ID mit `SHIP_ID=…` festschreiben (docs/kopplung.md, „Vor der Übergabe“).
+5. Zustandsautomat (`gateway/begrenzung.go`, `takt`) gegen die Spezifikationen LPC/LPP und FNN-Lastenheft 1.4 prüfen. Konkret: Ohne Steuerbox geht Failsafe nach der Mindestdauer in „Unbegrenzt/autonom“ (Anlage frei). Ist das FNN-konform, oder muss die Failsafe-Grenze bleiben? (Vom Nutzer am 04.10.2026 für später vorgemerkt.) Update-Rate der Messwerte klären (sendet bei jeder Änderung).
+6. **Neustart/Stromausfall während einer Begrenzung:** Die aktive Grenze geht verloren (Init → Failsafe-Grenze, nach Heartbeat Unbegrenzt). Die Test-Steuerbox schreibt sie nicht neu, die SwisBox schreibt sie direkt nach dem Verbinden (20.10.2026). Bei anderen Boxen prüfen, sonst Grenze mit Ablaufzeit sichern.
+7. Fehler upstream melden: spine-go `ApproveOrDenyWrite` (third_party/spine-go/PATCH.md, Issue-Text vorbereitet 04.10.2026), eebus-go `gcp/mgcp` Akteur, `cs/lpc`/`cs/lpp` `Set*NominalMax` mit festen IDs 0/0, enbility/zeroconf kündigt alle Adressen auf jeder Schnittstelle an.
 
 ## Umgebung und Werkzeuge
 
-- **PFC200:** IP 192.168.111.74 (X1), SSH als `root`, Datenverzeichnis bisher `/home/eebus-bruecke`, ab 0.5 `/home/eebus-gateway` (keine SD-Karte), Hostname `PFC200V3-683ADC`. Docker läuft. CODESYS: ModbusTCP Master mit Auto-Reconnect (war anfangs aus, Ursache für „SPS ausgefallen“).
+- **PFC200:** IP 192.168.111.74 (X1), SSH als `root` (nur mit Passwort, Claude kommt nicht selbst drauf, liest aber das UI über HTTP), Datenverzeichnis `/home/eebus-gateway` (keine SD-Karte), Hostname `PFC200V3-683ADC`. Docker läuft. CODESYS: ModbusTCP Master mit Auto-Reconnect (war anfangs aus, Ursache für „SPS ausgefallen“).
 - **Entwicklungsrechner:** Windows, **kein Go installiert**, alles läuft in Docker Desktop (20.10, Compose v2.10). Bash-Befehle in Git Bash. Bei `docker run -v` mit Windows-Pfaden `MSYS_NO_PATHCONV=1` voranstellen.
-- **Laufwerk C: ist knapp** (war einmal ganz voll, Docker lief dann nur noch lesend, zuletzt 1,1 GB frei). Docker-Festplatte liegt auf C:. Vor großen Builds `docker system df` prüfen, alter Build-Cache: `docker builder prune -f --filter until=168h`. Für Go-Befehle `golang:1.24-alpine` statt des großen Images nehmen, Modul-Cache im Volume `eebus-gomod`.
+- **Laufwerk C:** war einmal ganz voll (Docker lief dann nur noch lesend), am 20.10.2026 88 GB frei. Docker-Festplatte liegt auf C:. Vor großen Builds `docker system df` prüfen, alter Build-Cache: `docker builder prune -f --filter until=168h`. Für Go-Befehle `golang:1.24-alpine` statt des großen Images nehmen, Modul-Cache im Volume `eebus-gomod`.
 - Downloads beim Docker-Build brechen gelegentlich ab (`tls: bad record MAC`, TLS-Timeouts): vorübergehend, Build wiederholen. Zuerst nur `docker compose -f testwerkzeuge/docker-compose.yml build gateway`, die anderen nutzen dann die Modul-Schicht mit.
 - Im LAN läuft eine fremde „EnbilityNet Devices-App“ (SKI c1fded…), die per mDNS auftaucht und sich verbinden will. Callbacks müssen deshalb prüfen, ob ein Ereignis den eigenen Partner betrifft (`gemeinsam.GleicheIdentitaet`).
 - **Repo:** GitHub `justushinken/eebus-docker-bridge`, wird vom Nutzer in `eebus-gateway` umbenannt (danach `git remote set-url`). Der lokale Ordner heißt weiter `eebus-docker-bridge`.
@@ -52,7 +45,7 @@ docker compose -f testwerkzeuge/docker-compose.yml down -v   # inkl. Volumes (Ze
 # docker-compose.yml in der Wurzel ist nur die Betriebsvorlage (Host-Netz, läuft nicht auf Docker Desktop)
 
 # PFC-Images (ARMv7) nach dist/, Version landet als Software-Revision im Gateway
-sh skripte/pfc-images-bauen.sh 0.5
+sh skripte/pfc-images-bauen.sh 1.0
 ```
 
 Testen ohne Browser über die APIs, z. B.:
@@ -108,7 +101,7 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 - Werte aus dem LAN (mDNS-Gerätenamen, Daten der Steuerbox) im UI nur per `textContent`, nie `innerHTML`.
 - **Genau eine Steuerbox:** `EEBUS_REMOTE_SKI` schaltet Pairing Service und UI-Kopplung ab, sonst ersetzt jede neue Kopplung die alte. Deshalb müssen LPC/LPP-Ereignisse nicht nach Absender gefiltert werden.
 - Gateway-UI ändert nur **Kopplung, Suchmodus und Einstellungen samt Neustart** (Entscheidungen des Nutzers 10/2026), alles abschaltbar mit `WEB_AENDERUNGEN=aus`. Basic Auth (`WEB_PASSWORT` Pflicht, sonst UI aus), Aktionen nur mit JSON-Content-Type. Kein `SetAutoAccept`.
-- Commits mit `Co-Authored-By`-Zeile. Gearbeitet wird auf `dev`.
+- Commits mit `Co-Authored-By`-Zeile. Gearbeitet wird auf `dev`, Versionen kommen nach `main` mit Tag `vX.Y`.
 
 ## eebus-go: wichtige Details
 

@@ -17,10 +17,10 @@ type GefundenesGeraet struct {
 }
 
 // IstSteuerbox: Steuerboxen melden sich als "Grid Connection Hub" bzw. mit
-// dem Geraetetyp ElectricitySupplySystem.
+// dem Geraetetyp ElectricitySupplySystem oder ControlBox (Swistec SwisBox).
 func IstSteuerbox(d shipapi.RemoteMdnsService) bool {
 	return slices.Contains(d.Categories, shipapi.DeviceCategoryTypeGridConnectionHub) ||
-		d.Type == "ElectricitySupplySystem"
+		d.Type == "ElectricitySupplySystem" || d.Type == "ControlBox"
 }
 
 // GefundeneGeraete liefert die Liste fuer das UI, Steuerboxen zuerst.

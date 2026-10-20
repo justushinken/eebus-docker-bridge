@@ -32,6 +32,8 @@ func meldeSchnittstellen(namen []string) {
 		}
 		return
 	}
+	// Aendert sich spaeter eine vorhandene Adresse, bleibt die alte in der
+	// Ankuendigung (Zeroconf liest sie nur beim Start): dann neu starten.
 	for _, name := range namen {
 		s, err := net.InterfaceByName(name)
 		if err != nil {
@@ -49,7 +51,8 @@ func meldeSchnittstellen(namen []string) {
 		case s.Flags&net.FlagUp == 0:
 			log.Printf("mDNS auf %s: Schnittstelle ist aus, mDNS wartet", name)
 		case len(adressen) == 0:
-			log.Printf("mDNS auf %s: keine IP-Adresse", name)
+			// ship-go prueft alle 15 s und kuendigt an, sobald eine Adresse da ist
+			log.Printf("mDNS auf %s: noch keine IP-Adresse, mDNS wartet", name)
 		default:
 			log.Printf("mDNS nur auf %s (%s)", name, strings.Join(adressen, ", "))
 		}

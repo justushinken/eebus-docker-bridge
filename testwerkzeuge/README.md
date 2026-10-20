@@ -86,7 +86,7 @@ Für Tests mit der echten CODESYS-Applikation läuft die Test-Steuerbox als zwei
 
 ```sh
 mkdir -p /home/eebus-steuerbox
-docker load -i /home/eebus-steuerbox/eebus-steuerbox-0.5.tar.gz
+docker load -i /home/eebus-steuerbox/eebus-steuerbox-1.0.tar.gz
 docker run -d --name eebus-steuerbox \
   --network host \
   --memory 64m \

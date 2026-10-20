@@ -9,14 +9,15 @@ Die Versionsnummer gibt es nur beim Bauen: Sie ist das Argument des Skripts, ste
 Auf dem Entwicklungsrechner (Docker Desktop) aus dem Repo-Wurzelverzeichnis, in **Git Bash**:
 
 ```sh
-sh skripte/pfc-images-bauen.sh 0.5
-scp dist/eebus-gateway-0.5.tar.gz root@<pfc-ip>:/home/eebus-gateway/
+sh skripte/pfc-images-bauen.sh 1.0
+ssh root@<pfc-ip> mkdir -p /home/eebus-gateway
+scp dist/eebus-gateway-1.0.tar.gz root@<pfc-ip>:/home/eebus-gateway/
 ```
 
 In PowerShell gibt es kein `sh`, dort das von Git mitgelieferte aufrufen:
 
 ```powershell
-& "C:\Program Files\Git\bin\sh.exe" skripte/pfc-images-bauen.sh 0.5
+& "C:\Program Files\Git\bin\sh.exe" skripte/pfc-images-bauen.sh 1.0
 ```
 
 Das Skript baut Gateway und Test-Steuerbox für ARMv7 und legt beide als `.tar.gz` unter `dist/` ab. `scp` aus Git Bash, nicht aus PowerShell. Als `admin` statt `root` erst nach `/tmp` kopieren und auf dem PFC mit `sudo` verschieben.
@@ -24,8 +25,7 @@ Das Skript baut Gateway und Test-Steuerbox für ARMv7 und legt beide als `.tar.g
 Auf dem PFC200 (als root):
 
 ```sh
-mkdir -p /home/eebus-gateway
-docker load -i /home/eebus-gateway/eebus-gateway-0.5.tar.gz
+docker load -i /home/eebus-gateway/eebus-gateway-1.0.tar.gz
 
 docker rm -f eebus-gateway    # falls eine ältere Version läuft
 docker run -d --name eebus-gateway \
@@ -54,7 +54,7 @@ Platzhalter in spitzen Klammern samt Klammern ersetzen, die Shell liest `<` sons
 
 Auf anderen Linux-Rechnern mit Compose gilt dasselbe über die Vorlage [docker-compose.yml](../docker-compose.yml). Docker Desktop (Windows/Mac) eignet sich nicht für den Betrieb, weil `--network host` und damit mDNS dort nicht funktionieren.
 
-**Update und Rollback:** Das Archiv enthält das Image unter zwei Namen, `eebus-gateway:0.5` und `eebus-gateway:latest`. `docker load` setzt `latest` also auf die zuletzt geladene Version. Ein laufender Container wechselt dadurch nicht von selbst: Für ein Update `docker rm -f eebus-gateway` und denselben `docker run` erneut ausführen. Welche Version läuft, zeigt die Fußzeile des UI. Zurück auf eine ältere Version: im `docker run` statt `latest` die Nummer angeben, z. B. `eebus-gateway:0.4` (muss geladen sein, `docker images eebus-gateway`).
+**Update und Rollback:** Das Archiv enthält das Image unter zwei Namen, `eebus-gateway:1.0` und `eebus-gateway:latest`. `docker load` setzt `latest` also auf die zuletzt geladene Version. Ein laufender Container wechselt dadurch nicht von selbst: Für ein Update `docker rm -f eebus-gateway` und denselben `docker run` erneut ausführen. Welche Version läuft, zeigt die Fußzeile des UI. Zurück auf eine ältere Version: im `docker run` statt `latest` die Nummer angeben, z. B. `eebus-gateway:0.6` (muss geladen sein, `docker images eebus-gateway`).
 
 **Umstieg von der „EEBUS-Brücke“** (Versionen bis 0.4, Container `eebus-bruecke`):
 

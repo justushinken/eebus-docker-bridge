@@ -35,7 +35,8 @@ const (
 	ErgebnisTlsOk        Ergebnis = "tlsOk"        // eingehend: TLS fertig, SKI bekannt
 	ErgebnisPortZu       Ergebnis = "portZu"       // TCP-RST: Geraet erreichbar, Port geschlossen
 	ErgebnisKeineAntwort Ergebnis = "keineAntwort" // Zeitueberschreitung
-	ErgebnisUnerreichbar Ergebnis = "unerreichbar" // keine Route bzw. keine ARP-Antwort
+	ErgebnisUnerreichbar Ergebnis = "unerreichbar" // keine ARP-Antwort
+	ErgebnisKeinNetz     Ergebnis = "keinNetz"     // keine eigene Adresse im Netz des Ziels
 	ErgebnisTls          Ergebnis = "tls"          // TLS- oder Zertifikatsfehler
 	ErgebnisFehler       Ergebnis = "fehler"       // sonstiges
 )
@@ -43,7 +44,8 @@ const (
 var ergebnisTexte = map[Ergebnis]string{
 	ErgebnisPortZu:       "Port geschlossen (TCP-RST)",
 	ErgebnisKeineAntwort: "keine Antwort (Zeitueberschreitung)",
-	ErgebnisUnerreichbar: "nicht erreichbar (keine Route)",
+	ErgebnisUnerreichbar: "nicht erreichbar (keine Antwort auf ARP)",
+	ErgebnisKeinNetz:     "keine eigene Adresse in diesem Netz",
 	ErgebnisTls:          "TLS fehlgeschlagen",
 	ErgebnisFehler:       "fehlgeschlagen",
 }
@@ -56,7 +58,9 @@ func klassifiziere(fehler string) Ergebnis {
 		return ErgebnisPortZu
 	case strings.Contains(f, "i/o timeout"), strings.Contains(f, "deadline exceeded"), strings.Contains(f, "timed out"):
 		return ErgebnisKeineAntwort
-	case strings.Contains(f, "no route to host"), strings.Contains(f, "host is unreachable"), strings.Contains(f, "network is unreachable"):
+	case strings.Contains(f, "network is unreachable"):
+		return ErgebnisKeinNetz
+	case strings.Contains(f, "no route to host"), strings.Contains(f, "host is unreachable"):
 		return ErgebnisUnerreichbar
 	case strings.Contains(f, "tls"), strings.Contains(f, "certificate"), strings.Contains(f, "x509"), f == "eof":
 		return ErgebnisTls

@@ -28,7 +28,7 @@ MSYS_NO_PATHCONV=1 docker run --rm -v "$PWD:/src" -v eebus-gomod:/go/pkg/mod -w 
 docker compose -f testwerkzeuge/docker-compose.yml up -d --build
 
 # Images für den PFC, die Version landet als Software-Revision im Gateway
-sh skripte/pfc-images-bauen.sh 0.5
+sh skripte/pfc-images-bauen.sh 1.0
 ```
 
 ## eebus-go-Version
@@ -46,10 +46,10 @@ Für den SHIP Pairing Service wird der noch unveröffentlichte Entwicklungsstand
 
 ## Offene Punkte vor dem Produktiveinsatz
 
-- **Echte Steuerbox:** Lokal mit der Test-Steuerbox getestet: Kopplung per Pairing Service, per SKI und per Suchmodus, falsches Secret wird abgelehnt, Neustart, Grenzen für Bezug und Einspeisung (auch beide in einer Nachricht), Ablauf, Failsafe-Werte inklusive Speicherung, Heartbeat-Ausfall beider Richtungen, Verbindungsabbrüche, Nennleistungen, Messwerte MPC und MGCP, Ablehnung ohne SPS, Anlagenstatus. **Noch keine Verbindung mit einer echten Steuerbox:** Die Swistec SwisBox ist seit 20.10.2026 angeschlossen, nimmt aber keine Verbindung an (siehe [Kopplung](kopplung.md#swistec-swisbox)).
+- **Echte Steuerbox:** Lokal mit der Test-Steuerbox getestet: Kopplung per Pairing Service, per SKI und per Suchmodus, falsches Secret wird abgelehnt, Neustart, Grenzen für Bezug und Einspeisung (auch beide in einer Nachricht), Ablauf, Failsafe-Werte inklusive Speicherung, Heartbeat-Ausfall beider Richtungen, Verbindungsabbrüche, Nennleistungen, Messwerte MPC und MGCP, Ablehnung ohne SPS, Anlagenstatus. **Mit einer echten Steuerbox** (Swistec SwisBox, nur LPC) seit 20.10.2026 auf dem PFC verbunden: Kopplung per SKI, Grenze, Heartbeat (siehe [Kopplung](kopplung.md#swistec-swisbox)). Noch nicht mit echter Steuerbox erprobt: Grenzwechsel und Ablauf, Failsafe bei Verbindungsverlust, LPP, MPC, MGCP, Pairing Service.
 - **Begrenzung nach Neustart oder Stromausfall:** Das Gateway speichert die aktive Grenze des Netzbetreibers nicht. Nach dem Start gilt die Failsafe-Grenze, nach dem ersten Heartbeat ist der Bezug unbegrenzt, bis die Steuerbox erneut eine Grenze schreibt. Klären, ob eine echte Steuerbox das nach dem Wiederverbinden tut.
 - **Zustandsautomat:** Die Übergänge in `gateway/begrenzung.go` (Init geht nach 120 s ohne Heartbeat in Failsafe; Failsafe wird nur mit Heartbeat und neuer Grenze oder nach der Mindestdauer verlassen) gegen die Spezifikationen „Limitation of Power Consumption/Production“ und das FNN-Lastenheft Steuerbox 1.4 prüfen. Der FNN-Hinweis nennt keine Update-Raten für Messwerte. Das Gateway sendet bei jeder Änderung, gegebenenfalls ein Totband ergänzen.
-- **MPC auf der CEM-Entität:** Ob eine echte Steuerbox MPC dort liest, ist offen. Sonst `MPC_ENTITAET=submeter`.
+- **MPC auf der CEM-Entität:** Ob eine echte Steuerbox MPC dort liest, ist offen (die SwisBox liest keine Messwerte). Sonst `MPC_ENTITAET=submeter`.
 - **Verbindungsstatus:** Beim allerersten Test mit dem eebus-go-Beispiel kam nach dem Stoppen der Gegenseite keine Trennungsmeldung, in allen späteren Tests sofort. Bei der echten Steuerbox beobachten. Für die Grenze ist das unkritisch, dort entscheidet der Heartbeat.
 - **Zertifizierung:** Das Gateway ist nicht EEBUS-zertifiziert. Für Pilot- und Eigenanlagen ausreichend, für Serienanlagen vorher mit Netzbetreiber bzw. Messstellenbetreiber klären.
 - **Docker auf dem PFC200:** Nur ab neueren Firmware-Ständen verfügbar, bei gemischtem Gerätepark vorab je Steuerung prüfen. Docker-Datenverzeichnis wegen begrenztem internem Speicher möglichst auf die SD-Karte legen.

@@ -118,13 +118,20 @@ func (r *Begrenzung) restdauer(jetzt time.Time) float64 {
 	return 0
 }
 
-func (r *Begrenzung) uebernehmeGrenze(grenze ucapi.LoadLimit, jetzt time.Time) {
+// uebernehmeGrenze liefert, ob sich die Grenze geaendert hat. Steuerboxen
+// schreiben dieselbe Grenze teils mehrfach (die Swistec SwisBox zehnmal in den
+// ersten Sekunden nach dem Verbinden), das gehoert nicht ins Log. Eine
+// befristete Grenze laeuft bei jedem Schreiben neu an. Aufruf unter mu.
+func (r *Begrenzung) uebernehmeGrenze(grenze ucapi.LoadLimit, jetzt time.Time) bool {
+	geaendert := r.letzteGrenzeEmpfangen.IsZero() || grenze.IsActive != r.grenze.IsActive ||
+		grenze.Value != r.grenze.Value || grenze.Duration != r.grenze.Duration
 	r.grenze = grenze
 	r.letzteGrenzeEmpfangen = jetzt
 	r.grenzeAblauf = time.Time{}
 	if grenze.Duration > 0 {
 		r.grenzeAblauf = jetzt.Add(grenze.Duration)
 	}
+	return geaendert
 }
 
 // --- Gemeinsame Sicht auf cs/lpc und cs/lpp ---

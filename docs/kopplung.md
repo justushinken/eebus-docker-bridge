@@ -60,16 +60,59 @@ Die Geräte finden sich per **mDNS** (Multicast-DNS, UDP 5353 an 224.0.0.251). D
 | **Firewall der Steuerung:** UDP 5353 und TCP 4712 eingehend erlaubt | 4712 ist der EEBUS-Port des Gateways. Die Steuerbox verbindet sich dorthin, oder das Gateway zu ihr |
 | **IP-Adressen im selben Bereich** (DHCP oder fest) | Ohne DHCP vergeben EEBUS-Geräte sich laut Spezifikation selbst eine 169.254.x.x-Adresse. Das klappt nur, wenn beide Seiten das tun |
 
-Läuft auf der Steuerung bereits ein Avahi-Dienst, auf Port-Konflikte an 5353 achten.
+Läuft auf der Steuerung ein Avahi-Daemon, nutzt das Gateway ihn, wenn der Container `-v /var/run/dbus:/var/run/dbus` hat. Avahi kündigt je Schnittstelle nur deren eigene Adresse an. Ohne Avahi (auf dem PFC bisher der Fall) nutzt das Gateway sein eingebautes Zeroconf, das ebenfalls UDP 5353 belegt. Den Grund nennt die Startmeldung „mDNS über Zeroconf, Avahi nicht nutzbar: …“.
 
 Mit dem Installateur bzw. Messstellenbetreiber klären:
 
 - In welches Netz kommt der LAN-Anschluss der Steuerbox? Am einfachsten in dasselbe Netz wie X1 des PFC.
 - Wie werden die IP-Adressen vergeben: DHCP oder fest? Gibt es VLANs?
 - Ist ein verwalteter Switch mit Multicast-Filter dazwischen?
-- Alternative mit sauberer Trennung: X2 des PFC im WBM als eigene Schnittstelle konfigurieren und die EEBUS-Buchse der Steuerbox (bei PROLAN „ETH1“) direkt an X2 anschließen, mit festem gemeinsamem Subnetz. Das Gateway lauscht dank `--network host` auf allen Schnittstellen. Das ist noch nicht ausprobiert. Offen ist auch, ob ship-go IPv6-Link-Local-Adressen (ohne DHCP) korrekt anspricht.
+- Alternative mit sauberer Trennung: Steuerbox direkt an X2, siehe nächster Abschnitt.
 
 Zur Kontrolle zeigt die Statusseite unter „Per mDNS gefundene EEBUS-Geräte“, ob die Steuerbox gesehen wird. Die Liste wird laufend aktualisiert, eine neue Steuerbox erscheint spätestens nach etwa einer Minute. Erscheint sie dort nicht, liegt es am Netz, nicht an der Kopplung.
+
+### Getrenntes Netz an X2
+
+Die EEBUS-Buchse der Steuerbox (bei PROLAN und Swistec „ETH1“) kommt per Kabel direkt an X2 des PFC. X2 wird im WBM als eigene Schnittstelle eingerichtet (nicht als Switch mit X1), auf dem PFC heißt sie dann `br1`. Die Adresse von X2 muss im Subnetz der Steuerbox liegen, z. B. Steuerbox 192.168.1.100/24, X2 192.168.1.74/24. Ein Gateway (Router) ist nicht nötig.
+
+Dazu **`EEBUS_SCHNITTSTELLEN=br1`** setzen. Ohne diese Einstellung kündigt das Gateway auf jeder Schnittstelle alle seine Adressen an, auch die von X1 und docker0 (172.17.0.1). Die Steuerbox bekommt dann über X2 zuerst die Adresse von X1 und erreicht sie nicht. Grund: Ohne Avahi-Daemon auf dem PFC nutzt ship-go das eingebaute Zeroconf, und das sammelt die Adressen aller Schnittstellen in einer Liste. Mit `EEBUS_SCHNITTSTELLEN` sucht und kündigt das Gateway nur auf diesen Schnittstellen an. Der EEBUS-Port 4712 und das Web-UI bleiben auf allen Schnittstellen erreichbar. Beim Start stehen im Ereignisprotokoll die Zeilen „mDNS nur auf br1 (…)“ und „mDNS über Zeroconf“ bzw. „über den Avahi-Daemon“, jeweils mit dem Grund.
+
+Am 20.10.2026 mit der Swistec SwisBox an X2 aufgebaut: Ohne `EEBUS_SCHNITTSTELLEN` stand in der Ankündigung die unerreichbare Adresse von X1 vorn. Mit `EEBUS_SCHNITTSTELLEN` (ab 0.6) ist das auf dem PFC noch nicht getestet, lokal schon. Noch offen ist, ob ship-go IPv6-Link-Local-Adressen (ohne IPv4) korrekt anspricht.
+
+### Fehlersuche bei der Verbindung
+
+Der Reiter „Diagnose“ zeigt unter **„Verbindungsversuche“** den letzten Versuch in beide Richtungen, auch ohne `EEBUS_DEBUG`. Die Statusleiste nennt bei „Getrennt“ den letzten Fehler. Im Ereignisprotokoll steht jeder neue Fehler einmal, also erst wieder, wenn sich Adresse oder Grund ändern.
+
+| Anzeige | Bedeutung |
+|---|---|
+| Port geschlossen (TCP-RST) | Die Steuerbox ist im Netz erreichbar, nimmt auf dem per mDNS angekündigten Port aber keine Verbindung an. Liegt an der Steuerbox: EEBUS-Dienst aus oder nicht freigeschaltet. |
+| keine Antwort | Adresse aus einem anderen Netz, Firewall oder Kabel. Subnetz und `EEBUS_SCHNITTSTELLEN` prüfen. |
+| nicht erreichbar | Keine Antwort auf ARP oder keine Route ins Netz der Adresse. |
+| TLS fehlgeschlagen | Meist vertraut eine Seite dem Zertifikat (SKI) der anderen nicht. „EOF“ ist meist nur eine Portprüfung, z. B. `Test-NetConnection`. |
+| Noch kein Versuch | Das Gateway hat die gekoppelte Steuerbox per mDNS nicht gefunden. Ob die Steuerbox es versucht, steht unter „Steuerbox → Gateway“. |
+
+Eingehend kennt das Gateway die Adresse der Gegenstelle nur bei einem TLS-Fehler, nach erfolgreichem TLS nur deren SKI.
+
+Befehle auf dem PFC (als root):
+
+```sh
+docker logs -f eebus-gateway                              # Zeiten in UTC, das UI zeigt Ortszeit
+tcpdump -l -ni br1 -vv udp port 5353                      # mDNS-Ankündigungen beider Seiten
+tcpdump -l -ni br1 'host 192.168.1.100 and tcp'           # Verbindungsversuche von und zur Steuerbox
+ip -4 addr; netstat -tlnp | grep 4712                     # Adressen, lauscht das Gateway?
+```
+
+Vom Laptop im selben Netz: `Test-NetConnection 192.168.1.74 -Port 4712` (PowerShell) prüft, ob der EEBUS-Port des Gateways erreichbar ist. Das Gateway meldet den Versuch als „TLS fehlgeschlagen (EOF)“. „bad udp cksum“ im tcpdump ist harmlos (Checksum-Offload). Die Meldung `lookup <SHIP-ID>.local. on [::1]:53` aus `EEBUS_DEBUG` ist ebenfalls harmlos: Den Namen aus dem mDNS löst der Container nicht auf, ship-go verbindet sich danach über die IP. Seit 0.6 unterdrückt das Gateway diese Zeile.
+
+## Swistec SwisBox
+
+Die erste echte Steuerbox am Gateway (Inbetriebnahme ab 20.10.2026):
+
+- **Anschluss:** EEBUS über die Buchse **ETH1**. In der ersten Anlage mit fester IP 192.168.1.100/24 ohne Gateway, direkt an X2 des PFC (siehe [Getrenntes Netz an X2](#getrenntes-netz-an-x2)).
+- **Kopplung:** derzeit **nur SKI-Verfahren**, kein SHIP Pairing Service. Am Gateway `EEBUS_PAIRING_SERVICE=aus` und `EEBUS_REMOTE_SKI=<SKI der Box>` setzen oder die Box im UI „Vertrauen“. Der Messstellenbetreiber trägt den SKI des Gateways in seine Konfiguration ein (FNN-XML, `ski1`).
+- **SHIP-Port dynamisch:** Die Box wählt den Port bei jedem Neustart ihres Dienstes neu (beobachtet 51555, 51658, 54375) und kündigt ihn per mDNS an. Eine Freigabe für einen festen Port auf ihrer Seite gibt es also nicht.
+- **Konfiguration des Messstellenbetreibers** (erste Anlage): CLS2, nur Use Case LPC, Failsafe 11 000 W für 7200 s, Softstart in Stufen 0/3300/6600/11 000 W zu je 60 s. Passend dazu am Gateway `EEBUS_USECASES=lpc`, `FAILSAFE_GRENZE_W=11000`, `FAILSAFE_MINDESTDAUER=2h`.
+- **Stand 20.10.2026:** Die Box kündigt sich per mDNS an, setzt aber jede Verbindung auf ihrem SHIP-Port sofort zurück (TCP-RST, auch nach Neustart der Box) und baut selbst keine Verbindung zum Gateway auf. Die Seite des Gateways ist geprüft: SKI stabil, Box vertraut, Port 4712 von außen erreichbar, Ankündigung im richtigen Netz. Die Anfrage an Messstellenbetreiber und Swistec läuft: Ist die signierte Konfiguration mit `ski1` aktiv und EEBUS auf ETH1 freigeschaltet? Arbeitet die Box als Client oder Server? Warum ist der angekündigte Port geschlossen? Gibt es ein Log der Box?
 
 ## PROLAN-Steuerbox (STB-142E)
 

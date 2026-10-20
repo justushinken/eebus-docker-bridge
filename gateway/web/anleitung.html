@@ -227,8 +227,18 @@
 			<li>PFC-Firewall: UDP 5353 und TCP 4712 müssen erlaubt sein</li>
 		</ul>
 		<p class="hinweis">Kontrolle vor Ort: Erscheint die Steuerbox auf der Statusseite unter „Per mDNS gefundene EEBUS-Geräte“, ist das Netz in Ordnung. Fehlt sie dort, liegt es am Netz, nicht an der Kopplung.</p>
-		<h3 style="margin-top:20px">Direktes Kabel an X2 (noch nicht getestet)</h3>
-		<p>Viele Steuerboxen haben eine eigene Buchse für EEBUS (bei PROLAN „ETH1“). Ein direktes Kabel von dort an X2 des PFC trennt das EEBUS-Netz sauber vom übrigen LAN. Dazu X2 im WBM als eigene Schnittstelle (nicht als Switch mit X1) einrichten und eine Adresse im selben Subnetz wie die Steuerbox vergeben. Wie die Steuerbox an dieser Buchse ihre Adresse bekommt (fest, DHCP oder automatisch 169.254.x.x), beim Messstellenbetreiber erfragen.</p>
+		<h3 style="margin-top:20px">Direktes Kabel an X2</h3>
+		<p>Viele Steuerboxen haben eine eigene Buchse für EEBUS (bei PROLAN und Swistec „ETH1“). Ein direktes Kabel von dort an X2 des PFC trennt das EEBUS-Netz sauber vom übrigen LAN. Dazu X2 im WBM als eigene Schnittstelle (nicht als Switch mit X1) einrichten und eine Adresse im selben Subnetz wie die Steuerbox vergeben. Wie die Steuerbox an dieser Buchse ihre Adresse bekommt (fest, DHCP oder automatisch 169.254.x.x), beim Messstellenbetreiber erfragen.</p>
+		<p>Wichtig: <strong><code>EEBUS_SCHNITTSTELLEN=br1</code></strong> setzen (br1 ist X2 als eigene Schnittstelle). Sonst kündigt das Gateway auch über X2 die Adresse von X1 an, und die Steuerbox versucht sie vergeblich.</p>
+	</section>
+
+	<section class="karte" style="margin-top:16px">
+		<h2>Swistec SwisBox</h2>
+		<ul>
+			<li><strong>Anschluss:</strong> EEBUS über die Buchse <strong>ETH1</strong>, z. B. direkt an X2 des PFC (siehe „Direktes Kabel an X2“).</li>
+			<li><strong>Kopplung:</strong> derzeit nur per <strong>SKI</strong> (Verfahren B oder C), kein Pairing Service. Der Messstellenbetreiber trägt den SKI des Gateways ein.</li>
+			<li><strong>Port:</strong> Die Box wählt ihren SHIP-Port bei jedem Neustart neu und kündigt ihn per mDNS an. Das Gateway findet ihn selbst.</li>
+		</ul>
 	</section>
 
 	<section class="karte" style="margin-top:16px">
@@ -261,7 +271,10 @@
 			<tbody>
 				<tr><td>SPS „ausgefallen“</td><td>CODESYS schreibt nicht per Modbus. Im ModbusTCP Master <strong>Auto-Reconnect</strong> aktivieren, Ziel <code>127.0.0.1:5502</code> prüfen, läuft die Applikation?</td></tr>
 				<tr><td>Steuerbox „Kein Partner“</td><td>Noch keine Kopplung eingerichtet, siehe oben.</td></tr>
-				<tr><td>Steuerbox bleibt „Getrennt“</td><td>Steuerbox nicht im selben Netzsegment oder Subnetz wie der PFC, oder die PFC-Firewall sperrt TCP 4712 bzw. UDP 5353. Siehe „Netzwerk“ oben.</td></tr>
+				<tr><td>Steuerbox bleibt „Getrennt“</td><td>Steuerbox nicht im selben Netzsegment oder Subnetz wie der PFC, oder die PFC-Firewall sperrt TCP 4712 bzw. UDP 5353. Siehe „Netzwerk“ oben. Den Grund zeigt der Reiter „Diagnose“ unter „Verbindungsversuche“.</td></tr>
+				<tr><td>„Port geschlossen (TCP-RST)“</td><td>Die Steuerbox ist erreichbar, nimmt auf ihrem per mDNS angekündigten Port aber keine Verbindung an. Liegt an der Steuerbox: EEBUS-Dienst aus oder nicht freigeschaltet. Beim Messstellenbetreiber nachfragen.</td></tr>
+				<tr><td>„keine Antwort“ oder „nicht erreichbar“</td><td>Das Gateway erreicht die Adresse der Steuerbox nicht: anderes Subnetz, Kabel oder Firewall. Bei getrenntem X2 <code>EEBUS_SCHNITTSTELLEN</code> prüfen.</td></tr>
+				<tr><td>„TLS fehlgeschlagen“</td><td>Eine Seite vertraut dem Zertifikat der anderen nicht, meist ein falscher SKI. „EOF“ von einem Laptop ist nur eine Portprüfung.</td></tr>
 				<tr><td>„von Gegenseite abgelehnt“</td><td>Beim SKI-Verfahren ist auf einer Seite ein falscher SKI eingetragen.</td></tr>
 				<tr><td>„Verbindungsversuch eines unbekannten Geräts abgelehnt“</td><td>Die Steuerbox vertraut dem Gateway, das Gateway ihr noch nicht. Suchmodus starten und die Anfrage annehmen.</td></tr>
 				<tr><td>„SHIP ID mismatch“</td><td>Die gespeicherte Steuerbox meldet sich mit einer anderen SHIP-ID als bei der Kopplung. „Kopplung lösen“ und neu koppeln.</td></tr>

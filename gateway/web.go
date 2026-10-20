@@ -3,9 +3,12 @@ package main
 import (
 	_ "embed"
 	"net/http"
+	"strings"
 	"time"
 
 	"eebus-gateway/internal/gemeinsam"
+
+	shipapi "github.com/enbility/ship-go/api"
 )
 
 // Status-UI: eine eingebettete Seite, die /api/status jede Sekunde abfragt.
@@ -127,6 +130,8 @@ type StatusDaten struct {
 	Mpc         []Messwert      `json:"mpc"`  // nil = MPC aus
 	Mgcp        []Messwert      `json:"mgcp"` // nil = MGCP aus
 	Gegenstelle *Gegenstelle    `json:"gegenstelle"`
+	Ausgehend   *VersuchDaten   `json:"ausgehend"` // letzter Verbindungsversuch zur Steuerbox, nil = keiner
+	Eingehend   *VersuchDaten   `json:"eingehend"` // letzter eingehender Versuch, nil = keiner
 
 	EigenerSki string                       `json:"eigenerSki"`
 	Gefunden   []gemeinsam.GefundenesGeraet `json:"gefunden"`
@@ -154,6 +159,31 @@ type StatusDaten struct {
 	LaufzeitS             float64 `json:"laufzeitS"`
 
 	Ereignisse []gemeinsam.Ereignis `json:"ereignisse"`
+}
+
+type VersuchDaten struct {
+	AlterS   float64  `json:"alterS"`
+	Adresse  string   `json:"adresse"`
+	Ski      string   `json:"ski"`
+	Ergebnis Ergebnis `json:"ergebnis"`
+	Fehler   string   `json:"fehler"`
+	Anzahl   int      `json:"anzahl"`
+	Bekannt  bool     `json:"bekannt"` // SKI ist die eingetragene Steuerbox
+}
+
+// versuchDaten: Aufruf unter mu (wegen vertraut). ship-go baut ausgehende
+// Verbindungen nur zu vertrauten Geraeten auf. Eine Pairing-Kopplung kennt oft
+// keinen SKI, eingehend hilft dann die verbundene Steuerbox.
+func (b *Gateway) versuchDaten(v *Versuch, ausgehend bool, jetzt time.Time) *VersuchDaten {
+	if v == nil {
+		return nil
+	}
+	return &VersuchDaten{
+		AlterS: jetzt.Sub(v.Zeit).Seconds(), Adresse: v.Adresse, Ski: v.Ski,
+		Ergebnis: v.Ergebnis, Fehler: v.Fehler, Anzahl: v.Anzahl,
+		Bekannt: ausgehend || v.Ski != "" &&
+			(b.vertraut(shipapi.ServiceIdentity{SKI: v.Ski}) || strings.EqualFold(v.Ski, b.partner.SKI)),
+	}
 }
 
 func alterS(jetzt, zeit time.Time) *float64 {
@@ -238,5 +268,7 @@ func (b *Gateway) Status(jetzt time.Time) StatusDaten {
 		})
 	}
 	s.Mpc, s.Mgcp = b.messwerteUi(b.mpcGroessen), b.messwerteUi(b.mgcpGroessen)
+	ausgehend, eingehend := b.versuche.Stand()
+	s.Ausgehend, s.Eingehend = b.versuchDaten(ausgehend, true, jetzt), b.versuchDaten(eingehend, false, jetzt)
 	return s
 }

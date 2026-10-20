@@ -35,5 +35,7 @@ services:
       # Mit lpp (Erzeugung) zusaetzlich Pflicht:
       # NENNLEISTUNG_ERZEUGUNG_MAX_W: "8000"
       # FAILSAFE_EINSPEISEGRENZE_W: "4800"
+      # Steuerbox in eigenem Netz an X2: mDNS nur dort (docs/kopplung.md)
+      # EEBUS_SCHNITTSTELLEN: br1
       # Vor der Uebergabe an den Messstellenbetreiber festschreiben (docs/kopplung.md):
       # SHIP_ID: Demo-EEBUS-Gateway-0030DE683ADC

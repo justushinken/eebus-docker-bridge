@@ -191,6 +191,15 @@
 		</section>
 
 		<section class="karte">
+			<h2>Verbindungsversuche</h2>
+			<div class="leise">Gateway → Steuerbox</div>
+			<div id="vAusgehend" style="margin:4px 0 12px"></div>
+			<div class="leise">Steuerbox → Gateway</div>
+			<div id="vEingehend" style="margin-top:4px"></div>
+			<p class="hinweis" id="vHinweis"></p>
+		</section>
+
+		<section class="karte">
 			<h2>Steuerbox: gemeldete Daten</h2>
 			<p class="leise" id="gegenstelleLeer">Erst nach dem Verbinden verfügbar.</p>
 			<dl id="gegenstelleDaten" hidden>
@@ -396,6 +405,13 @@ function statusfeld(id, farbe, wert, text) {
 	$(id + "Text").textContent = text;
 }
 
+// Grund des letzten gescheiterten Versuchs zur Steuerbox, für die Statusleiste
+function letzterFehler(s) {
+	const v = s.ausgehend;
+	if (!v || !versuchHinweise[v.ergebnis]) return "";
+	return ` · zuletzt: ${versuchTexte[v.ergebnis][0]} (${v.adresse})`;
+}
+
 // Statusleiste: Steuerbox abgestuft nach nie gekoppelt / getrennt / verbunden
 function statusleiste(s) {
 	const k = s.kopplung;
@@ -407,7 +423,7 @@ function statusleiste(s) {
 		statusfeld("stSteuerbox", "rot", s.abgelehnt ? "Verbindung abgelehnt" : "Getrennt",
 			s.abgelehnt
 				? `Die Steuerbox vertraut dem Gateway nicht. SKI und SHIP-ID des Gateways müssen in der Steuerbox eingetragen sein · ${name}`
-				: `Gekoppelt, aber nicht verbunden · seit ${dauer(s.verbindungSeitS)} · ${name}`);
+				: `Gekoppelt, aber nicht verbunden · seit ${dauer(s.verbindungSeitS)} · ${name}` + letzterFehler(s));
 	} else {
 		statusfeld("stSteuerbox", "", "Nicht gekoppelt",
 			s.suchmodusRestS > 0 ? `Suchmodus läuft noch ${dauer(s.suchmodusRestS)}` : "Im Reiter „Kopplung“ eine Steuerbox koppeln");
@@ -421,6 +437,49 @@ function statusleiste(s) {
 			? "Noch kein Lebenszeichen seit dem Start"
 			: `Kein neues Lebenszeichen seit ${dauer(s.spsLebenszeichenAlterS)}`) + " · neue Grenzen werden abgelehnt");
 	}
+}
+
+// Verbindungsversuche unterhalb von SHIP (TCP, TLS), siehe verbindungsversuche.go
+const versuchTexte = {
+	aufbau: ["Verbindungsaufbau", ""],
+	verbunden: ["verbunden", "gruen"],
+	tlsOk: ["TLS in Ordnung", "gruen"],
+	portZu: ["Port geschlossen (TCP-RST)", "rot"],
+	keineAntwort: ["keine Antwort", "rot"],
+	unerreichbar: ["nicht erreichbar", "rot"],
+	tls: ["TLS fehlgeschlagen", "rot"],
+	fehler: ["fehlgeschlagen", "rot"],
+};
+const versuchHinweise = {
+	portZu: "Die Steuerbox ist im Netz erreichbar, nimmt auf dem per mDNS angekündigten SHIP-Port aber keine Verbindung an. Das liegt an der Steuerbox (EEBUS-Dienst aus oder nicht freigeschaltet).",
+	keineAntwort: "Keine Antwort von der Adresse: anderes Netz, Firewall oder Kabel. Prüfen, ob Gateway und Steuerbox im selben Subnetz sind (EEBUS_SCHNITTSTELLEN).",
+	unerreichbar: "Kein Weg zur Adresse: Die Steuerbox antwortet nicht auf ARP oder liegt in einem Netz ohne Route.",
+	tls: "TLS scheitert: Meist vertraut eine Seite dem Zertifikat (SKI) der anderen nicht. „EOF“ von einer fremden Adresse ist meist nur eine Portprüfung.",
+	fehler: "Die Verbindung ist gescheitert, Einzelheiten in der Meldung darunter.",
+};
+
+function versuchText(v) {
+	const [text, farbe] = versuchTexte[v.ergebnis] || [v.ergebnis, ""];
+	const span = document.createElement("span");
+	span.className = "marke " + farbe;
+	span.textContent = text;
+	const knoten = [span];
+	const div = (text, klasse) => { const d = document.createElement("div"); d.className = klasse; d.textContent = text; knoten.push(d); };
+	div([v.adresse, alter(v.alterS), v.anzahl > 1 ? `${v.anzahl} Versuche` : ""].filter(x => x).join(" · "), "");
+	if (v.ski) div((v.bekannt ? "Steuerbox, SKI " : "SKI ") + v.ski, "leise mono");
+	if (v.fehler) div(v.fehler, "leise mono");
+	return knoten;
+}
+
+function zeigeVersuche(s) {
+	const leer = (id, text) => { const p = document.createElement("span"); p.className = "leise"; p.textContent = text; $(id).replaceChildren(p); };
+	if (s.ausgehend) $("vAusgehend").replaceChildren(...versuchText(s.ausgehend));
+	else leer("vAusgehend", s.kopplung ? "Noch kein Versuch: Steuerbox per mDNS nicht gefunden" : "Keine Steuerbox gekoppelt");
+	if (s.eingehend) $("vEingehend").replaceChildren(...versuchText(s.eingehend));
+	else leer("vEingehend", "Noch kein Versuch seit dem Start");
+	const fehler = s.verbindung !== 2 && [s.ausgehend, s.eingehend].find(v => v && versuchHinweise[v.ergebnis]);
+	$("vHinweis").textContent = fehler ? versuchHinweise[fehler.ergebnis]
+		: "Zeigt, was unterhalb von SHIP passiert: TCP-Verbindung und TLS-Handshake in beide Richtungen.";
 }
 
 function zeige(s) {
@@ -472,6 +531,7 @@ function zeige(s) {
 	}
 
 	zeigeKopplung(s);
+	zeigeVersuche(s);
 
 	const heute = new Date().toDateString();
 	$("ereignisse").replaceChildren(...s.ereignisse.map(e => {

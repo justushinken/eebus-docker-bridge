@@ -20,6 +20,16 @@ type Ereignisprotokoll struct {
 	mu        sync.Mutex
 	eintraege []Ereignis
 	max       int
+	filter    func(text string) (string, bool)
+}
+
+// SetzeFilter: Der Filter sieht jede Zeile ohne Zeitstempel und kann sie fuer
+// das UI umschreiben oder weglassen (false). stderr bekommt sie unveraendert.
+// Er laeuft unter der Sperre des Standard-Logs und darf selbst nicht loggen.
+func (p *Ereignisprotokoll) SetzeFilter(filter func(text string) (string, bool)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.filter = filter
 }
 
 // ProtokolliereLog haengt ein Ereignisprotokoll an das Standard-Log, damit alle
@@ -41,6 +51,12 @@ func (p *Ereignisprotokoll) Write(daten []byte) (int, error) {
 		if len(zeile) > len(logZeitformat) {
 			if zeit, err := time.ParseInLocation(logZeitformat, zeile[:len(logZeitformat)], time.Local); err == nil {
 				e = Ereignis{Zeit: zeit, Text: zeile[len(logZeitformat)+1:]}
+			}
+		}
+		if p.filter != nil {
+			var behalten bool
+			if e.Text, behalten = p.filter(e.Text); !behalten {
+				continue
 			}
 		}
 		p.eintraege = append(p.eintraege, e)

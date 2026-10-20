@@ -97,6 +97,8 @@ type Gateway struct {
 
 	kopplungMu sync.Mutex // reiht Aenderungen der Kopplung (kopplung.go)
 
+	versuche Verbindungsversuche // eigene Sperre, siehe verbindungsversuche.go
+
 	mu             sync.Mutex
 	gefunden       []shipapi.RemoteMdnsService // per mDNS sichtbare EEBUS-Geraete
 	partner        shipapi.ServiceIdentity     // verbundene Steuerbox, leer = keine

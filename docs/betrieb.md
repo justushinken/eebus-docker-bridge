@@ -120,9 +120,11 @@ Port 8090 statt 8080, weil auf dem PFC die CODESYS-WebVisu oft 8080 belegt. Bei 
 
 ### Weitere
 
+`EEBUS_SCHNITTSTELLEN` (leer = alle): mDNS nur auf diesen Netzwerkschnittstellen, kommagetrennt, z. B. `br1`. Nötig, wenn die Steuerbox in einem eigenen Netz an X2 hängt, siehe [Kopplung](kopplung.md#getrenntes-netz-an-x2). Die SHIP-ID (MAC) hängt nicht davon ab.
+
 `EEBUS_PORT` (4712), `MODBUS_URL` (`tcp://127.0.0.1:5502`), `DATENVERZEICHNIS` (`/data`), `GERAET_HERSTELLER`, `GERAET_MARKE` (`Demo`), `GERAET_MODELL` (`EEBUS-Gateway`), `GERAET_SERIENNUMMER` (Vorgabe: MAC-Adresse), `GERAET_HW_REVISION` (wird an die Steuerbox gemeldet). Die Software-Revision ist die Image-Version.
 
-`EEBUS_DEBUG=an` schreibt das ausführliche Protokoll von eebus-go, ship-go und spine-go nach stdout (`docker logs eebus-gateway`), nicht ins Ereignisprotokoll. Für die Fehlersuche mit einer neuen Steuerbox, danach wieder ausschalten.
+`EEBUS_DEBUG=an` schreibt das ausführliche Protokoll von eebus-go, ship-go und spine-go nach stdout (`docker logs eebus-gateway`), nicht ins Ereignisprotokoll. Für die Fehlersuche mit einer neuen Steuerbox, danach wieder ausschalten. Gescheiterte Verbindungsversuche wertet das Gateway auch ohne `EEBUS_DEBUG` aus (Reiter „Diagnose“, „Verbindungsversuche“). Die Zeiten in `docker logs` sind UTC, das UI zeigt Ortszeit.
 
 ## Status-UI
 
@@ -130,9 +132,9 @@ Port 8090 statt 8080, weil auf dem PFC die CODESYS-WebVisu oft 8080 belegt. Bei 
 
 - **Übersicht** (Betrieb): je Richtung Zustand, wirksame Grenze, Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Grenze, Nennleistung und letzter Ablehnungsgrund; Heartbeat, Failsafe-Mindestdauer; SPS-Lebenszeichen und Anlagenstatus; Messwerte MPC und MGCP.
 - **Kopplung** (Inbetriebnahme): per mDNS gefundene Geräte mit „Vertrauen“, gekoppelte Steuerbox und „Kopplung lösen“, einklappbarer Suchmodus, Daten für den Messstellenbetreiber (SKI, SHIP-ID, Fingerprint, Secret, QR-Code).
-- **Diagnose:** Use Cases von Gateway und Steuerbox, von der Steuerbox gemeldete Daten (Gerät, Software, Entitäten, Use-Case-Versionen), die letzten 100 Log-Meldungen.
+- **Diagnose:** Use Cases von Gateway und Steuerbox, letzte Verbindungsversuche in beide Richtungen (TCP und TLS, mit Grund), von der Steuerbox gemeldete Daten (Gerät, Software, Entitäten, Use-Case-Versionen), die letzten 100 Log-Meldungen.
 - **Konfiguration:** alle Einstellungen mit Variablenname und Herkunft, änderbar (siehe unten).
-- **Anleitung:** eigene Seite mit Schaubildern zu Aufbau, Zuständen, Kopplung, PROLAN-Steuerbox und Fehlersuche.
+- **Anleitung:** eigene Seite mit Schaubildern zu Aufbau, Zuständen, Kopplung, Netzwerk, Steuerboxen und Fehlersuche.
 
 Die Anmeldung läuft über HTTP Basic Auth ohne HTTPS, das Passwort ist im LAN also mitlesbar. Sie schützt vor zufälligem Zugriff, nicht vor gezielten Angriffen.
 

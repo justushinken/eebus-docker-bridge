@@ -81,6 +81,7 @@ func (b *Gateway) RemoteServiceConnected(dienst api.ServiceInterface, partner sh
 	b.partner = partner
 	delete(b.anfragen, partner.SKI)
 	b.mu.Unlock()
+	b.versuche.Verbunden()
 	if neu {
 		log.Printf("Steuerbox verbunden: %s", gemeinsam.Bezeichnung(partner))
 	}

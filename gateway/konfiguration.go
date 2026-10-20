@@ -15,6 +15,7 @@ import (
 // geaenderte Werte (einstellungen.json) haben Vorrang, siehe einstellungen.go.
 type Konfiguration struct {
 	EebusPort            int
+	Schnittstellen       []string // mDNS nur auf diesen Netzwerkschnittstellen, leer = alle
 	ModbusUrl            string
 	Datenverzeichnis     string
 	RemoteSki            string // SKI-Verfahren: SKI der Steuerbox, leer = aus
@@ -94,6 +95,20 @@ func leseKonfiguration(u gemeinsam.Umgebung) (Konfiguration, error) {
 			return konf, fmt.Errorf("EEBUS_REMOTE_SKI: %w", err)
 		}
 		konf.RemoteSki, konf.PairingService = ski, false
+	}
+
+	// mDNS auf bestimmte Schnittstellen beschraenken, z. B. br1 (X2) mit der
+	// Steuerbox. Sonst kuendigt Zeroconf auf jeder Schnittstelle alle
+	// Adressen an, auch die aus anderen Netzen und von docker0.
+	for _, name := range strings.Split(u.Text("EEBUS_SCHNITTSTELLEN", ""), ",") {
+		name = strings.TrimSpace(name)
+		if name == "" || slices.Contains(konf.Schnittstellen, name) {
+			continue
+		}
+		if len(name) > 15 || strings.ContainsAny(name, " /:") {
+			return konf, fmt.Errorf("EEBUS_SCHNITTSTELLEN: %q ist kein Schnittstellenname (z. B. br1)", name)
+		}
+		konf.Schnittstellen = append(konf.Schnittstellen, name)
 	}
 
 	// Ohne Seriennummer die MAC-Adresse des PFC: weltweit eindeutig und auf
@@ -213,6 +228,7 @@ func (k Konfiguration) Anzeige() []KonfigGruppe {
 		}},
 		{"Schnittstellen", []KonfigEintrag{
 			{Name: "EEBUS-Port", Wert: fmt.Sprint(k.EebusPort), Variable: "EEBUS_PORT"},
+			{Name: "mDNS-Schnittstellen", Wert: schnittstellenText(k.Schnittstellen), Variable: "EEBUS_SCHNITTSTELLEN"},
 			{Name: "Modbus-Server", Wert: k.ModbusUrl, Variable: "MODBUS_URL"},
 			{Name: "Datenverzeichnis", Wert: k.Datenverzeichnis, Variable: "DATENVERZEICHNIS"},
 			{Name: "Web-UI", Wert: k.WebAdresse, Variable: "WEB_ADRESSE"},
@@ -220,6 +236,13 @@ func (k Konfiguration) Anzeige() []KonfigGruppe {
 			{Name: "EEBUS-Protokoll auf stdout", Wert: anAus(k.EebusDebug), Variable: "EEBUS_DEBUG"},
 		}},
 	}
+}
+
+func schnittstellenText(namen []string) string {
+	if len(namen) == 0 {
+		return "alle"
+	}
+	return strings.Join(namen, ", ")
 }
 
 func stundenMinuten(d time.Duration) string {

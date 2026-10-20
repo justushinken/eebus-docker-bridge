@@ -71,7 +71,7 @@ Vor der Übergabe an den Messstellenbetreiber die SHIP-ID festschreiben, siehe [
 | Thema | Datei |
 |---|---|
 | Installation, Update, alle Variablen, Datenverzeichnis, Status-UI | [docs/betrieb.md](docs/betrieb.md) |
-| Kopplung, SHIP-ID, Netzwerk, PROLAN-Steuerbox | [docs/kopplung.md](docs/kopplung.md) |
+| Kopplung, SHIP-ID, Netzwerk, Fehlersuche, Steuerboxen (Swistec, PROLAN) | [docs/kopplung.md](docs/kopplung.md) |
 | Modbus-Registerlayout und CODESYS-Bausteine | [codesys/README.md](codesys/README.md) |
 | Test-Steuerbox, SPS-Simulator, lokale Testumgebung | [testwerkzeuge/README.md](testwerkzeuge/README.md) |
 | Aufbau des Codes, eebus-go-Version, offene Punkte | [docs/entwicklung.md](docs/entwicklung.md) |
@@ -80,7 +80,7 @@ Im UI erklärt außerdem die Seite „Anleitung“ Aufbau, Zustände, Kopplung u
 
 ## Stand und Einschränkungen
 
-- Lokal mit der Test-Steuerbox in allen Szenarien getestet, **noch nicht gegen eine echte Steuerbox** (als erste vorgesehen: PROLAN STB-142E).
+- Lokal mit der Test-Steuerbox in allen Szenarien getestet. **Erste echte Steuerbox (Swistec SwisBox) seit 20.10.2026 in Inbetriebnahme**, noch ohne Verbindung (die Box nimmt keine Verbindung an, Klärung mit dem Messstellenbetreiber läuft).
 - Nutzt einen unveröffentlichten Entwicklungsstand von eebus-go/ship-go (für den SHIP Pairing Service), auf feste Commits gepinnt.
 - Das Gateway ist **nicht EEBUS-zertifiziert**. Für Pilot- und Eigenanlagen gedacht, für Serienanlagen vorher mit Netzbetreiber bzw. Messstellenbetreiber klären.
 - Die CODESYS-Bausteine der aktuellen Registerversion sind noch nicht in CODESYS kompiliert.

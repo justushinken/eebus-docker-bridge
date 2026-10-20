@@ -34,6 +34,8 @@ services:
       # Im Container-Netz statt nur 127.0.0.1, damit SPS-Simulator und
       # Modbus-Master auf dem PC herankommen.
       MODBUS_URL: tcp://0.0.0.0:5502
+      # mDNS nur im Container-Netz (wie br1 auf dem PFC mit getrenntem X2)
+      EEBUS_SCHNITTSTELLEN: eth0
       NENNLEISTUNG_MAX_W: "11000"
       EEBUS_USECASES: lpc,lpp,mpc,mgcp
       FAILSAFE_EINSPEISEGRENZE_W: "4800"

@@ -87,6 +87,11 @@ func main() {
 		log.Fatalf("EEBUS-Konfiguration: %v", err)
 	}
 	konfiguration.SetAlternateIdentifier(konf.ShipId)
+	if len(konf.Schnittstellen) > 0 {
+		konfiguration.SetInterfaces(konf.Schnittstellen)
+	}
+	meldeSchnittstellen(konf.Schnittstellen)
+	meldeMdnsAnbieter()
 
 	if werte := LadeFailsafe(konf.Datenverzeichnis); werte != nil {
 		konf.FailsafeGrenzeW, konf.FailsafeMindestdauer = werte.GrenzeW, werte.Mindestdauer
@@ -105,8 +110,10 @@ func main() {
 
 	gw := NeuesGateway(konf, einstellungen, eigenerSki, kopplung)
 	dienst := service.NewService(konfiguration, gw)
+	// Immer mitlesen: Verbindungsfehler meldet ship-go nur in seinem Log.
+	dienst.SetLogging(gemeinsam.NeuesEebusLog(konf.EebusDebug, gw.versuche.EebusMeldung))
+	protokoll.SetzeFilter(gw.versuche.BeobachteLog)
 	if konf.EebusDebug {
-		dienst.SetLogging(gemeinsam.NeuesEebusLog())
 		log.Printf("EEBUS_DEBUG: Protokoll von eebus-go auf stdout (docker logs)")
 	}
 	if err := dienst.Setup(); err != nil {

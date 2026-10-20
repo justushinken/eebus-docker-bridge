@@ -10,18 +10,19 @@ Doku für Anwender: `README.md` (Schnellstart, kurz halten), `docs/betrieb.md` (
   - SHIP Pairing Service, Anleitungsseiten, gespeicherte Failsafe-Werte, SHIP-ID aus der MAC.
   - **Neu:** alle vier FNN-Use-Cases (per `EEBUS_USECASES` wählbar, Vorgabe `lpc`), Suchmodus und Kopplung vom Gateway aus, Diagnose der Gegenstelle, Anlagenstatus und Revisionen, Freigabe nur bei erreichbarer SPS, Modbus-Erweiterung 2, neue CODESYS-Bausteine.
   - Umbenennung Brücke → EEBUS-Gateway, README aufgeteilt, Compose getrennt (08.10.2026).
+  - Nach der ersten Inbetriebnahme (20.10.2026): `EEBUS_SCHNITTSTELLEN` (mDNS nur auf z. B. `br1`), Startmeldung zu Avahi/Zeroconf, Karte „Verbindungsversuche“ (liest ship-go-Log mit), `.local`-Lookup-Fehler unterdrückt. Lokal getestet, nicht auf dem PFC.
   - `main` = Stand 0.3 (nur SKI-Verfahren, eebus-go v0.7.0).
-- **Lokal mit der Test-Steuerbox getestet** (alle Szenarien der Steuerbox-Anleitung, Stand 03.10.2026), **noch nicht gegen eine echte Steuerbox, nicht auf dem PFC**.
+- **Lokal mit der Test-Steuerbox getestet** (alle Szenarien der Steuerbox-Anleitung, Stand 03.10.2026), **noch keine Verbindung mit einer echten Steuerbox**.
 - **CODESYS-Bausteine** der Erweiterung 2 sind ohne CODESYS geschrieben, nicht kompiliert.
-- **Auf dem PFC läuft 0.2** (nur Status-UI) noch unter altem Namen (`eebus-bruecke`, `/home/eebus-bruecke`), gestartet mit `GERAET_SERIENNUMMER=0001`. Beim Update auf 0.5 umziehen (docs/betrieb.md, „Umstieg“) und die Zeile weglassen, dann kommt die SHIP-ID aus der MAC. Images 0.4 unter `dist/` sind veraltet, als nächstes 0.5 bauen.
-- **Erste echte Steuerbox: PROLAN STB-142E** (EEBUS über Buchse ETH1, Kopplung richtet der Messstellenbetreiber aus der Ferne ein). Recherche und Fragen an den MSB stehen in docs/kopplung.md, Abschnitt „PROLAN-Steuerbox“.
+- **Auf dem PFC läuft 0.5** (Stand 20.10.2026) noch unter altem Namen: Container `eebus-bruecke`, `/home/eebus-bruecke`, `--network host`, `-v /var/run/dbus:/var/run/dbus`. Env: `GERAET_MARKE=ecg`, `SHIP_ID=ecg-PFC200-LPC-Bruecke-0030DE683ADC` (bleibt so, steht beim MSB), `EEBUS_USECASES=lpc`, `EEBUS_PAIRING_SERVICE=aus`, `EEBUS_REMOTE_SKI=d4e4c4aeb6082d84bc5b09ecd679e0edd6241a5c`, `NENNLEISTUNG_MAX_W=11000`, `FAILSAFE_GRENZE_W=11000`, `FAILSAFE_MINDESTDAUER=2h`, `EEBUS_DEBUG=an`. SKI des Gateways `d3b6409e4b5f…`, Port 4712. Als nächstes 0.6 mit `EEBUS_SCHNITTSTELLEN=br1`.
+- **Erste echte Steuerbox: Swistec SwisBox** (nicht PROLAN), SHIP-ID `GSWIC026090004`, EEBUS an ETH1 mit 192.168.1.100/24, nur SKI-Verfahren, SHIP-Port dynamisch. Netz zum Test X1+X2 gebrückt (br0 = 192.168.1.74/24), Ziel X2 getrennt (br1). **Box nimmt keine Verbindung an** (TCP-RST auf ihrem angekündigten Port, verbindet sich selbst nie), Anfrage an MSB/Swistec läuft. Details in docs/kopplung.md, „Swistec SwisBox“. PROLAN STB-142E bleibt dokumentiert (Abschnitt „PROLAN-Steuerbox“).
 
 ## Nächste Schritte / offen
 
-1. Fragen an den Messstellenbetreiber klären (docs/kopplung.md, „PROLAN-Steuerbox“): FW ≥ 1.1.3, aktive Use Cases, Kopplungsverfahren, IP-Vergabe an ETH1, Kaskadierung aus, Failsafe-Werte, Technisches Handbuch.
-2. 0.5 bauen und auf dem PFC testen, auch Gateway + Test-Steuerbox gleichzeitig. CODESYS-Bausteine übernehmen und kompilieren.
-3. Netzwerk: Direktkabel ETH1 → X2 vorab mit Laptop und Test-Steuerbox an X2 testen (inkl. IPv6-Link-Local ohne DHCP).
-4. Beim ersten Kontakt mit der PROLAN-Box: Karte „Steuerbox: gemeldete Daten“ auswerten (Use-Case-Versionen, Entitäten), ggf. `EEBUS_DEBUG=an`. Prüfen, ob sie MPC auf der CEM-Entität liest, sonst `MPC_ENTITAET=submeter`.
+1. Antwort von MSB/Swistec zur SwisBox abwarten (docs/kopplung.md, „Swistec SwisBox“): Konfiguration mit `ski1` aktiv, EEBUS auf ETH1 frei, Client/Server-Rolle, warum Port geschlossen, Log der Box.
+2. 0.6 bauen, auf dem PFC als `eebus-gateway` umziehen (docs/betrieb.md, „Umstieg“, dabei `SHIP_ID` und `EEBUS_REMOTE_SKI` übernehmen), X2 wieder trennen und `EEBUS_SCHNITTSTELLEN=br1` setzen. Prüfen: Startmeldungen „mDNS nur auf br1“ und Avahi-Grund, `tcpdump -ni br1 udp port 5353` zeigt nur 192.168.1.74, Karte „Verbindungsversuche“. CODESYS-Bausteine übernehmen und kompilieren.
+3. Netzwerk: IPv6-Link-Local ohne IPv4 an X2 noch ungetestet.
+4. Beim ersten Kontakt mit einer echten Steuerbox: Karte „Steuerbox: gemeldete Daten“ auswerten (Use-Case-Versionen, Entitäten), ggf. `EEBUS_DEBUG=an`. Prüfen, ob sie MPC auf der CEM-Entität liest, sonst `MPC_ENTITAET=submeter`.
 5. Vor Übergabe: `GERAET_MARKE` auf Firmenkürzel, SHIP-ID mit `SHIP_ID=…` festschreiben (docs/kopplung.md, „Vor der Übergabe“).
 6. Zustandsautomat (`gateway/begrenzung.go`, `takt`) gegen die Spezifikationen LPC/LPP und FNN-Lastenheft 1.4 prüfen. Konkret: Ohne Steuerbox geht Failsafe nach der Mindestdauer in „Unbegrenzt/autonom“ (Anlage frei). Ist das FNN-konform, oder muss die Failsafe-Grenze bleiben? (Vom Nutzer am 04.10.2026 für später vorgemerkt.) Update-Rate der Messwerte klären (sendet bei jeder Änderung).
 7. **Neustart/Stromausfall während einer Begrenzung:** Die aktive Grenze geht verloren (Init → Failsafe-Grenze, nach Heartbeat Unbegrenzt). Die Test-Steuerbox schreibt sie nicht neu (getestet 04.10.2026). Klären: Schreibt eine echte Steuerbox nach dem Wiederverbinden erneut? Sonst Grenze mit Ablaufzeit in einer Datei sichern und im Init wieder einsetzen (Uhr des PFC beachten).
@@ -76,6 +77,7 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
   - `kopplung.go`: ship-go-Callbacks, Suchmodus, Kopplungsanfragen, eine Steuerbox (Änderungen seriell über `kopplungMu`).
   - `messwerte.go`: MPC/MGCP einrichten, MGCP-Akteur-Workaround. Jeder Messwert ist eine Zeile der Tabelle `messgroesse` (Register, Gültigkeitsbit, Update-Funktion); Senden und UI laufen nur darüber.
   - `gegenstelle.go`: Diagnose der verbundenen Steuerbox.
+  - `verbindungsversuche.go`: letzter TCP/TLS-Versuch je Richtung aus dem ship-go-Log (`EebusLog`-Beobachter) und den TLS-Fehlern im Standard-Log (Filter des Ereignisprotokolls). Eigene Sperre, unter ihr nie loggen. `netz.go`: Schnittstellen und Avahi beim Start prüfen.
   - `anlage.go`: Revisionen, Anlagenstatus.
   - `modbus.go`: Registerlayout.
   - `web.go` + `web/`: Status-UI, Aktionen, Anleitung. `GET /api/konfiguration` liefert `Konfiguration.Anzeige()` (ohne Passwort).

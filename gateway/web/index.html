@@ -511,12 +511,12 @@ function zeige(s) {
 	marke($("anlagenstatus"), s.anlagenstatus, s.anlagenstatus === "normal" ? "gruen" : s.anlagenstatus === "Standby" ? "" : "rot");
 
 	$("useCases").replaceChildren(...s.useCases.map(u => {
-		const lokal = document.createElement("span"), box = document.createElement("span");
-		marke(lokal, u.lokal ? "an" : "aus", u.lokal ? "gruen" : "");
+		const gateway = document.createElement("span"), box = document.createElement("span");
+		marke(gateway, u.gateway ? "an" : "aus", u.gateway ? "gruen" : "");
 		if (s.verbindung !== 2) box.textContent = "–";
 		else if (u.steuerbox) marke(box, "unterstützt", "gruen");
-		else marke(box, "nein", u.lokal ? "orange" : "");
-		return zeile([u.name, lokal, box]);
+		else marke(box, "nein", u.gateway ? "orange" : "");
+		return zeile([u.name, gateway, box]);
 	}));
 
 	$("karteMpc").hidden = !s.mpc;

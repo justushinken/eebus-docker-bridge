@@ -109,8 +109,8 @@ type BegrenzungStatus struct {
 
 type UseCaseStatus struct {
 	Name      string `json:"name"`
-	Lokal     bool   `json:"lokal"`
-	Steuerbox bool   `json:"steuerbox"`
+	Gateway   bool   `json:"gateway"`   // vom Gateway angeboten (Input-Register 15)
+	Steuerbox bool   `json:"steuerbox"` // von der Steuerbox gemeldet (Input-Register 16)
 }
 
 // StatusDaten ist ein konsistenter Schnappschuss fuer das UI. Zeitangaben
@@ -261,10 +261,10 @@ func (b *Gateway) Status(jetzt time.Time) StatusDaten {
 		s.Partner = gemeinsam.Bezeichnung(b.partner)
 	}
 
-	lokal := b.useCasesLokal()
-	for _, uc := range steuerboxUseCases {
+	gateway := b.useCasesGateway()
+	for _, uc := range useCaseTabelle {
 		s.UseCases = append(s.UseCases, UseCaseStatus{
-			Name: uc.kurz, Lokal: lokal&uc.bit != 0, Steuerbox: b.steuerboxUseCases&uc.bit != 0,
+			Name: uc.kurz, Gateway: gateway&uc.bit != 0, Steuerbox: b.steuerboxUseCases&uc.bit != 0,
 		})
 	}
 	s.Mpc, s.Mgcp = b.messwerteUi(b.mpcGroessen), b.messwerteUi(b.mgcpGroessen)

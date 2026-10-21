@@ -11,18 +11,18 @@ VAR_INPUT
 	stMgcp : ST_EebusMgcp;
 END_VAR
 VAR_IN_OUT
-	aHoldingRegister : ARRAY [0..27] OF WORD;
+	aHoldingRegister : ARRAY [0..27] OF WORD;   // GvlEebus.aHoldingRegister
 END_VAR
 VAR CONSTANT
-	// Holding-Register, identisch mit modbus.go
-	iRegMpcMaske         : INT := 5;
-	iRegMgcpMaske        : INT := 6;
-	iRegMpcP             : INT := 8;
-	iRegMpcEBezug        : INT := 10;
-	iRegMpcEErzeugung    : INT := 14;
-	iRegMgcpP            : INT := 18;
-	iRegMgcpEEinspeisung : INT := 20;
-	iRegMgcpEBezug       : INT := 24;
+	// Holding-Register (Belegung siehe GvlEebus)
+	iRegMpcMaske         : INT := 5;    // Gültigkeitsbits MPC
+	iRegMgcpMaske        : INT := 6;    // Gültigkeitsbits MGCP
+	iRegMpcP             : INT := 8;    // MPC Leistung in W, DINT, 2 Register
+	iRegMpcEBezug        : INT := 10;   // MPC Energie Bezug in Wh, ULINT, 4 Register
+	iRegMpcEErzeugung    : INT := 14;   // MPC Energie Erzeugung in Wh, ULINT, 4 Register
+	iRegMgcpP            : INT := 18;   // MGCP Leistung in W, DINT, 2 Register
+	iRegMgcpEEinspeisung : INT := 20;   // MGCP Energie Einspeisung in Wh, ULINT, 4 Register
+	iRegMgcpEBezug       : INT := 24;   // MGCP Energie Bezug in Wh, ULINT, 4 Register
 END_VAR
 
 aHoldingRegister[iRegMpcMaske]  := stMpc.wGueltig;

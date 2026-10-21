@@ -88,7 +88,7 @@ Aktionen verlangen `Content-Type: application/json` (CSRF-Schutz). Screenshots d
 ## Modbus-Schnittstelle
 
 - **Versionsregel:** Register 1 = Schnittstellenversion (1), nur bei inkompatiblen Änderungen erhöhen. Neue Register nur anhängen und dann `ErweiterungsVersion` (Register 14, jetzt 2) erhöhen. `FbEebusLpc` prüft Register 1 und läuft deshalb weiter.
-- Input 0–30: LPC-Block ab 2, LPP-Block ab 17 (gleicher Aufbau, Offsets `blk*`), 14 Erweiterung, 15/16 Use-Case-Masken (lokal / Steuerbox), 29–30 Failsafe-Mindestdauer.
+- Input 0–30: LPC-Block ab 2, LPP-Block ab 17 (gleicher Aufbau, Offsets `blk*`), 14 Erweiterung, 15/16 Use-Case-Masken (Gateway / Steuerbox, in CODESYS `wUseCasesGateway`/`wUseCasesSteuerbox`), 29–30 Failsafe-Mindestdauer.
 - Holding 0–27: 0 Lebenszeichen, 1–2/3–4 Nennleistungen, 5/6 Gültigkeitsmasken (je 3 Bits), 7 Anlagenstatus, 8–17 MPC, 18–27 MGCP (je Leistung DINT, Energie Bezug/Erzeugung bzw. Einspeisung/Bezug ULINT). Die SPS schreibt alles in einem FC16.
 - Messwerte bewusst nur Leistung und Energie (Entscheidung 10/2026): reicht für FNN und die Pflicht-Szenarien. Strom, Spannung, Frequenz, Phasen, PV-Faktor bei Bedarf hinten anhängen.
 - Tabellen in `codesys/README.md`.

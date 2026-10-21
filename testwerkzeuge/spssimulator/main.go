@@ -36,10 +36,11 @@ func u32(r []uint16, i int) uint32 {
 
 // Registerbelegung siehe gateway/modbus.go
 const (
-	blockBezug       = 2
-	blockEinspeisung = 17
-	anzahlInput      = 31
-	anzahlHolding    = 28
+	blockBezug         = 2
+	blockEinspeisung   = 17
+	regUseCasesGateway = 15 // Bit 1 = LPP vom Gateway angeboten
+	anzahlInput        = 31
+	anzahlHolding      = 28
 )
 
 type register []uint16
@@ -96,7 +97,7 @@ func main() {
 		var lpcGrenze, lppGrenze float64
 		if r != nil {
 			lpcAktiv, lpcGrenze = r[blockBezug+4] == 1, float64(u32(r, blockBezug+2))
-			lppAktiv, lppGrenze = r[blockEinspeisung+4] == 1 && r[15]&2 != 0, float64(u32(r, blockEinspeisung+2))
+			lppAktiv, lppGrenze = r[blockEinspeisung+4] == 1 && r[regUseCasesGateway]&2 != 0, float64(u32(r, blockEinspeisung+2))
 		}
 		if lpcAktiv {
 			verbrauch = min(verbrauch, lpcGrenze)

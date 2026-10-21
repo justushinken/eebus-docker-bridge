@@ -1,35 +1,44 @@
 // Verbindung zum EEBUS-Gateway (Erweiterungsversion 2: LPC, LPP, MPC, MGCP).
 //
 // Der Baustein
-// - überwacht Lebenszeichen und Schnittstellenversion des Gateways,
+// - überwacht Lebenszeichen und Versionen des Gateways (xGatewayOk),
 // - dekodiert Verbindung, Heartbeat und die Use-Case-Masken,
 // - schreibt SPS-Lebenszeichen, Nennleistungen und Anlagenstatus in die
 //   Holding-Register (Register 0 bis 4 und 7).
 //
 // Die Begrenzungen je Richtung wertet FbEebusBegrenzung aus, die Messwerte
-// schreibt FbEebusMesswerte. Alle drei arbeiten auf denselben Registerabbildern.
+// schreibt FbEebusMesswerte. Alle drei arbeiten auf denselben Registerabbildern
+// (GvlEebus, dort auch die Belegung aller Register).
 FUNCTION_BLOCK FbEebusGateway
 VAR_INPUT
 	xFreigabe                 : BOOL;            // Auswertung aktiv
-	udiNennleistungBezugW     : UDINT;           // max. Leistungsaufnahme der Anlage in W (LPC), 0 = Vorgabe des Gateways
-	udiNennleistungErzeugungW : UDINT;           // max. Einspeiseleistung in W (LPP), 0 = Vorgabe des Gateways
+	udiNennleistungBezugW     : UDINT;           // max. Leistungsaufnahme der Anlage in W (LPC), 0 = Einstellung im Gateway
+	udiNennleistungErzeugungW : UDINT;           // max. Einspeiseleistung in W (LPP), 0 = Einstellung im Gateway
 	eStatus                   : eAnlagenstatus;  // Störung der Anlage an die Steuerbox melden
 	tGatewayTimeout           : TIME := T#10S;   // max. Zeit ohne Änderung des Gateway-Lebenszeichens
 END_VAR
 VAR_IN_OUT
-	aInputRegister   : ARRAY [0..30] OF WORD;    // Abbild der Input-Register des Gateways
-	aHoldingRegister : ARRAY [0..27] OF WORD;    // an das Gateway zu schreibende Register
+	aInputRegister   : ARRAY [0..30] OF WORD;    // GvlEebus.aInputRegister
+	aHoldingRegister : ARRAY [0..27] OF WORD;    // GvlEebus.aHoldingRegister
 END_VAR
 VAR_OUTPUT
-	xGatewayOk          : BOOL;                  // Gateway lebt und Version passt
-	eVerbindung         : eEebusVerbindung;
+	xGatewayOk          : BOOL;                  // Gateway lebt und beide Versionen passen; sonst gelten die Ersatzgrenzen
+	eVerbindung         : eEebusVerbindung;      // Verbindung Gateway <-> Steuerbox
 	uiHeartbeatAlterS   : UINT;                  // Sekunden seit letztem Heartbeat der Steuerbox, 65535 = nie
-	xLpcAktiv           : BOOL;                  // Use Case vom Gateway angeboten ...
-	xLppAktiv           : BOOL;
-	xMpcAktiv           : BOOL;
-	xMgcpAktiv          : BOOL;
-	wUseCasesSteuerbox  : WORD;                  // ... und von der Steuerbox unterstützt (Bits wie wUseCases*)
-	udiFailsafeMindestdauerS : UDINT;            // gemeinsam für LPC und LPP
+
+	// Use Cases, die das Gateway anbietet (Register 15, im Gateway fest
+	// eingestellt). Steuern, ob FbEebusBegrenzung eine Richtung auswertet.
+	wUseCasesGateway    : WORD;                  // Bit 0 LPC, 1 LPP, 2 MPC, 3 MGCP
+	xLpcGateway         : BOOL;                  // Bezug begrenzen (LPC) angeboten
+	xLppGateway         : BOOL;                  // Einspeisung begrenzen (LPP) angeboten
+	xMpcGateway         : BOOL;                  // Messwerte der Anlage (MPC) angeboten
+	xMgcpGateway        : BOOL;                  // Messwerte Netzanschlusspunkt (MGCP) angeboten
+
+	// Use Cases, die die verbundene Steuerbox meldet (Register 16), nur zur
+	// Information. 0 ohne Verbindung.
+	wUseCasesSteuerbox  : WORD;                  // Bits wie wUseCasesGateway
+
+	udiFailsafeMindestdauerS : UDINT;            // Failsafe-Mindestdauer in s, gemeinsam für LPC und LPP
 	xFehler             : BOOL;
 	udiFehlerId         : UDINT;                 // siehe Konstanten udiFehler*
 END_VAR
@@ -39,29 +48,35 @@ VAR
 	tonSekundentakt     : TON;
 	uiLebenszeichenSps  : UINT;
 	xVersionOk          : BOOL;
-	wUseCases           : WORD;
 END_VAR
 VAR CONSTANT
-	uiSchnittstellenVersion : UINT := 1;   // SchnittstellenVersion in modbus.go
-	uiErweiterungMindestens : UINT := 2;   // ErweiterungsVersion in modbus.go
+	// Versionsprüfung. Register 1 muss genau uiSchnittstellenVersion sein.
+	// Register 14 (Erweiterungsversion) muss mindestens uiErweiterungsVersionMin
+	// sein: Erst ab Erweiterung 2 liefert das Gateway die Register 14 bis 30
+	// (LPP, Use Cases, Mindestdauer). Ein älteres Gateway, oder ein FC04-Kanal,
+	// der weniger als 31 Register liest, liefert dort 0. Dann meldet der
+	// Baustein Fehler 2, statt mit falschen Werten zu arbeiten. Ein neueres
+	// Gateway (Erweiterung 3, 4, ...) ist in Ordnung: Es hängt Register nur an.
+	uiSchnittstellenVersion  : UINT := 1;   // Gateway: SchnittstellenVersion
+	uiErweiterungsVersionMin : UINT := 2;   // Gateway: ErweiterungsVersion
 
-	// Input-Register, identisch mit modbus.go
-	iRegLebenszeichen       : INT := 0;
-	iRegVersion             : INT := 1;
-	iRegVerbindung          : INT := 3;
-	iRegHeartbeatAlter      : INT := 13;
-	iRegErweiterung         : INT := 14;
-	iRegUseCasesLokal       : INT := 15;
-	iRegUseCasesSteuerbox   : INT := 16;
-	iRegMindestdauer        : INT := 29;
+	// Input-Register (Belegung siehe GvlEebus)
+	iRegLebenszeichen       : INT := 0;    // Lebenszeichen Gateway
+	iRegVersion             : INT := 1;    // Schnittstellenversion
+	iRegVerbindung          : INT := 3;    // Verbindung (aus dem Block Bezug, in beiden Blöcken gleich)
+	iRegHeartbeatAlter      : INT := 13;   // Heartbeat-Alter (aus dem Block Bezug, in beiden Blöcken gleich)
+	iRegErweiterung         : INT := 14;   // Erweiterungsversion
+	iRegUseCasesGateway     : INT := 15;   // Use Cases des Gateways
+	iRegUseCasesSteuerbox   : INT := 16;   // Use Cases der Steuerbox
+	iRegMindestdauer        : INT := 29;   // Failsafe-Mindestdauer, 2 Register
 
-	// Holding-Register, identisch mit modbus.go
-	iRegSpsLebenszeichen    : INT := 0;
-	iRegNennleistung        : INT := 1;
-	iRegNennleistungErzeugung : INT := 3;
-	iRegAnlagenstatus       : INT := 7;
+	// Holding-Register (Belegung siehe GvlEebus)
+	iRegSpsLebenszeichen      : INT := 0;  // Lebenszeichen SPS
+	iRegNennleistung          : INT := 1;  // Nennleistung Bezug, 2 Register
+	iRegNennleistungErzeugung : INT := 3;  // Nennleistung Erzeugung, 2 Register
+	iRegAnlagenstatus         : INT := 7;  // Anlagenstatus
 
-	// Bits der Use-Case-Masken
+	// Bits der Use-Case-Masken (Register 15 und 16)
 	wUseCaseLpc             : WORD := 16#0001;
 	wUseCaseLpp             : WORD := 16#0002;
 	wUseCaseMpc             : WORD := 16#0004;
@@ -69,8 +84,8 @@ VAR CONSTANT
 
 	// Fehlernummern
 	udiFehlerKeine          : UDINT := 0;
-	udiFehlerGatewayTimeout : UDINT := 1;   // Lebenszeichen des Gateways steht
-	udiFehlerVersion        : UDINT := 2;   // Registerlayout passt nicht (Gateway zu alt?)
+	udiFehlerGatewayTimeout : UDINT := 1;   // Lebenszeichen des Gateways steht (Container gestoppt, Modbus-Verbindung weg)
+	udiFehlerVersion        : UDINT := 2;   // Register 1 <> 1 oder Register 14 < 2: Gateway zu alt oder FC04-Kanal kürzer als 31 Register
 END_VAR
 
 // ---------------------------------------------------------------------------
@@ -94,7 +109,7 @@ tonGatewayTimeout(IN := xFreigabe AND (aInputRegister[iRegLebenszeichen] = wLebe
 wLebenszeichenAlt := aInputRegister[iRegLebenszeichen];
 
 xVersionOk := WORD_TO_UINT(aInputRegister[iRegVersion]) = uiSchnittstellenVersion
-              AND WORD_TO_UINT(aInputRegister[iRegErweiterung]) >= uiErweiterungMindestens;
+              AND WORD_TO_UINT(aInputRegister[iRegErweiterung]) >= uiErweiterungsVersionMin;
 xGatewayOk := xFreigabe AND NOT tonGatewayTimeout.Q AND xVersionOk;
 
 IF xGatewayOk THEN
@@ -106,7 +121,7 @@ IF xGatewayOk THEN
 		eVerbindung := eEebusVerbindung.Unbekannt;
 	END_CASE
 	uiHeartbeatAlterS        := WORD_TO_UINT(aInputRegister[iRegHeartbeatAlter]);
-	wUseCases                := aInputRegister[iRegUseCasesLokal];
+	wUseCasesGateway         := aInputRegister[iRegUseCasesGateway];
 	wUseCasesSteuerbox       := aInputRegister[iRegUseCasesSteuerbox];
 	udiFailsafeMindestdauerS := FuEebusLiesUdint(aRegister := aInputRegister, iIndex := iRegMindestdauer);
 	xFehler                  := FALSE;
@@ -114,7 +129,7 @@ IF xGatewayOk THEN
 ELSE
 	eVerbindung              := eEebusVerbindung.Unbekannt;
 	uiHeartbeatAlterS        := 16#FFFF;
-	wUseCases                := 0;
+	wUseCasesGateway         := 0;
 	wUseCasesSteuerbox       := 0;
 	udiFailsafeMindestdauerS := 0;
 	xFehler                  := xFreigabe;
@@ -127,8 +142,8 @@ ELSE
 	END_IF
 END_IF
 
-xLpcAktiv  := (wUseCases AND wUseCaseLpc) <> 0;
-xLppAktiv  := (wUseCases AND wUseCaseLpp) <> 0;
-xMpcAktiv  := (wUseCases AND wUseCaseMpc) <> 0;
-xMgcpAktiv := (wUseCases AND wUseCaseMgcp) <> 0;
+xLpcGateway  := (wUseCasesGateway AND wUseCaseLpc) <> 0;
+xLppGateway  := (wUseCasesGateway AND wUseCaseLpp) <> 0;
+xMpcGateway  := (wUseCasesGateway AND wUseCaseMpc) <> 0;
+xMgcpGateway := (wUseCasesGateway AND wUseCaseMgcp) <> 0;
 END_FUNCTION_BLOCK

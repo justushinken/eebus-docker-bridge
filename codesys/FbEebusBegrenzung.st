@@ -8,43 +8,47 @@
 // einer einzelnen Last.
 //
 // Ist das Gateway ausgefallen, gilt die lokale Ersatzgrenze (sichere Seite, wie
-// im Failsafe). Bietet das Gateway den Use Case bewusst nicht an
-// (EEBUS_USECASES), gibt es in dieser Richtung keine Begrenzung.
+// im Failsafe). Bietet das Gateway den Use Case bewusst nicht an (im Gateway
+// abgeschaltet), gibt es in dieser Richtung keine Begrenzung.
+//
+// Für die Regelung genügen xBegrenzungAktiv und udiLeistungsgrenzeW. Den
+// Zustandsautomaten (Init, Begrenzt, Failsafe, ...) führt das Gateway, die
+// übrigen Ausgänge dienen der Anzeige.
 FUNCTION_BLOCK FbEebusBegrenzung
 VAR_INPUT
 	xGatewayOk       : BOOL;                     // von FbEebusGateway
-	xUseCaseAktiv    : BOOL;                     // von FbEebusGateway (xLpcAktiv bzw. xLppAktiv), FALSE = Use Case aus, keine Begrenzung
+	xUseCaseGateway  : BOOL;                     // von FbEebusGateway (xLpcGateway bzw. xLppGateway), FALSE = Use Case im Gateway aus, keine Begrenzung
 	iBasis           : INT := 2;                 // 2 = Bezug, 17 = Einspeisung
 	udiErsatzgrenzeW : UDINT := 4200;            // gilt, solange das Gateway nicht verfügbar ist
 END_VAR
 VAR_IN_OUT
-	aInputRegister   : ARRAY [0..30] OF WORD;
+	aInputRegister   : ARRAY [0..30] OF WORD;    // GvlEebus.aInputRegister
 END_VAR
 VAR_OUTPUT
-	xBegrenzungAktiv    : BOOL;                  // udiLeistungsgrenzeW muss eingehalten werden
-	udiLeistungsgrenzeW : UDINT;                 // nur gültig bei xBegrenzungAktiv
-	eZustand            : eLpcZustand;
-	udiRestdauerS       : UDINT;                 // Restlaufzeit der Grenze, 0 = unbefristet
-	udiGrenzeNetzW      : UDINT;                 // zuletzt empfangene Grenze (Diagnose)
-	udiFailsafeGrenzeW  : UDINT;                 // aktuelle Failsafe-Grenze (Diagnose)
+	xBegrenzungAktiv    : BOOL;                  // TRUE = udiLeistungsgrenzeW am Netzanschlusspunkt einhalten
+	udiLeistungsgrenzeW : UDINT;                 // einzuhaltende Grenze in W, nur gültig bei xBegrenzungAktiv
+	eZustand            : eLpcZustand;           // Zustand laut Gateway, Unbekannt bei Ausfall oder Use Case aus
+	udiRestdauerS       : UDINT;                 // Restlaufzeit der Grenze des Netzbetreibers in s, 0 = unbefristet (Diagnose)
+	udiGrenzeNetzW      : UDINT;                 // zuletzt empfangene Grenze des Netzbetreibers in W (Diagnose)
+	udiFailsafeGrenzeW  : UDINT;                 // aktuelle Failsafe-Grenze in W (Diagnose)
 	xErsatzgrenze       : BOOL;                  // Ersatzgrenze aktiv, Gateway nicht verfügbar
 END_VAR
 VAR
 	uiRohZustand : UINT;
 END_VAR
 VAR CONSTANT
-	// Offsets im Block, identisch mit blk* in modbus.go
-	iBlkZustand          : INT := 0;
-	iBlkWirksameGrenze   : INT := 2;
-	iBlkBegrenzungAktiv  : INT := 4;
-	iBlkGrenzeNetz       : INT := 5;
-	iBlkRestdauer        : INT := 7;
-	iBlkFailsafeGrenze   : INT := 9;
+	// Offsets im Block (Register = iBasis + Offset), Belegung siehe GvlEebus
+	iBlkZustand          : INT := 0;   // Zustand 0..4 (eLpcZustand)
+	iBlkWirksameGrenze   : INT := 2;   // wirksame Grenze in W, 2 Register
+	iBlkBegrenzungAktiv  : INT := 4;   // 1 = Grenze einhalten
+	iBlkGrenzeNetz       : INT := 5;   // letzte Grenze des Netzbetreibers in W, 2 Register
+	iBlkRestdauer        : INT := 7;   // Restlaufzeit in s, 2 Register
+	iBlkFailsafeGrenze   : INT := 9;   // Failsafe-Grenze in W, 2 Register
 END_VAR
 
 uiRohZustand := WORD_TO_UINT(aInputRegister[iBasis + iBlkZustand]);
 
-IF xGatewayOk AND NOT xUseCaseAktiv THEN
+IF xGatewayOk AND NOT xUseCaseGateway THEN
 	// Use Case abgeschaltet: keine Vorgaben in dieser Richtung
 	eZustand            := eLpcZustand.Unbekannt;
 	xBegrenzungAktiv    := FALSE;

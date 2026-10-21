@@ -347,7 +347,9 @@ function ampel(s) {
 	const w = richtungen[0];
 	if (!w) return zeigeAmpel("", "Kein Use Case aktiv", "");
 	const r = w.r, seit = "seit " + dauer(r.zustandSeitS);
-	const weitere = richtungen.slice(1).map(x => `${x.name}: ${x.r.zustandText}`).join(" · ");
+	// Die andere Richtung mit Wert, sonst fehlt bei zwei Grenzen eine in der Ampel
+	const weitere = richtungen.slice(1).map(x => `${x.name}: ${x.r.zustandText}`
+		+ (x.r.begrenzungAktiv ? `, ${watt(x.r.wirksameGrenzeW)}` : "")).join(" · ");
 	const zusatz = weitere ? " · " + weitere : "";
 	const name = richtungen.length > 1 ? w.name + " " : "";
 	// Steuerbox weg, aber noch innerhalb der 120 s bis zum Failsafe

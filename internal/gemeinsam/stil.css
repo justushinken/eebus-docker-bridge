@@ -59,13 +59,18 @@ h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacin
 
 /* Gesamtstatus (Gateway): Ampel und darunter die Verbindungen in einem Rahmen */
 .gesamtstatus { border: 1px solid var(--rand); border-radius: 10px; overflow: hidden; margin-bottom: 16px; background: var(--flaeche); }
-.gesamtstatus .ampel { margin: 0; border: none; border-radius: 0; }
+.gesamtstatus .ampel { margin: 0; border: none; border-radius: 0; min-width: 0; }
+/* Je Richtung (Bezug, Einspeisung) eine Ampel, nebeneinander wie die Statusfelder */
+.ampeln { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.ampeln .ampel:not([hidden]) + .ampel:not([hidden]) { border-left: 1px solid var(--rand); }
 .statusleiste { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--rand); }
 .statusfeld { display: flex; gap: 10px; align-items: flex-start; padding: 12px 20px 12px 24px; min-width: 0; } /* Punkt mittig unter dem der Ampel */
 .statusfeld + .statusfeld { border-left: 1px solid var(--rand); }
 @media (max-width: 600px) {
 	.statusleiste { grid-template-columns: 1fr; }
 	.statusfeld + .statusfeld { border-left: none; border-top: 1px solid var(--rand); }
+	.ampeln { grid-auto-flow: row; }
+	.ampeln .ampel:not([hidden]) + .ampel:not([hidden]) { border-left: none; border-top: 1px solid var(--rand); }
 }
 .statusfeld .punkt { width: 10px; height: 10px; border-radius: 50%; background: var(--grau); flex: none; margin-top: 5px; }
 .statusfeld.gruen .punkt { background: var(--gruen); }

@@ -128,7 +128,7 @@ Port 8090 statt 8080, weil auf dem PFC die CODESYS-WebVisu oft 8080 belegt. Bei 
 
 ## Status-UI
 
-`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Oben steht immer die Ampel mit dem kritischsten Zustand von Bezug und Einspeisung, darunter der Verbindungsstatus von Steuerbox und SPS. Darunter folgen Reiter, direkt aufrufbar, z. B. `…:8090/#kopplung`:
+`http://<pfc-ip>:8090`, Anmeldung mit Benutzer `admin` und dem Passwort aus `WEB_PASSWORT`. Oben steht immer je Richtung eine Ampel (Bezug, bei eingeschaltetem LPP daneben Einspeisung), darunter der Verbindungsstatus von Steuerbox und SPS. Was beide Richtungen betrifft, etwa der Countdown bis Failsafe nach Verlust der Steuerbox, steht im Feld der Steuerbox. Darunter folgen Reiter, direkt aufrufbar, z. B. `…:8090/#kopplung`:
 
 - **Übersicht** (Betrieb): je Richtung Zustand, wirksame Grenze, Grenze des Netzbetreibers, Restlaufzeit, Failsafe-Grenze, Nennleistung und letzter Ablehnungsgrund; Heartbeat, Failsafe-Mindestdauer; SPS-Lebenszeichen und Anlagenstatus; Messwerte MPC und MGCP.
 - **Kopplung** (Inbetriebnahme): per mDNS gefundene Geräte mit „Vertrauen“, gekoppelte Steuerbox und „Kopplung lösen“, einklappbarer Suchmodus, Daten für den Messstellenbetreiber (SKI, SHIP-ID, Fingerprint, Secret, QR-Code).

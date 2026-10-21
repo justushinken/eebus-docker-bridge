@@ -22,13 +22,24 @@
 		<span class="leise" id="geraet"></span>
 	</header>
 
-	<!-- Gesamtstatus in allen Reitern: Begrenzung, darunter die beiden Verbindungen -->
+	<!-- Gesamtstatus in allen Reitern: je Richtung eine Ampel, darunter die beiden Verbindungen -->
 	<section class="gesamtstatus">
-	<div class="ampel" id="ampel">
-		<div class="punkt"></div>
-		<div>
-			<div class="titel" id="ampelTitel">Lade …</div>
-			<div class="leise" id="ampelText"></div>
+	<div class="ampeln">
+		<div class="ampel" id="ampelB">
+			<div class="punkt"></div>
+			<div>
+				<div class="statusname" id="ampelBName">Bezug · LPC</div>
+				<div class="titel" id="ampelBTitel">Lade …</div>
+				<div class="leise" id="ampelBText"></div>
+			</div>
+		</div>
+		<div class="ampel" id="ampelE" hidden>
+			<div class="punkt"></div>
+			<div>
+				<div class="statusname">Einspeisung · LPP</div>
+				<div class="titel" id="ampelETitel"></div>
+				<div class="leise" id="ampelEText"></div>
+			</div>
 		</div>
 	</div>
 	<div class="statusleiste">
@@ -329,48 +340,52 @@ function knopf(text, klasse, aktion) {
 	return b;
 }
 
-function zeigeAmpel(farbe, titel, text) {
-	$("ampel").className = "ampel " + farbe;
-	$("ampelTitel").textContent = titel;
-	$("ampelText").textContent = text;
+function zeigeAmpel(p, farbe, titel, text) {
+	$("ampel" + p).className = "ampel " + farbe;
+	$("ampel" + p + "Titel").textContent = titel;
+	$("ampel" + p + "Text").textContent = text;
 }
 
 const zustandFarbe = { 0: "rot", 1: "gruen", 2: "orange", 3: "rot", 4: "gruen" };
 
-// Ampel: die kritischste der beiden Richtungen
-function ampel(s) {
-	const richtungen = [];
-	if (s.bezug) richtungen.push({ name: "Bezug", r: s.bezug });
-	if (s.einspeisung) richtungen.push({ name: "Einspeisung", r: s.einspeisung });
-	const rang = { 3: 4, 0: 3, 2: 2, 4: 1, 1: 0 };
-	richtungen.sort((a, b) => rang[b.r.zustand] - rang[a.r.zustand]);
-	const w = richtungen[0];
-	if (!w) return zeigeAmpel("", "Kein Use Case aktiv", "");
-	const r = w.r, seit = "seit " + dauer(r.zustandSeitS);
-	// Die andere Richtung mit Wert, sonst fehlt bei zwei Grenzen eine in der Ampel
-	const weitere = richtungen.slice(1).map(x => `${x.name}: ${x.r.zustandText}`
-		+ (x.r.begrenzungAktiv ? `, ${watt(x.r.wirksameGrenzeW)}` : "")).join(" · ");
-	const zusatz = weitere ? " · " + weitere : "";
-	const name = richtungen.length > 1 ? w.name + " " : "";
-	// Steuerbox weg, aber noch innerhalb der 120 s bis zum Failsafe
-	const weg = s.verbindung !== 2 && s.heartbeatAlterS != null
-		? ` · Steuerbox getrennt, Failsafe in ${dauer(Math.max(0, 120 - s.heartbeatAlterS))}` : "";
+// Kein Status vom Gateway: eine graue Ampel über die volle Breite
+function zeigeStoerung(titel, text) {
+	$("ampelB").hidden = false;
+	$("ampelBName").hidden = true;
+	$("ampelE").hidden = true;
+	zeigeAmpel("B", "", titel, text);
+}
+
+// Je Richtung eine Ampel. Was beide betrifft (Heartbeat, Countdown bis
+// Failsafe), steht einmal im Statusfeld der Steuerbox.
+function ampeln(s) {
+	$("ampelE").hidden = !s.einspeisung;
+	if (s.einspeisung) ampel("E", s, s.einspeisung);
+	if (s.bezug) ampel("B", s, s.bezug);
+	else if (s.einspeisung) $("ampelB").hidden = true;
+	else zeigeAmpel("B", "", "Kein Use Case aktiv", "Weder LPC noch LPP eingeschaltet (EEBUS_USECASES)");
+	$("ampelBName").hidden = !s.bezug;
+}
+
+function ampel(p, s, r) {
+	$("ampel" + p).hidden = false;
+	const seit = "seit " + dauer(r.zustandSeitS);
 	switch (r.zustand) {
-		case 0: zeigeAmpel("rot", `${name}Failsafe-Grenze ${watt(r.wirksameGrenzeW)}`, `Init: wartet auf Steuerbox · ${seit}${zusatz}`); break;
-		case 1: zeigeAmpel(weg ? "orange" : "gruen", "Unbegrenzt", `Von der Steuerbox gesteuert, keine Grenze aktiv · ${seit}${weg}${zusatz}`); break;
-		case 2: zeigeAmpel("orange", `${name}begrenzt auf ${watt(r.wirksameGrenzeW)}`,
-			`Grenze des Netzbetreibers · ${seit}` + (r.restdauerS > 0 ? ` · noch ${dauer(r.restdauerS)}` : " · unbefristet") + weg + zusatz); break;
+		case 0: zeigeAmpel(p, "rot", `Failsafe-Grenze ${watt(r.wirksameGrenzeW)}`, `Init: wartet auf die Steuerbox · ${seit}`); break;
+		case 1: zeigeAmpel(p, "gruen", "Unbegrenzt", `Von der Steuerbox gesteuert, keine Grenze aktiv · ${seit}`); break;
+		case 2: zeigeAmpel(p, "orange", `Begrenzt auf ${watt(r.wirksameGrenzeW)}`,
+			"Grenze des Netzbetreibers · " + (r.restdauerS > 0 ? `noch ${dauer(r.restdauerS)}` : "unbefristet") + ` · ${seit}`); break;
 		case 3: {
-			const rest = Math.max(0, s.failsafeMindestdauerS - r.zustandSeitS);
+			const rest = dauer(Math.max(0, s.failsafeMindestdauerS - r.zustandSeitS));
 			// Ohne Steuerbox endet der Failsafe genau nach der Mindestdauer (dann
 			// unbegrenzt/autonom), mit Steuerbox auch früher durch eine neue Grenze.
-			const grund = heartbeatOk(s)
-				? `Steuerbox wieder da, Failsafe endet mit ihrer nächsten Grenze, spätestens in ${dauer(rest)}`
-				: `Kein Heartbeat der Steuerbox · in ${dauer(rest)} unbegrenzt (autonom), falls sie sich bis dahin nicht meldet`;
-			zeigeAmpel("rot", `${name}Failsafe: ${watt(r.wirksameGrenzeW)}`, `${grund} · ${seit}${zusatz}`); break;
+			const ende = heartbeatOk(s)
+				? `Endet mit der nächsten Grenze, spätestens in ${rest}`
+				: `Ohne Steuerbox in ${rest} unbegrenzt (autonom)`;
+			zeigeAmpel(p, "rot", `Failsafe: ${watt(r.wirksameGrenzeW)}`, `${ende} · ${seit}`); break;
 		}
-		case 4: zeigeAmpel("gruen", "Unbegrenzt", `Autonom: keine Kommunikation mit der Steuerbox · ${seit}${zusatz}`); break;
-		default: zeigeAmpel("", r.zustandText, seit);
+		case 4: zeigeAmpel(p, "gruen", "Unbegrenzt", `Autonom: keine Kommunikation mit der Steuerbox · ${seit}`); break;
+		default: zeigeAmpel(p, "", r.zustandText, seit);
 	}
 }
 
@@ -401,6 +416,12 @@ function heartbeatOk(s) {
 	return s.verbindung === 2 && s.heartbeatAlterS != null && s.heartbeatAlterS < 120;
 }
 
+// Countdown bis Failsafe (120 s nach dem letzten Heartbeat), gilt für beide Richtungen
+function bisFailsafe(s) {
+	const h = s.heartbeatAlterS;
+	return h != null && h < 120 ? ` · Failsafe in ${dauer(120 - h)}` : "";
+}
+
 function statusfeld(id, farbe, wert, text) {
 	$(id).className = "statusfeld " + farbe;
 	$(id + "Wert").textContent = wert;
@@ -420,12 +441,12 @@ function statusleiste(s) {
 	const name = k ? (k.shipId || "SKI " + k.ski) : "";
 	if (s.verbindung === 2) {
 		if (heartbeatOk(s)) statusfeld("stSteuerbox", "gruen", "Verbunden", `Heartbeat ${alter(s.heartbeatAlterS)} · ${s.partner}`);
-		else statusfeld("stSteuerbox", "orange", "Verbunden, kein Heartbeat", `Letzter Heartbeat: ${alter(s.heartbeatAlterS)} · ${s.partner}`);
+		else statusfeld("stSteuerbox", "orange", "Verbunden, kein Heartbeat", `Letzter Heartbeat: ${alter(s.heartbeatAlterS)}${bisFailsafe(s)} · ${s.partner}`);
 	} else if (s.verbindung === 1) {
 		statusfeld("stSteuerbox", "rot", s.abgelehnt ? "Verbindung abgelehnt" : "Getrennt",
 			s.abgelehnt
 				? `Die Steuerbox vertraut dem Gateway nicht. SKI und SHIP-ID des Gateways müssen in der Steuerbox eingetragen sein · ${name}`
-				: `Gekoppelt, aber nicht verbunden · seit ${dauer(s.verbindungSeitS)} · ${name}` + letzterFehler(s));
+				: `Gekoppelt, aber nicht verbunden · seit ${dauer(s.verbindungSeitS)}${bisFailsafe(s)} · ${name}` + letzterFehler(s));
 	} else {
 		statusfeld("stSteuerbox", "", "Nicht gekoppelt",
 			s.suchmodusRestS > 0 ? `Suchmodus läuft noch ${dauer(s.suchmodusRestS)}` : "Im Reiter „Kopplung“ eine Steuerbox koppeln");
@@ -495,7 +516,7 @@ function zeigeVersuche(s) {
 function zeige(s) {
 	zuletzt = s;
 	$("geraet").textContent = `${s.hersteller} ${s.modell} · SN ${s.seriennummer}`;
-	ampel(s);
+	ampeln(s);
 	statusleiste(s);
 
 	$("karteBezug").hidden = !s.bezug;
@@ -680,14 +701,14 @@ async function abfragen() {
 	try {
 		const antwort = await fetch(statusUrl, { cache: "no-store" });
 		if (antwort.status === 401) {
-			zeigeAmpel("", "Anmeldung abgelaufen", "Seite neu laden");
+			zeigeStoerung("Anmeldung abgelaufen", "Seite neu laden");
 		} else if (!antwort.ok) {
 			throw new Error(antwort.status);
 		} else {
 			zeige(await antwort.json());
 		}
 	} catch (fehler) {
-		zeigeAmpel("", "Gateway nicht erreichbar", "Letzter Versuch " + new Date().toLocaleTimeString("de-DE"));
+		zeigeStoerung("Gateway nicht erreichbar", "Letzter Versuch " + new Date().toLocaleTimeString("de-DE"));
 	}
 	setTimeout(abfragen, 1000);
 }

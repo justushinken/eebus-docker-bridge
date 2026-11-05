@@ -35,6 +35,35 @@ docker compose -f testwerkzeuge/docker-compose.yml stop spssimulator   # SPS-Aus
 docker compose -f testwerkzeuge/docker-compose.yml down -v             # alles entfernen inkl. Volumes
 ```
 
+## Zwei Steuerboxen
+
+Mehrere Gateway-Instanzen auf einem PFC (docs/betrieb.md, „Mehrere Steuerboxen“) lassen sich lokal mit einem zweiten Paar nachstellen:
+
+```sh
+docker compose -f testwerkzeuge/docker-compose.yml -f testwerkzeuge/docker-compose.zwei.yml up -d --build
+```
+
+| Dienst | Adresse | Anmeldung |
+|---|---|---|
+| Gateway 2 | http://localhost:8092 | admin / test |
+| Test-Steuerbox 2 | http://localhost:8093 | admin / test |
+| Modbus von Gateway 2 | localhost:5503 | – |
+
+`gateway2` teilt das Netz von `gateway` wie zwei Container mit `--network host` auf dem PFC: dieselbe MAC, zwei mDNS-Responder auf derselben Adresse. `GATEWAY_INSTANZ=2` wählt eigene Ports (EEBUS 4713, Modbus 5503, Web 8092) und die Seriennummer `<MAC>-2`. Dazu kommen `steuerbox2` und `spssimulator2` (7 kW Last, nur LPC und MPC). Wird `gateway` neu angelegt, verliert `gateway2` sein Netz und muss ebenfalls neu gestartet werden. Das gibt es nur in der Testumgebung, nicht auf dem PFC.
+
+Koppeln am besten per SKI, je Paar beide Seiten: im Gateway-UI „Vertrauen“ bei der eigenen Steuerbox, im Steuerbox-UI „Per SKI koppeln“ beim eigenen Gateway. Fest per `.env`: `STEUERBOX_SKI` und `STEUERBOX2_SKI`.
+
+Getestet am 05.11.2026: Beide Gateways beantworten jede mDNS-Anfrage und sehen alle Geräte, beide Paare koppeln und verbinden sich, eine Grenze von Steuerbox 2 kommt nur bei Gateway 2 und `spssimulator2` an, ein Neustart von Gateway 2 unterbricht Paar 1 nicht. Bekannte Schwäche der Test-Steuerbox: Wird sie gestartet, während schon mehrere Geräte laufen, fehlen in ihrer Liste „Per mDNS gefunden“ manchmal Geräte, obwohl deren Antworten nachweislich ankommen (Mitschnitt mit tcpdump). Die Gateways betrifft das nicht. Fehlt das eigene Gateway, die Steuerbox neu starten.
+
+Warnung bei gleicher Kennung prüfen: eine dritte Instanz mit der Seriennummer von Gateway 1 ins selbe Netz stellen. Beide zeigen dann oben auf der Statusseite den roten Hinweis „Achtung: …“ und eine WARNUNG im Ereignisprotokoll.
+
+```sh
+SN=$(curl -s -u admin:test localhost:8090/api/status | python -c "import json,sys; print(json.load(sys.stdin)['seriennummer'])")
+docker run -d --name eebus-test-falsch --network container:eebus-test-gateway-1 -e GATEWAY_INSTANZ=3 -e GERAET_SERIENNUMMER=$SN -e WEB_PASSWORT=test -e EEBUS_SCHNITTSTELLEN=eth0 eebus-gateway:dev
+docker logs eebus-test-falsch 2>&1 | grep WARNUNG
+docker rm -f eebus-test-falsch
+```
+
 ## Test-Steuerbox
 
 Spielt die Steuerbox des Messstellenbetreibers (Energy Guard für LPC und LPP, Monitoring Appliance für MPC und MGCP). Mit `STEUERBOX_USECASES` (Vorgabe `lpc,lpp,mpc,mgcp`) lässt sich eine Steuerbox nachstellen, die nur einen Teil kann.

@@ -1,0 +1,61 @@
+# Zweites Paar Gateway + Steuerbox zur Testumgebung, wie mehrere Instanzen
+# auf einem PFC (docs/betrieb.md, "Mehrere Steuerboxen"). Nur zusammen mit
+# docker-compose.yml, aus der Repo-Wurzel:
+#
+#   docker compose -f testwerkzeuge/docker-compose.yml -f testwerkzeuge/docker-compose.zwei.yml up -d --build
+#
+# Gateway 2:    http://localhost:8092  (admin / test)
+# Steuerbox 2:  http://localhost:8093  (admin / test)
+# Modbus 2:     localhost:5503
+#
+# gateway2 teilt das Netz von gateway, wie zwei Container mit --network host
+# auf dem PFC: Ports und mDNS-Responder liegen auf derselben Adresse, und
+# beide sehen dieselbe MAC. GATEWAY_INSTANZ=2 waehlt eigene Ports und haengt
+# "-2" an die Seriennummer. Die Ports werden am Dienst gateway veroeffentlicht.
+
+services:
+  gateway:
+    ports:
+      - "8092:8092"
+      - "5503:5503"
+
+  gateway2:
+    image: eebus-gateway:dev
+    network_mode: service:gateway
+    depends_on:
+      - gateway
+    environment:
+      GATEWAY_INSTANZ: "2"
+      EEBUS_REMOTE_SKI: ${STEUERBOX2_SKI:-}
+      SHIP_ID: Demo-EEBUS-Gateway-Lokal-2
+      # wie bei gateway: fuer den SPS-Simulator im Container-Netz statt 127.0.0.1
+      MODBUS_URL: tcp://0.0.0.0:5503
+      EEBUS_SCHNITTSTELLEN: eth0
+      NENNLEISTUNG_MAX_W: "11000"
+      EEBUS_USECASES: lpc,mpc
+      WEB_PASSWORT: test
+    volumes:
+      - gateway2-daten:/data
+
+  steuerbox2:
+    image: eebus-steuerbox:dev
+    depends_on:
+      - steuerbox
+    ports:
+      - "8093:8091"
+    environment:
+      SHIP_ID: Test-Steuerbox-Lokal-2
+      STEUERBOX_USECASES: lpc,mpc
+      WEB_PASSWORT: test
+    volumes:
+      - steuerbox2-daten:/data
+
+  spssimulator2:
+    image: eebus-spssimulator:dev
+    command: ["-url", "tcp://gateway:5503", "-nennleistung", "11000", "-last", "7000", "-pv", "0"]
+    depends_on:
+      - gateway2
+
+volumes:
+  gateway2-daten:
+  steuerbox2-daten:

@@ -135,6 +135,8 @@ type StatusDaten struct {
 
 	EigenerSki string                       `json:"eigenerSki"`
 	Gefunden   []gemeinsam.GefundenesGeraet `json:"gefunden"`
+	Doppelt    []gemeinsam.GefundenesGeraet `json:"doppelt"` // fremde Geraete mit der Kennung dieses Gateways
+	Instanz    int                          `json:"instanz"`
 
 	// Kopplung
 	Kennung           Kennung        `json:"kennung"`
@@ -236,6 +238,8 @@ func (b *Gateway) Status(jetzt time.Time) StatusDaten {
 
 		EigenerSki: b.eigenerSki,
 		Gefunden:   gemeinsam.GefundeneGeraete(b.gefunden),
+		Doppelt:    gemeinsam.GefundeneGeraete(b.doppelt),
+		Instanz:    b.konf.Instanz,
 
 		Kennung:           b.kennung,
 		PairingService:    b.konf.PairingService,

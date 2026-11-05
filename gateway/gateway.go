@@ -99,13 +99,17 @@ type Gateway struct {
 
 	versuche Verbindungsversuche // eigene Sperre, siehe verbindungsversuche.go
 
-	mu             sync.Mutex
-	gefunden       []shipapi.RemoteMdnsService // per mDNS sichtbare EEBUS-Geraete
-	partner        shipapi.ServiceIdentity     // verbundene Steuerbox, leer = keine
-	kopplung       *gemeinsam.Kopplung         // im UI oder per Pairing Service gekoppelte Steuerbox
-	verbindung     Verbindung
-	verbindungSeit time.Time // seit wann verbindung gilt
-	abgelehnt      bool      // Steuerbox hat die Verbindung abgelehnt, bis zur naechsten Verbindung
+	mdnsName string // eigener Name in der mDNS-Ankuendigung, vor dem Start gesetzt
+
+	mu              sync.Mutex
+	gefunden        []shipapi.RemoteMdnsService // per mDNS sichtbare EEBUS-Geraete
+	doppelt         []shipapi.RemoteMdnsService // fremde Geraete mit eigenem mDNS-Namen oder eigener SHIP-ID
+	doppeltGemeldet map[string]bool             // SKIs, fuer die das schon im Log steht
+	partner         shipapi.ServiceIdentity     // verbundene Steuerbox, leer = keine
+	kopplung        *gemeinsam.Kopplung         // im UI oder per Pairing Service gekoppelte Steuerbox
+	verbindung      Verbindung
+	verbindungSeit  time.Time // seit wann verbindung gilt
+	abgelehnt       bool      // Steuerbox hat die Verbindung abgelehnt, bis zur naechsten Verbindung
 
 	bezug                *Begrenzung // LPC, nil = Use Case aus
 	einspeisung          *Begrenzung // LPP, nil = Use Case aus

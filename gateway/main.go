@@ -109,6 +109,10 @@ func main() {
 	}
 
 	gw := NeuesGateway(konf, einstellungen, eigenerSki, kopplung)
+	gw.mdnsName = konfiguration.MdnsServiceName()
+	if konf.Instanz > 1 {
+		log.Printf("Gateway-Instanz %d: EEBUS-Port %d, Modbus %s, Web-UI %s, Seriennummer %s", konf.Instanz, konf.EebusPort, konf.ModbusUrl, konf.WebAdresse, konf.Seriennummer)
+	}
 	dienst := service.NewService(konfiguration, gw)
 	// Immer mitlesen: Verbindungsfehler meldet ship-go nur in seinem Log.
 	dienst.SetLogging(gemeinsam.NeuesEebusLog(konf.EebusDebug, gw.versuche.EebusMeldung))

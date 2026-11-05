@@ -59,6 +59,8 @@ docker run -d --name eebus-gateway \
 
 Mit Erzeugung (PV, Speicher) zusätzlich `lpp` sowie `NENNLEISTUNG_ERZEUGUNG_MAX_W` und `FAILSAFE_EINSPEISEGRENZE_W`. Hängt die Steuerbox in einem eigenen Netz an X2, zusätzlich `-e EEBUS_SCHNITTSTELLEN=br1` ([Netzwerk](docs/kopplung.md#getrenntes-netz-an-x2)). Wer Compose hat, nimmt stattdessen die Vorlage [docker-compose.yml](docker-compose.yml).
 
+**Mehrere Steuerboxen** (z. B. vier Einrichtungen mit eigenen Zählpunkten): je Steuerbox ein eigener Container mit `-e GATEWAY_INSTANZ=2`, `3`, … sowie eigenem Namen und Datenverzeichnis. Die Instanz wählt eigene Ports und eine eigene Seriennummer. Alle Befehle stehen unter [Mehrere Steuerboxen](docs/betrieb.md#mehrere-steuerboxen).
+
 **3. Status-UI öffnen:** `http://<pfc-ip>:8090`, Benutzer `admin`. Ausdrücklich `http://` eintippen, eine HTTPS-Verbindung gibt es nicht.
 
 **4. Mit der Steuerbox koppeln:** Im Reiter „Kopplung“ stehen die Daten für den Messstellenbetreiber (QR-Code bzw. SKI und SHIP-ID). Er trägt das Gateway in der Steuerbox ein. Beim Pairing Service ist danach nichts mehr zu tun. Beim SKI-Verfahren in der Geräteliste bei der Steuerbox „Vertrauen“ wählen. Steht dort „verbunden“, ist die Kopplung fertig.

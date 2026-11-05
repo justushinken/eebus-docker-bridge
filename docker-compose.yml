@@ -39,3 +39,24 @@ services:
       # EEBUS_SCHNITTSTELLEN: br1
       # Vor der Uebergabe an den Messstellenbetreiber festschreiben (docs/kopplung.md):
       # SHIP_ID: Demo-EEBUS-Gateway-0030DE683ADC
+
+  # Weitere Steuerbox (eigene Einrichtung mit eigenem Zaehlpunkt): je Steuerbox
+  # eine Instanz mit eigenem Namen, Datenverzeichnis und GATEWAY_INSTANZ. Die
+  # Instanz waehlt eigene Ports (EEBUS 4713, Modbus 5503, Web 8092 fuer 2) und
+  # haengt "-2" an die Seriennummer. Siehe docs/betrieb.md, "Mehrere Steuerboxen".
+  # gateway-2:
+  #   image: eebus-gateway:latest
+  #   container_name: eebus-gateway-2
+  #   restart: unless-stopped
+  #   network_mode: host
+  #   mem_limit: 64m
+  #   volumes:
+  #     - /home/eebus-gateway-2:/data
+  #   environment:
+  #     GATEWAY_INSTANZ: "2"
+  #     WEB_PASSWORT: "bitte-aendern"
+  #     GERAET_MARKE: Demo
+  #     EEBUS_USECASES: lpc
+  #     NENNLEISTUNG_MAX_W: "11000"
+  #     FAILSAFE_GRENZE_W: "4200"
+  #     FAILSAFE_MINDESTDAUER: 2h

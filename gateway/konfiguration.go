@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 // Konfiguration kommt aus Umgebungsvariablen (docker run -e ...). Im UI
 // geaenderte Werte (einstellungen.json) haben Vorrang, siehe einstellungen.go.
 type Konfiguration struct {
+	Instanz              int // GATEWAY_INSTANZ: mehrere Gateways auf einer Steuerung, 1 = einziges
 	EebusPort            int
 	Schnittstellen       []string // mDNS nur auf diesen Netzwerkschnittstellen, leer = alle
 	ModbusUrl            string
@@ -63,10 +65,43 @@ func auswahl(u gemeinsam.Umgebung, name, vorgabe string, erlaubt []string) (map[
 	return ergebnis, nil
 }
 
+// hoechsteInstanz begrenzt GATEWAY_INSTANZ, damit die abgeleiteten Ports in
+// ihren Bereichen bleiben (EEBUS 4712-4731, Modbus 5502-5521, Web 8090-8110).
+const hoechsteInstanz = 20
+
+// leseInstanz: GATEWAY_INSTANZ, Vorgabe 1. Streng geprueft, weil ein
+// Tippfehler sonst stillschweigend Instanz 1 ergaebe und mit ihr kollidierte.
+func leseInstanz(u gemeinsam.Umgebung) (int, error) {
+	text := u.Text("GATEWAY_INSTANZ", "1")
+	n, err := strconv.Atoi(strings.TrimSpace(text))
+	if err != nil || n < 1 || n > hoechsteInstanz {
+		return 0, fmt.Errorf("GATEWAY_INSTANZ: Zahl von 1 bis %d erwartet, nicht %q", hoechsteInstanz, text)
+	}
+	return n, nil
+}
+
+// Vorgaben je Instanz: Instanz 1 wie bisher, jede weitere eigene Ports. Web
+// ab 8092, weil die Test-Steuerbox 8091 nutzt.
+func eebusPortVorgabe(instanz int) int { return 4711 + instanz }
+func modbusUrlVorgabe(instanz int) string {
+	return fmt.Sprintf("tcp://127.0.0.1:%d", 5501+instanz)
+}
+func webAdresseVorgabe(instanz int) string {
+	if instanz == 1 {
+		return ":8090"
+	}
+	return fmt.Sprintf(":%d", 8090+instanz)
+}
+
 func leseKonfiguration(u gemeinsam.Umgebung) (Konfiguration, error) {
+	instanz, err := leseInstanz(u)
+	if err != nil {
+		return Konfiguration{}, err
+	}
 	konf := Konfiguration{
-		EebusPort:            u.Ganzzahl("EEBUS_PORT", 4712),
-		ModbusUrl:            u.Text("MODBUS_URL", "tcp://127.0.0.1:5502"),
+		Instanz:              instanz,
+		EebusPort:            u.Ganzzahl("EEBUS_PORT", eebusPortVorgabe(instanz)),
+		ModbusUrl:            u.Text("MODBUS_URL", modbusUrlVorgabe(instanz)),
 		Datenverzeichnis:     u.Text("DATENVERZEICHNIS", "/data"),
 		RemoteSki:            u.Text("EEBUS_REMOTE_SKI", ""),
 		PairingService:       u.Text("EEBUS_PAIRING_SERVICE", "an") != "aus",
@@ -78,7 +113,7 @@ func leseKonfiguration(u gemeinsam.Umgebung) (Konfiguration, error) {
 		FailsafeGrenzeW:      u.Kommazahl("FAILSAFE_GRENZE_W", 4200),
 		FailsafeMindestdauer: u.Dauer("FAILSAFE_MINDESTDAUER", 2*time.Hour),
 		NennleistungMaxW:     u.Kommazahl("NENNLEISTUNG_MAX_W", 11000),
-		WebAdresse:           u.TextLeerErlaubt("WEB_ADRESSE", ":8090"),
+		WebAdresse:           u.TextLeerErlaubt("WEB_ADRESSE", webAdresseVorgabe(instanz)),
 		WebBenutzer:          u.Text("WEB_BENUTZER", "admin"),
 		WebPasswort:          u.Text("WEB_PASSWORT", ""),
 		WebAenderungen:       u.Text("WEB_AENDERUNGEN", "an") != "aus",
@@ -112,10 +147,16 @@ func leseKonfiguration(u gemeinsam.Umgebung) (Konfiguration, error) {
 	}
 
 	// Ohne Seriennummer die MAC-Adresse des PFC: weltweit eindeutig und auf
-	// dem Typenschild ablesbar. Daraus ergibt sich auch die SHIP-ID.
+	// dem Typenschild ablesbar. Daraus ergibt sich auch die SHIP-ID. Alle
+	// Instanzen auf einer Steuerung sehen dieselbe MAC, deshalb ab Instanz 2
+	// mit Nummer: Aus Marke, Modell und Seriennummer bildet eebus-go den
+	// mDNS-Namen, gleiche Namen verwechseln die Steuerboxen.
 	if konf.Seriennummer == "" {
 		if konf.Seriennummer = gemeinsam.GeraeteKennung(); konf.Seriennummer == "" {
 			return konf, fmt.Errorf("keine MAC-Adresse gefunden: GERAET_SERIENNUMMER setzen")
+		}
+		if instanz > 1 {
+			konf.Seriennummer = fmt.Sprintf("%s-%d", konf.Seriennummer, instanz)
 		}
 	}
 	konf.ShipId = u.Text("SHIP_ID", fmt.Sprintf("%s-%s-%s", konf.Marke, konf.Modell, konf.Seriennummer))
@@ -227,6 +268,7 @@ func (k Konfiguration) Anzeige() []KonfigGruppe {
 			{Name: "Software-Version", Wert: Version, Variable: "Image-Version"},
 		}},
 		{"Schnittstellen", []KonfigEintrag{
+			{Name: "Instanz", Wert: fmt.Sprint(k.Instanz), Variable: "GATEWAY_INSTANZ"},
 			{Name: "EEBUS-Port", Wert: fmt.Sprint(k.EebusPort), Variable: "EEBUS_PORT"},
 			{Name: "mDNS-Schnittstellen", Wert: schnittstellenText(k.Schnittstellen), Variable: "EEBUS_SCHNITTSTELLEN"},
 			{Name: "Modbus-Server", Wert: k.ModbusUrl, Variable: "MODBUS_URL"},

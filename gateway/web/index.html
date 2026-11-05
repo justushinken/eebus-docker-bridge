@@ -52,6 +52,7 @@
 			<div><div class="statusname">SPS (Modbus)</div><div class="statuswert" id="stSpsWert">…</div><div class="statustext" id="stSpsText"></div></div>
 		</div>
 	</div>
+	<p class="hinweis fehlertext" id="doppeltHinweis" style="margin:0;padding:12px 24px;border-top:1px solid var(--rand)" hidden></p>
 	</section>
 
 	<!-- Übersicht: was im Betrieb zählt -->
@@ -515,7 +516,14 @@ function zeigeVersuche(s) {
 
 function zeige(s) {
 	zuletzt = s;
-	$("geraet").textContent = `${s.hersteller} ${s.modell} · SN ${s.seriennummer}`;
+	$("geraet").textContent = `${s.hersteller} ${s.modell} · SN ${s.seriennummer}` + (s.instanz > 1 ? ` · Instanz ${s.instanz}` : "");
+	document.title = s.instanz > 1 ? `EEBUS-Gateway ${s.instanz}` : "EEBUS-Gateway";
+	const doppelt = s.doppelt || [];
+	$("doppeltHinweis").hidden = !doppelt.length;
+	$("doppeltHinweis").textContent = doppelt.length
+		? `Achtung: ${doppelt.map(g => `${g.shipId || "?"} (SKI ${g.ski})`).join(", ")} kündigt sich unter derselben Kennung an wie dieses Gateway. ` +
+		  "Läuft eine zweite Gateway-Instanz ohne eigene GATEWAY_INSTANZ bzw. GERAET_SERIENNUMMER? Steuerboxen können die beiden verwechseln (docs/betrieb.md, „Mehrere Steuerboxen“)."
+		: "";
 	ampeln(s);
 	statusleiste(s);
 

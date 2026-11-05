@@ -81,6 +81,10 @@ So läuft die erste Anlage mit der Swistec SwisBox seit 20.10.2026 stabil. Ohne 
 
 Bekommt die Schnittstelle erst nach dem Start des Gateways eine Adresse, kündigt das Gateway sie von selbst an: ship-go prüft alle 15 s. Ändert sich später eine schon vorhandene Adresse, bleibt die alte in der Ankündigung, dann `docker restart eebus-gateway`. Noch offen ist, ob ship-go IPv6-Link-Local-Adressen (ohne IPv4) korrekt anspricht.
 
+### Mehrere Steuerboxen
+
+Bei mehreren Gateway-Instanzen auf einem PFC (siehe [Betrieb](betrieb.md#mehrere-steuerboxen)) hängen alle Steuerboxen über einen Switch an X2 oder gemeinsam im Anlagennetz. Jede Instanz hat über `GATEWAY_INSTANZ` eine eigene SHIP-ID und einen eigenen SKI. Jede Steuerbox sieht per mDNS alle Instanzen. Deshalb jeder Steuerbox genau die Daten ihrer Instanz übergeben (SKI, SHIP-ID bzw. QR-Code) und in jeder Instanz `EEBUS_REMOTE_SKI` auf ihre Steuerbox setzen. Dann verbindet sich jede Instanz nur mit ihrer Box und ignoriert die anderen. Alle Instanzen bekommen dasselbe `EEBUS_SCHNITTSTELLEN`. In der Liste „Per mDNS gefunden“ erscheinen die anderen Instanzen und Steuerboxen, das ist normal.
+
 ### Fehlersuche bei der Verbindung
 
 Der Reiter „Diagnose“ zeigt unter **„Verbindungsversuche“** den letzten Versuch in beide Richtungen, auch ohne `EEBUS_DEBUG`. Die Statusleiste nennt bei „Getrennt“ den letzten Fehler. Im Ereignisprotokoll steht jeder neue Fehler einmal, also erst wieder, wenn sich Adresse oder Grund ändern.

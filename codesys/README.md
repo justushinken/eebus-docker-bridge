@@ -14,6 +14,14 @@ Das Gateway ist Modbus-TCP-Server auf `127.0.0.1:5502`, die CODESYS-Applikation 
 
 Falls der Gerätebaum Localhost als Ziel nicht akzeptiert, alternativ `FbMbMasterTcp` aus WagoAppPlcModbus mit `sHost := '127.0.0.1'` verwenden. Die Bausteine bleiben dabei unverändert, da sie nur die Register-Arrays sehen.
 
+### Mehrere Gateways
+
+Bei mehreren Steuerboxen läuft je Steuerbox ein Gateway mit eigenem Modbus-Port (5502, 5503, 5504, …, siehe [docs/betrieb.md](../docs/betrieb.md#mehrere-steuerboxen)). In CODESYS dann:
+
+- Unter dem *ModbusTCP Master* je Gateway einen eigenen *ModbusTCP Slave*, alle mit IP `127.0.0.1`, Port je Gateway, Kanäle wie oben.
+- Je Gateway eigene Register-Arrays (z. B. `aInputRegister2`/`aHoldingRegister2` in `GvlEebus` oder je Gateway eine eigene GVL) und eigene Instanzen von `FbEebusGateway`, `FbEebusBegrenzung` und `FbEebusMesswerte`. Die Bausteine haben keinen gemeinsamen Zustand, mehrere Instanzen stören sich nicht.
+- Jede Grenze gilt nur für die Einrichtung ihres Zählpunkts. Nennleistung, Anlagenstatus und Messwerte meldet jede Instanz für ihre Einrichtung, nicht für die ganze Anlage.
+
 ## Bausteine
 
 Beispiel in `PrgEnergiemanagement.st`.

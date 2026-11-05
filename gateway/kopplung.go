@@ -110,14 +110,43 @@ func (b *Gateway) RemoteServiceDisconnected(dienst api.ServiceInterface, partner
 // Hilfreich bei der Inbetriebnahme: zeigt die per mDNS gefundenen Geraete samt SKI.
 // mDNS meldet die Liste wiederholt, protokolliert werden nur neu gefundene Geraete.
 func (b *Gateway) VisibleRemoteMdnsServicesUpdated(dienst api.ServiceInterface, eintraege []shipapi.RemoteMdnsService) {
+	doppelt := doppelteKennung(eintraege, b.mdnsName, b.konf.ShipId)
 	b.mu.Lock()
 	neu := gemeinsam.NeuGefunden(b.gefunden, eintraege)
 	b.gefunden = slices.Clone(eintraege)
+	b.doppelt = doppelt
+	var neuDoppelt []shipapi.RemoteMdnsService
+	for _, e := range doppelt {
+		if !b.doppeltGemeldet[e.Ski] {
+			if b.doppeltGemeldet == nil {
+				b.doppeltGemeldet = map[string]bool{}
+			}
+			b.doppeltGemeldet[e.Ski] = true
+			neuDoppelt = append(neuDoppelt, e)
+		}
+	}
 	b.mu.Unlock()
 
 	for _, e := range neu {
 		log.Printf("Gefunden: %s %s, SHIP-ID %s, SKI %s", e.Brand, e.Model, e.ShipID, e.Ski)
 	}
+	for _, e := range neuDoppelt {
+		log.Printf("WARNUNG: Ein anderes Geraet (SKI %s, SHIP-ID %s) kuendigt sich unter derselben Kennung an wie dieses Gateway. Zweite Gateway-Instanz ohne eigene GATEWAY_INSTANZ bzw. GERAET_SERIENNUMMER? Steuerboxen koennen die beiden verwechseln.", e.Ski, e.ShipID)
+	}
+}
+
+// doppelteKennung liefert die fremden Geraete, die unter dem eigenen
+// mDNS-Namen oder der eigenen SHIP-ID auftreten. Das passiert, wenn auf einer
+// Steuerung zwei Gateways mit derselben Seriennummer laufen (gleiche MAC).
+// Das eigene Geraet filtert ship-go schon ueber den SKI heraus.
+func doppelteKennung(eintraege []shipapi.RemoteMdnsService, mdnsName, shipId string) []shipapi.RemoteMdnsService {
+	var ergebnis []shipapi.RemoteMdnsService
+	for _, e := range eintraege {
+		if (mdnsName != "" && strings.EqualFold(e.Name, mdnsName)) || (shipId != "" && e.ShipID == shipId) {
+			ergebnis = append(ergebnis, e)
+		}
+	}
+	return ergebnis
 }
 
 func (b *Gateway) ServiceUpdated(partner shipapi.ServiceIdentity) {}

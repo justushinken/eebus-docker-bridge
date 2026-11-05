@@ -82,6 +82,196 @@ Zertifikat, SKI, Fingerprint, Secret und Kopplung bleiben erhalten. Die SHIP-ID 
 
 `--network host` ist nötig, weil mDNS (Multicast) über das Docker-Bridge-Netz nicht zuverlässig funktioniert. Der Modbus-Server bindet trotzdem nur auf 127.0.0.1, ist also aus dem LAN nicht erreichbar. Zum Testen mit einem Modbus-Master auf dem PC `-e MODBUS_URL=tcp://0.0.0.0:5502` setzen. Dann ist der Port ohne Schutz im ganzen LAN offen, danach wieder entfernen.
 
+## Mehrere Steuerboxen
+
+Ein Gateway bedient genau eine Steuerbox: Bei LPC und LPP gehört zu einem Controllable System genau ein Energy Guard. Gibt es mehrere steuerbare Verbrauchseinrichtungen mit **eigenen Zählpunkten** und je einer Steuerbox, läuft auf dem PFC **ein Gateway-Container je Steuerbox**. Jede Instanz ist für ihre Steuerbox ein eigenes EEBUS-Gerät mit eigenem Zertifikat, SKI und eigener SHIP-ID. Die SPS spricht jede über einen eigenen Modbus-Port an.
+
+Hängen alle Einrichtungen an einem Zählpunkt, ist eine Steuerbox über das EMS (die SPS) meist die bessere Lösung: Der Netzbetreiber gibt eine gemeinsame Grenze vor, die SPS verteilt sie. Das vorher mit Netzbetreiber bzw. Messstellenbetreiber klären.
+
+### Was `GATEWAY_INSTANZ` einstellt
+
+Die Instanznummer ist die einzige Einstellung, die sich zwischen den Instanzen unterscheiden muss. Aus ihr ergibt das Gateway selbst:
+
+| | Instanz 1 (Vorgabe) | Instanz 2 | Instanz 3 | Instanz 4 |
+|---|---|---|---|---|
+| `GATEWAY_INSTANZ` | weglassen oder `1` | `2` | `3` | `4` |
+| EEBUS-Port | 4712 | 4713 | 4714 | 4715 |
+| Modbus (für CODESYS) | 127.0.0.1:5502 | 127.0.0.1:5503 | 127.0.0.1:5504 | 127.0.0.1:5505 |
+| Web-UI | :8090 | :8092 | :8093 | :8094 |
+| Seriennummer | MAC | MAC-2 | MAC-3 | MAC-4 |
+| SHIP-ID (ohne `SHIP_ID`) | `<Marke>-EEBUS-Gateway-<MAC>` | `…-<MAC>-2` | `…-<MAC>-3` | `…-<MAC>-4` |
+
+Erlaubt ist 1 bis 20. Ausdrücklich gesetzte Variablen (`EEBUS_PORT`, `MODBUS_URL`, `WEB_ADRESSE`, `GERAET_SERIENNUMMER`) haben Vorrang. Container-Name und Datenverzeichnis legt der `docker run` fest, also ebenfalls je Instanz eigene.
+
+**Warum die Seriennummer zählt:** Alle Container auf dem PFC sehen dieselbe MAC. Aus Marke, Modell und Seriennummer bildet eebus-go den Namen in der mDNS-Ankündigung. Bei gleicher Seriennummer kündigen sich zwei Instanzen unter demselben Namen an, und die Steuerboxen verwechseln sie. Eine eigene `SHIP_ID` allein hilft dagegen nicht. `GATEWAY_INSTANZ` hängt die Nummer deshalb selbst an. Sieht ein Gateway trotzdem ein fremdes Gerät mit seiner eigenen Kennung (mDNS-Name oder SHIP-ID), zeigt die Statusseite oben einen roten Hinweis „Achtung: … kündigt sich unter derselben Kennung an“, und im Ereignisprotokoll steht eine WARNUNG.
+
+### Schritt für Schritt auf dem PFC
+
+Alle Befehle als `root` auf dem PFC. Für jede Instanz kommt der `docker run` in ein kleines Startskript im eigenen Datenverzeichnis. Damit liegt der Befehl bei der Sicherung dabei, und ein Update ist ein Aufruf je Instanz.
+
+**1. Image laden** (einmal für alle Instanzen, Archiv wie unter [Bauen und Verteilen](#bauen-und-verteilen) kopiert):
+
+```sh
+docker load -i /home/eebus-gateway/eebus-gateway-1.0.tar.gz
+docker images eebus-gateway
+```
+
+**2. Datenverzeichnisse anlegen:**
+
+```sh
+mkdir -p /home/eebus-gateway /home/eebus-gateway-2 /home/eebus-gateway-3 /home/eebus-gateway-4
+```
+
+**3. Startskripte schreiben.** Je Instanz einen Block kopieren und vorher anpassen: Firmenkürzel, Passwort und die Werte der jeweiligen Einrichtung (Use Cases, Nennleistung, Failsafe). Hängen die Steuerboxen nicht über einen Switch an X2, sondern im Netz von X1, die Zeile `EEBUS_SCHNITTSTELLEN` entfernen (siehe [Kopplung](kopplung.md#mehrere-steuerboxen)). Der Text zwischen `<<'EOF'` und `EOF` wird unverändert in die Datei geschrieben.
+
+Instanz 1 (läuft schon ein Gateway, dessen bisherige Werte übernehmen, insbesondere `SHIP_ID` und `EEBUS_REMOTE_SKI`):
+
+```sh
+cat > /home/eebus-gateway/start.sh <<'EOF'
+docker rm -f eebus-gateway 2>/dev/null
+docker run -d --name eebus-gateway \
+  --restart unless-stopped \
+  --network host \
+  --memory 64m \
+  -v /home/eebus-gateway:/data \
+  -e GATEWAY_INSTANZ=1 \
+  -e GERAET_MARKE=<Firmenkürzel> \
+  -e EEBUS_SCHNITTSTELLEN=br1 \
+  -e EEBUS_USECASES=lpc \
+  -e NENNLEISTUNG_MAX_W=11000 \
+  -e FAILSAFE_GRENZE_W=4200 \
+  -e FAILSAFE_MINDESTDAUER=2h \
+  -e WEB_PASSWORT='<Passwort für das Status-UI>' \
+  eebus-gateway:latest
+EOF
+```
+
+Instanz 2:
+
+```sh
+cat > /home/eebus-gateway-2/start.sh <<'EOF'
+docker rm -f eebus-gateway-2 2>/dev/null
+docker run -d --name eebus-gateway-2 \
+  --restart unless-stopped \
+  --network host \
+  --memory 64m \
+  -v /home/eebus-gateway-2:/data \
+  -e GATEWAY_INSTANZ=2 \
+  -e GERAET_MARKE=<Firmenkürzel> \
+  -e EEBUS_SCHNITTSTELLEN=br1 \
+  -e EEBUS_USECASES=lpc \
+  -e NENNLEISTUNG_MAX_W=11000 \
+  -e FAILSAFE_GRENZE_W=4200 \
+  -e FAILSAFE_MINDESTDAUER=2h \
+  -e WEB_PASSWORT='<Passwort für das Status-UI>' \
+  eebus-gateway:latest
+EOF
+```
+
+Instanz 3:
+
+```sh
+cat > /home/eebus-gateway-3/start.sh <<'EOF'
+docker rm -f eebus-gateway-3 2>/dev/null
+docker run -d --name eebus-gateway-3 \
+  --restart unless-stopped \
+  --network host \
+  --memory 64m \
+  -v /home/eebus-gateway-3:/data \
+  -e GATEWAY_INSTANZ=3 \
+  -e GERAET_MARKE=<Firmenkürzel> \
+  -e EEBUS_SCHNITTSTELLEN=br1 \
+  -e EEBUS_USECASES=lpc \
+  -e NENNLEISTUNG_MAX_W=11000 \
+  -e FAILSAFE_GRENZE_W=4200 \
+  -e FAILSAFE_MINDESTDAUER=2h \
+  -e WEB_PASSWORT='<Passwort für das Status-UI>' \
+  eebus-gateway:latest
+EOF
+```
+
+Instanz 4:
+
+```sh
+cat > /home/eebus-gateway-4/start.sh <<'EOF'
+docker rm -f eebus-gateway-4 2>/dev/null
+docker run -d --name eebus-gateway-4 \
+  --restart unless-stopped \
+  --network host \
+  --memory 64m \
+  -v /home/eebus-gateway-4:/data \
+  -e GATEWAY_INSTANZ=4 \
+  -e GERAET_MARKE=<Firmenkürzel> \
+  -e EEBUS_SCHNITTSTELLEN=br1 \
+  -e EEBUS_USECASES=lpc \
+  -e NENNLEISTUNG_MAX_W=11000 \
+  -e FAILSAFE_GRENZE_W=4200 \
+  -e FAILSAFE_MINDESTDAUER=2h \
+  -e WEB_PASSWORT='<Passwort für das Status-UI>' \
+  eebus-gateway:latest
+EOF
+```
+
+Statt `cat > … <<'EOF'` geht auch ein Editor (`vi /home/eebus-gateway-2/start.sh`). Platzhalter in spitzen Klammern samt Klammern ersetzen.
+
+**4. Alle Instanzen starten:**
+
+```sh
+sh /home/eebus-gateway/start.sh
+sh /home/eebus-gateway-2/start.sh
+sh /home/eebus-gateway-3/start.sh
+sh /home/eebus-gateway-4/start.sh
+```
+
+**5. Prüfen:**
+
+```sh
+docker ps --filter name=eebus-gateway
+docker logs eebus-gateway-2 2>&1 | head -20
+```
+
+`docker ps` zeigt alle vier als „Up“. Im Log von Instanz 2 bis 4 steht „Gateway-Instanz 2: EEBUS-Port 4713, Modbus tcp://127.0.0.1:5503, Web-UI :8092, Seriennummer …-2“. Bricht ein Container gleich wieder ab, zeigt `docker logs` den Grund, meist ein belegter Port (gleiche `GATEWAY_INSTANZ` zweimal) oder ein Tippfehler in einer Variable. Die Status-UIs: `http://<pfc-ip>:8090`, `:8092`, `:8093`, `:8094`. Die Seriennummer steht oben rechts, bei Instanz 2 bis 4 mit „· Instanz n“, der Browser-Tab heißt „EEBUS-Gateway n“. Oben darf kein roter Hinweis „Achtung: …“ stehen.
+
+**6. Koppeln:** Je Instanz im Reiter „Kopplung“ die Daten für den Messstellenbetreiber ablesen (SKI und SHIP-ID bzw. QR-Code) und genau der Steuerbox dieser Einrichtung zuordnen. Danach wie bei einer Instanz koppeln ([Kopplung](kopplung.md)).
+
+**7. Festschreiben:** Nach der Kopplung in jedem Startskript `-e SHIP_ID=<SHIP-ID aus dem UI>` und `-e EEBUS_REMOTE_SKI=<SKI der Steuerbox>` ergänzen (z. B. mit `vi`) und das Skript erneut ausführen. Kopplung und Zertifikat bleiben dabei erhalten.
+
+**Update** (neues Image, alle Instanzen):
+
+```sh
+docker load -i /home/eebus-gateway/eebus-gateway-1.1.tar.gz
+for s in /home/eebus-gateway*/start.sh; do sh "$s"; done
+docker ps --filter name=eebus-gateway
+```
+
+**Eine Instanz entfernen:**
+
+```sh
+docker rm -f eebus-gateway-4
+# Datenverzeichnis erst löschen, wenn die Steuerbox nicht mehr gebraucht wird (Zertifikat und Kopplung gehen verloren):
+# rm -r /home/eebus-gateway-4
+```
+
+**Sichern:** alle Datenverzeichnisse samt Startskripten, z. B. auf den PC (Git Bash): `scp -r root@<pfc-ip>:/home/eebus-gateway* .`
+
+### Hinweise
+
+- **Speicher:** Ein Gateway braucht gut 10–15 MB, vier Instanzen mit je `--memory 64m` passen auf den PFC200. Kontrolle: `docker stats --no-stream`.
+- **Firewall:** Ist die PFC-Firewall aktiv, zusätzlich zu 4712 und 8090 die Ports 4713–4715 und 8092–8094 (TCP) freigeben. UDP 5353 für mDNS teilen sich alle Instanzen.
+- **Netz:** Alle Steuerboxen im selben Netz, Einzelheiten unter [Kopplung](kopplung.md#mehrere-steuerboxen).
+- **CODESYS:** je Instanz ein eigener Modbus-Slave auf Port 5502–5505, siehe [codesys/README.md](../codesys/README.md#mehrere-gateways).
+- **Compose:** Auf dem PFC gibt es kein Docker Compose, deshalb die Startskripte. Auf anderen Linux-Rechnern geht dasselbe mit der Vorlage [docker-compose.yml](../docker-compose.yml) (auskommentierte zweite Instanz).
+- **Ausprobieren** auf dem PC mit zwei Paaren aus Gateway und Test-Steuerbox: [testwerkzeuge/README.md](../testwerkzeuge/README.md#zwei-steuerboxen).
+
+**Zuordnung festhalten**, für den Messstellenbetreiber und für die SPS:
+
+| Instanz | Einrichtung | Zählpunkt | SHIP-ID des Gateways | SKI des Gateways | Steuerbox (SKI) | Modbus-Port | Web-UI |
+|---|---|---|---|---|---|---|---|
+| 1 | z. B. Wärmepumpe | … | … | … | … | 5502 | 8090 |
+| 2 | | | | | | 5503 | 8092 |
+| 3 | | | | | | 5504 | 8093 |
+| 4 | | | | | | 5505 | 8094 |
+
 ## Variablen
 
 ### Use Cases und Messwerte
@@ -122,7 +312,7 @@ Port 8090 statt 8080, weil auf dem PFC die CODESYS-WebVisu oft 8080 belegt. Bei 
 
 `EEBUS_SCHNITTSTELLEN` (leer = alle): mDNS nur auf diesen Netzwerkschnittstellen, kommagetrennt, z. B. `br1`. Nötig, wenn die Steuerbox in einem eigenen Netz an X2 hängt, siehe [Kopplung](kopplung.md#getrenntes-netz-an-x2). Die SHIP-ID (MAC) hängt nicht davon ab.
 
-`EEBUS_PORT` (4712), `MODBUS_URL` (`tcp://127.0.0.1:5502`), `DATENVERZEICHNIS` (`/data`), `GERAET_HERSTELLER`, `GERAET_MARKE` (`Demo`), `GERAET_MODELL` (`EEBUS-Gateway`), `GERAET_SERIENNUMMER` (Vorgabe: MAC-Adresse), `GERAET_HW_REVISION` (wird an die Steuerbox gemeldet). Die Software-Revision ist die Image-Version.
+`GATEWAY_INSTANZ` (1): Nummer bei mehreren Gateways auf einer Steuerung, setzt Ports und Seriennummer (siehe [Mehrere Steuerboxen](#mehrere-steuerboxen)). `EEBUS_PORT` (4712), `MODBUS_URL` (`tcp://127.0.0.1:5502`), `DATENVERZEICHNIS` (`/data`), `GERAET_HERSTELLER`, `GERAET_MARKE` (`Demo`), `GERAET_MODELL` (`EEBUS-Gateway`), `GERAET_SERIENNUMMER` (Vorgabe: MAC-Adresse), `GERAET_HW_REVISION` (wird an die Steuerbox gemeldet). Die Software-Revision ist die Image-Version.
 
 `EEBUS_DEBUG=an` schreibt das ausführliche Protokoll von eebus-go, ship-go und spine-go nach stdout (`docker logs eebus-gateway`), nicht ins Ereignisprotokoll. Für die Fehlersuche mit einer neuen Steuerbox, danach wieder ausschalten. Gescheiterte Verbindungsversuche wertet das Gateway auch ohne `EEBUS_DEBUG` aus (Reiter „Diagnose“, „Verbindungsversuche“). Die Zeiten in `docker logs` sind UTC, das UI zeigt Ortszeit.
 
@@ -147,6 +337,6 @@ Use Cases, Nennleistungen, Failsafe-Startwerte, MPC-Entität, Messwert-Herkunft,
 
 **Vorrang:** im UI geändert > Env (`docker run -e`) > Vorgabe. Jede Zeile zeigt, woher ihr Wert kommt. „Zurücksetzen“ löscht die Änderung aus dem UI, dann gilt wieder die Env. `einstellungen.json` bleibt bei einem Update erhalten. Passen die gespeicherten Werte nicht mehr zur Env, startet das Gateway mit der Env allein und meldet das im Ereignisprotokoll.
 
-Nur per Env änderbar: Ports und Adressen, `DATENVERZEICHNIS`, Web-Zugang (`WEB_*`, sonst sperrt man sich aus), `GERAET_SERIENNUMMER` und `EEBUS_REMOTE_SKI`.
+Nur per Env änderbar: `GATEWAY_INSTANZ`, Ports und Adressen, `DATENVERZEICHNIS`, Web-Zugang (`WEB_*`, sonst sperrt man sich aus), `GERAET_SERIENNUMMER` und `EEBUS_REMOTE_SKI`.
 
 **Achtung beim Neustart während einer Begrenzung:** Das Gateway vergisst die Grenze des Netzbetreibers. Bis zum ersten Heartbeat gilt die Failsafe-Grenze, danach ist der Bezug unbegrenzt, bis die Steuerbox erneut eine Grenze schreibt. Gleiches gilt nach einem Stromausfall. Ob eine echte Steuerbox die Grenze nach dem Wiederverbinden neu schreibt, ist offen (siehe [offene Punkte](entwicklung.md#offene-punkte-vor-dem-produktiveinsatz)).

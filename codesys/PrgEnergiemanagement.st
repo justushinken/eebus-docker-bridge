@@ -35,14 +35,14 @@ fbGateway(
 
 fbBezug(
 	xGatewayOk       := fbGateway.xGatewayOk,
-	xUseCaseAktiv    := fbGateway.xLpcAktiv,
+	xUseCaseGateway  := fbGateway.xLpcGateway,
 	iBasis           := 2,
 	udiErsatzgrenzeW := 4200,
 	aInputRegister   := GvlEebus.aInputRegister);
 
 fbEinspeisung(
 	xGatewayOk       := fbGateway.xGatewayOk,
-	xUseCaseAktiv    := fbGateway.xLppAktiv,
+	xUseCaseGateway  := fbGateway.xLppGateway,
 	iBasis           := 17,
 	udiErsatzgrenzeW := udiPvMaxW * 6 / 10,   // z. B. 60 % nach Netzanschlussvertrag
 	aInputRegister   := GvlEebus.aInputRegister);

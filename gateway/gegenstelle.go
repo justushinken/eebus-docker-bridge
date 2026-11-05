@@ -43,9 +43,10 @@ type GegenstelleUseCase struct {
 	Verfuegbar bool   `json:"verfuegbar"`
 }
 
-// Kurznamen und Bits (Input-Register 16) der Use Cases, die das Gateway als
-// Gegenstueck erwartet: Akteur auf Seiten der Steuerbox.
-var steuerboxUseCases = []struct {
+// Die vier FNN-Use-Cases mit Kurzname und Bit der Masken in den
+// Input-Registern 15 (Gateway) und 16 (Steuerbox). Akteur und Name sind die
+// Angaben, mit denen die Steuerbox den Use Case meldet.
+var useCaseTabelle = []struct {
 	akteur model.UseCaseActorType
 	name   model.UseCaseNameType
 	kurz   string
@@ -112,7 +113,7 @@ func (b *Gateway) PruefeGegenstelle() {
 			for _, sz := range s.ScenarioSupport {
 				eintrag.Szenarien = append(eintrag.Szenarien, uint(sz))
 			}
-			for _, bekannt := range steuerboxUseCases {
+			for _, bekannt := range useCaseTabelle {
 				if uc.Actor != nil && *uc.Actor == bekannt.akteur && s.UseCaseName != nil && *s.UseCaseName == bekannt.name {
 					eintrag.Kurz = bekannt.kurz
 					if eintrag.Verfuegbar {

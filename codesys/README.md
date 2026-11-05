@@ -20,8 +20,8 @@ Beispiel in `PrgEnergiemanagement.st`.
 
 | Baustein | Aufgabe |
 |---|---|
-| `FbEebusGateway` | Lebenszeichen, Versionsprüfung, Verbindung, Use-Case-Masken; schreibt SPS-Lebenszeichen, Nennleistungen und Anlagenstatus (`eAnlagenstatus`) |
-| `FbEebusBegrenzung` | eine Richtung, zweimal aufrufen: `iBasis := 2` Bezug, `iBasis := 17` Einspeisung. Ersatzgrenze, wenn das Gateway ausfällt oder den Use Case nicht anbietet |
+| `FbEebusGateway` | Lebenszeichen, Versionsprüfung (`xGatewayOk`), Verbindung, Use Cases (`wUseCasesGateway` mit `xLpcGateway` … `xMgcpGateway`, dazu `wUseCasesSteuerbox`); schreibt SPS-Lebenszeichen, Nennleistungen und Anlagenstatus (`eAnlagenstatus`) |
+| `FbEebusBegrenzung` | eine Richtung, zweimal aufrufen: `iBasis := 2` Bezug mit `xUseCaseGateway := xLpcGateway`, `iBasis := 17` Einspeisung mit `xLppGateway`. Ersatzgrenze, wenn das Gateway ausfällt; keine Begrenzung, wenn das Gateway den Use Case nicht anbietet |
 | `FbEebusMesswerte` | schreibt `ST_EebusMpc` und `ST_EebusMgcp` samt Gültigkeitsbits |
 | `FuEebusRegister` | Hilfsfunktionen zum Lesen und Schreiben mehrwortiger Register |
 | `FbEebusLpc` | veraltet, nur für bestehende Projekte mit 14/3 Registern |
@@ -30,7 +30,11 @@ Beispiel in `PrgEnergiemanagement.st`.
 
 Mehrwortige Werte High-Word zuerst. Unit-ID beliebig.
 
+Die Belegung steht mit Erläuterungen auch als Kommentar in `GvlEebus.st`, für CODESYS-Entwickler ohne Blick in den Go-Code.
+
 **Versionsregel:** Register 1 ist die Schnittstellenversion und ändert sich nur bei inkompatiblen Änderungen. Neue Register werden nur angehängt, dann steigt die Erweiterungsversion in Register 14. Ältere SPS-Programme (14 Input-, 3 Holding-Register, `FbEebusLpc`) laufen deshalb unverändert weiter.
+
+**Versionsprüfung in `FbEebusGateway`:** Register 1 muss 1 sein, Register 14 mindestens `uiErweiterungsVersionMin` (2), denn erst ab Erweiterung 2 gibt es die Register 14–30. Ein neueres Gateway ist in Ordnung. Sonst bleibt `xGatewayOk` FALSE mit `udiFehlerId = 2`, und die Ersatzgrenzen gelten. Häufigste Ursache: Der FC04-Kanal liest noch 14 statt 31 Register (Einstellung aus einem alten Projekt mit `FbEebusLpc`). Dann sind Register 14–30 und damit auch die Use-Case-Masken 0.
 
 ### Input-Register (FC04), Gateway → SPS
 
@@ -52,8 +56,8 @@ Bezug (LPC) und Einspeisung (LPP) haben je einen gleich aufgebauten Block, Bezug
 | 0 | Lebenszeichen Gateway (+1 pro Sekunde) |
 | 1 | Schnittstellenversion (1) |
 | 14 | Erweiterungsversion (2) |
-| 15 | Use Cases, die das Gateway anbietet (Bit 0 LPC, 1 LPP, 2 MPC, 3 MGCP) |
-| 16 | Use Cases, die die Steuerbox unterstützt (Bits wie Register 15) |
+| 15 | Use Cases Gateway: im Gateway eingeschaltet (`EEBUS_USECASES`), Bit 0 LPC, 1 LPP, 2 MPC, 3 MGCP |
+| 16 | Use Cases Steuerbox: von der verbundenen Steuerbox gemeldet, Bits wie Register 15, 0 ohne Verbindung (nur Information) |
 | 29–30 | Failsafe-Mindestdauer in s, gilt für beide Richtungen |
 
 Für die Regelung genügen je Richtung „Begrenzung aktiv“ und „wirksame Leistungsgrenze“.

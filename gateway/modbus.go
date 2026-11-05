@@ -28,8 +28,8 @@ const (
 	blockEinspeisung = 17
 
 	regErweiterung       = 14 // ErweiterungsVersion
-	regUseCasesLokal     = 15 // Bitmaske ucBit*: vom Gateway angeboten
-	regUseCasesSteuerbox = 16 // Bitmaske ucBit*: von der Steuerbox unterstuetzt
+	regUseCasesGateway   = 15 // Bitmaske ucBit*: vom Gateway angeboten (EEBUS_USECASES, fest ab Start)
+	regUseCasesSteuerbox = 16 // Bitmaske ucBit*: von der verbundenen Steuerbox gemeldet (0 ohne Verbindung, bis 5 s Verzoegerung)
 
 	regMindestdauerHi   = 29 // Failsafe-Mindestdauer in s (gemeinsam fuer LPC und LPP)
 	regMindestdauerLo   = 30
@@ -118,8 +118,8 @@ func starteModbusServer(url string, b *Gateway) (*modbus.ModbusServer, error) {
 	return server, server.Start()
 }
 
-// useCasesLokal liefert die Bitmaske der angebotenen Use Cases.
-func (b *Gateway) useCasesLokal() uint16 {
+// useCasesGateway liefert die Bitmaske der vom Gateway angebotenen Use Cases.
+func (b *Gateway) useCasesGateway() uint16 {
 	var bits uint16
 	for _, uc := range []struct {
 		an  bool
@@ -141,7 +141,7 @@ func (b *Gateway) inputRegister(jetzt time.Time) [anzahlInputRegister]uint16 {
 	r[regLebenszeichen] = b.lebenszeichen
 	r[regVersion] = SchnittstellenVersion
 	r[regErweiterung] = ErweiterungsVersion
-	r[regUseCasesLokal] = b.useCasesLokal()
+	r[regUseCasesGateway] = b.useCasesGateway()
 	r[regUseCasesSteuerbox] = b.steuerboxUseCases
 	r[regMindestdauerHi], r[regMindestdauerLo] = teileUint32(alsUint32(b.failsafeMindestdauer.Seconds()))
 

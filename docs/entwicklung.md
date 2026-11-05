@@ -16,6 +16,27 @@ Für alle, die am Gateway selbst arbeiten. Arbeitsstand und Hintergründe für d
 | `skripte/pfc-images-bauen.sh` | Baut Gateway und Test-Steuerbox für den PFC (ARMv7) nach `dist/` |
 | `dist/` | gebaute Images zum Verteilen (nicht im Repo) |
 
+## EEBUS-Rollen
+
+EEBUS beschreibt ein Gerät auf mehreren Ebenen. „Controllable System“ ist die Rolle in einem Use Case, nicht der Gerätetyp.
+
+| Ebene | Gateway | Test-Steuerbox |
+|---|---|---|
+| Gerätetyp (SPINE) | `EnergyManagementSystem` | `ElectricitySupplySystem` |
+| Entitäten | `CEM` (LPC, LPP, MPC), `GridConnectionPointOfPremises` (MGCP), wahlweise `SubMeterElectricity` (MPC, `MPC_ENTITAET=submeter`) | `GridGuard` |
+| Akteur LPC/LPP | Controllable System (`cs/lpc`, `cs/lpp`) | Energy Guard (`eg/lpc`, `eg/lpp`) |
+| Akteur MPC | Monitored Unit (`mu/mpc`) | Monitoring Appliance (`ma/mpc`) |
+| Akteur MGCP | Grid Connection Point (`gcp/mgcp`, Akteur korrigiert) | Monitoring Appliance (`ma/mgcp`) |
+| SHIP | Server und Client, Pairing Listener | Pairing Announcer |
+
+**„CEM“ hat drei Bedeutungen:**
+
+- **Entitätstyp `CEM`:** Den hat das Gateway, LPC, LPP und MPC liegen darauf (`gateway/main.go`).
+- **Use-Case-Akteur „CEM“:** Gibt es nur in Use Cases nach unten zu den Geräten (E-Mobilität wie EVCC, OPEV, OSCEV, CEVC, außerdem Visualisierung und Wärme). Die spricht das Gateway nicht, die Geräte hängen an der SPS.
+- **Funktion Energiemanager:** Gateway und SPS zusammen. Das Gateway reicht Grenzen und Messwerte per Modbus weiter, die CODESYS-Applikation verteilt die Grenze auf die Verbraucher.
+
+LPC und LPP kennen nur die Rollen Energy Guard und Controllable System. Ein Energiemanager hinter der Steuerbox tritt deshalb nach oben als Controllable System auf, so wie das Beispiel `examples/hems` in eebus-go (CEM-Entität mit `cs/lpc`). Nach unten wäre er CEM oder Energy Guard. Diese Hälfte übernimmt bei uns die SPS.
+
 ## Bauen ohne lokales Go
 
 Alle Go-Programme liegen in einem Modul (`eebus-gateway`). Gebaut wird ausschließlich in Docker (Go 1.24), das Laufzeit-Image ist `scratch`.
